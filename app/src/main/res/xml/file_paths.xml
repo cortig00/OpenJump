@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Share only validated trajectory MP4 files, never the complete app cache. -->
+    <cache-path
+        name="trajectory_exports"
+        path="trajectory_exports/" />
+</paths>

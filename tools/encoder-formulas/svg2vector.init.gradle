@@ -1,0 +1,33 @@
+gradle.afterProject { project ->
+    if (project.name == 'app') {
+        project.tasks.register('generateEncoderFormulaVectors') {
+            doLast {
+                def svgDirectory = project.file(project.findProperty('formulaSvgDir'))
+                def vectorDirectory = project.file(project.findProperty('formulaVectorDir'))
+                if (!svgDirectory.isDirectory()) {
+                    throw new GradleException("Formula SVG directory does not exist: ${svgDirectory}")
+                }
+                vectorDirectory.mkdirs()
+                def converter = project.buildscript.classLoader.loadClass(
+                    'com.android.ide.common.vectordrawable.Svg2Vector'
+                )
+                def method = converter.getMethod(
+                    'parseSvgToXml',
+                    java.nio.file.Path,
+                    java.io.OutputStream,
+                )
+                svgDirectory.listFiles({ file -> file.name.endsWith('.svg') } as FileFilter)
+                    .sort { it.name }
+                    .each { svg ->
+                        def target = new File(vectorDirectory, svg.name.replace('.svg', '.xml'))
+                        target.withOutputStream { output ->
+                            def errors = method.invoke(null, svg.toPath(), output)
+                            if (errors != null && !errors.toString().isBlank()) {
+                                throw new GradleException("Could not convert ${svg.name}: ${errors}")
+                            }
+                        }
+                    }
+            }
+        }
+    }
+}

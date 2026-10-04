@@ -1,0 +1,1233 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 5,
+    "identityHash": "5b5ea1643ee9fde4350dded1aea01f11",
+    "entities": [
+      {
+        "tableName": "assessments",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `sessionKey` TEXT NOT NULL, `athleteId` INTEGER, `testingSessionId` INTEGER, `protocolId` TEXT NOT NULL, `dateTime` INTEGER NOT NULL, `primaryMetricKey` TEXT NOT NULL, `primaryMetricValue` REAL NOT NULL, `primaryMetricUnit` TEXT NOT NULL, FOREIGN KEY(`athleteId`) REFERENCES `athletes`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sessionKey",
+            "columnName": "sessionKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "athleteId",
+            "columnName": "athleteId",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "testingSessionId",
+            "columnName": "testingSessionId",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "protocolId",
+            "columnName": "protocolId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dateTime",
+            "columnName": "dateTime",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "primaryMetricKey",
+            "columnName": "primaryMetricKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "primaryMetricValue",
+            "columnName": "primaryMetricValue",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "primaryMetricUnit",
+            "columnName": "primaryMetricUnit",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_assessments_sessionKey",
+            "unique": true,
+            "columnNames": [
+              "sessionKey"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_assessments_sessionKey` ON `${TABLE_NAME}` (`sessionKey`)"
+          },
+          {
+            "name": "index_assessments_athleteId_dateTime_id",
+            "unique": false,
+            "columnNames": [
+              "athleteId",
+              "dateTime",
+              "id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_assessments_athleteId_dateTime_id` ON `${TABLE_NAME}` (`athleteId`, `dateTime`, `id`)"
+          },
+          {
+            "name": "index_assessments_testingSessionId_dateTime_id",
+            "unique": false,
+            "columnNames": [
+              "testingSessionId",
+              "dateTime",
+              "id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_assessments_testingSessionId_dateTime_id` ON `${TABLE_NAME}` (`testingSessionId`, `dateTime`, `id`)"
+          },
+          {
+            "name": "index_assessments_dateTime_id",
+            "unique": false,
+            "columnNames": [
+              "dateTime",
+              "id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_assessments_dateTime_id` ON `${TABLE_NAME}` (`dateTime`, `id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "athletes",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "athleteId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "attempts",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `assessmentId` INTEGER NOT NULL, `ordinal` INTEGER NOT NULL, `side` TEXT, `source` TEXT NOT NULL, `videoUri` TEXT, `detectedFps` INTEGER NOT NULL, `dropHeightCm` REAL, `distanceCm` REAL, FOREIGN KEY(`assessmentId`) REFERENCES `assessments`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "assessmentId",
+            "columnName": "assessmentId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ordinal",
+            "columnName": "ordinal",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "side",
+            "columnName": "side",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "videoUri",
+            "columnName": "videoUri",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "detectedFps",
+            "columnName": "detectedFps",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dropHeightCm",
+            "columnName": "dropHeightCm",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "distanceCm",
+            "columnName": "distanceCm",
+            "affinity": "REAL",
+            "notNull": false
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_attempts_assessmentId",
+            "unique": false,
+            "columnNames": [
+              "assessmentId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_attempts_assessmentId` ON `${TABLE_NAME}` (`assessmentId`)"
+          },
+          {
+            "name": "index_attempts_assessmentId_ordinal",
+            "unique": true,
+            "columnNames": [
+              "assessmentId",
+              "ordinal"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_attempts_assessmentId_ordinal` ON `${TABLE_NAME}` (`assessmentId`, `ordinal`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "assessments",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "assessmentId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "attempt_events",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`attemptId` INTEGER NOT NULL, `type` TEXT NOT NULL, `ordinal` INTEGER NOT NULL, `ptsUs` INTEGER NOT NULL, PRIMARY KEY(`attemptId`, `type`, `ordinal`), FOREIGN KEY(`attemptId`) REFERENCES `attempts`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "attemptId",
+            "columnName": "attemptId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ordinal",
+            "columnName": "ordinal",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ptsUs",
+            "columnName": "ptsUs",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "attemptId",
+            "type",
+            "ordinal"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_attempt_events_attemptId",
+            "unique": false,
+            "columnNames": [
+              "attemptId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_attempt_events_attemptId` ON `${TABLE_NAME}` (`attemptId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "attempts",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "attemptId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "attempt_metrics",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`attemptId` INTEGER NOT NULL, `key` TEXT NOT NULL, `ordinal` INTEGER NOT NULL, `value` REAL NOT NULL, `unit` TEXT NOT NULL, PRIMARY KEY(`attemptId`, `key`, `ordinal`), FOREIGN KEY(`attemptId`) REFERENCES `attempts`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "attemptId",
+            "columnName": "attemptId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "key",
+            "columnName": "key",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ordinal",
+            "columnName": "ordinal",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "value",
+            "columnName": "value",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "unit",
+            "columnName": "unit",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "attemptId",
+            "key",
+            "ordinal"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_attempt_metrics_attemptId",
+            "unique": false,
+            "columnNames": [
+              "attemptId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_attempt_metrics_attemptId` ON `${TABLE_NAME}` (`attemptId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "attempts",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "attemptId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "attempt_calibrations",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`attemptId` INTEGER NOT NULL, `frameIndex` INTEGER NOT NULL, `pointAX` REAL NOT NULL, `pointAY` REAL NOT NULL, `pointBX` REAL NOT NULL, `pointBY` REAL NOT NULL, `referenceLengthM` REAL NOT NULL, `metersPerPixel` REAL NOT NULL, PRIMARY KEY(`attemptId`), FOREIGN KEY(`attemptId`) REFERENCES `attempts`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "attemptId",
+            "columnName": "attemptId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "frameIndex",
+            "columnName": "frameIndex",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pointAX",
+            "columnName": "pointAX",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pointAY",
+            "columnName": "pointAY",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pointBX",
+            "columnName": "pointBX",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pointBY",
+            "columnName": "pointBY",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "referenceLengthM",
+            "columnName": "referenceLengthM",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "metersPerPixel",
+            "columnName": "metersPerPixel",
+            "affinity": "REAL",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "attemptId"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": [
+          {
+            "table": "attempts",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "attemptId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "attempt_spatial_marks",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`attemptId` INTEGER NOT NULL, `type` TEXT NOT NULL, `frameIndex` INTEGER NOT NULL, `ptsUs` INTEGER NOT NULL, `pointX` REAL NOT NULL, `pointY` REAL NOT NULL, PRIMARY KEY(`attemptId`, `type`), FOREIGN KEY(`attemptId`) REFERENCES `attempts`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "attemptId",
+            "columnName": "attemptId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "frameIndex",
+            "columnName": "frameIndex",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ptsUs",
+            "columnName": "ptsUs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pointX",
+            "columnName": "pointX",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pointY",
+            "columnName": "pointY",
+            "affinity": "REAL",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "attemptId",
+            "type"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_attempt_spatial_marks_attemptId",
+            "unique": false,
+            "columnNames": [
+              "attemptId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_attempt_spatial_marks_attemptId` ON `${TABLE_NAME}` (`attemptId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "attempts",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "attemptId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "encoder_sessions",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `sessionKey` TEXT NOT NULL, `athleteId` INTEGER, `testingSessionId` INTEGER, `exercise` TEXT NOT NULL, `loadKg` REAL NOT NULL, `dateTime` INTEGER NOT NULL, `source` TEXT NOT NULL, `videoUri` TEXT, `observedFps` REAL, `nominalFps` REAL, `captureFps` REAL, `timingMode` TEXT NOT NULL, `slowMotionFactor` REAL NOT NULL, `calibrationFrameIndex` INTEGER NOT NULL, `calibrationAX` REAL NOT NULL, `calibrationAY` REAL NOT NULL, `calibrationBX` REAL NOT NULL, `calibrationBY` REAL NOT NULL, `referenceLengthM` REAL NOT NULL, `metersPerPixel` REAL NOT NULL, `analysisVersion` INTEGER NOT NULL, `minimumVelocityMps` REAL NOT NULL, `noiseMultiplier` REAL NOT NULL, `exitRatio` REAL NOT NULL, `minimumDirectionHoldUs` INTEGER NOT NULL, `stationaryDurationUs` INTEGER NOT NULL, `pauseDurationUs` INTEGER NOT NULL, `minimumPhaseDurationUs` INTEGER NOT NULL, `minimumPhaseDisplacementM` REAL NOT NULL, `romOutlierFraction` REAL NOT NULL, `minimumMedianConfidence` REAL NOT NULL, `maximumUncertainFraction` REAL NOT NULL, `smoothingWindowSamples` INTEGER NOT NULL, `velocityEnterMps` REAL, `velocityExitMps` REAL, `totalRepetitions` INTEGER NOT NULL, `validRepetitions` INTEGER NOT NULL, `bestMcv` REAL, `setVelocityLoss` REAL, FOREIGN KEY(`athleteId`) REFERENCES `athletes`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sessionKey",
+            "columnName": "sessionKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "athleteId",
+            "columnName": "athleteId",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "testingSessionId",
+            "columnName": "testingSessionId",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "exercise",
+            "columnName": "exercise",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "loadKg",
+            "columnName": "loadKg",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dateTime",
+            "columnName": "dateTime",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "videoUri",
+            "columnName": "videoUri",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "observedFps",
+            "columnName": "observedFps",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "nominalFps",
+            "columnName": "nominalFps",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "captureFps",
+            "columnName": "captureFps",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "timingMode",
+            "columnName": "timingMode",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "slowMotionFactor",
+            "columnName": "slowMotionFactor",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "calibrationFrameIndex",
+            "columnName": "calibrationFrameIndex",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "calibrationAX",
+            "columnName": "calibrationAX",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "calibrationAY",
+            "columnName": "calibrationAY",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "calibrationBX",
+            "columnName": "calibrationBX",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "calibrationBY",
+            "columnName": "calibrationBY",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "referenceLengthM",
+            "columnName": "referenceLengthM",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "metersPerPixel",
+            "columnName": "metersPerPixel",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "analysisVersion",
+            "columnName": "analysisVersion",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "minimumVelocityMps",
+            "columnName": "minimumVelocityMps",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "noiseMultiplier",
+            "columnName": "noiseMultiplier",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "exitRatio",
+            "columnName": "exitRatio",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "minimumDirectionHoldUs",
+            "columnName": "minimumDirectionHoldUs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "stationaryDurationUs",
+            "columnName": "stationaryDurationUs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pauseDurationUs",
+            "columnName": "pauseDurationUs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "minimumPhaseDurationUs",
+            "columnName": "minimumPhaseDurationUs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "minimumPhaseDisplacementM",
+            "columnName": "minimumPhaseDisplacementM",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "romOutlierFraction",
+            "columnName": "romOutlierFraction",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "minimumMedianConfidence",
+            "columnName": "minimumMedianConfidence",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "maximumUncertainFraction",
+            "columnName": "maximumUncertainFraction",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "smoothingWindowSamples",
+            "columnName": "smoothingWindowSamples",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "velocityEnterMps",
+            "columnName": "velocityEnterMps",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "velocityExitMps",
+            "columnName": "velocityExitMps",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "totalRepetitions",
+            "columnName": "totalRepetitions",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "validRepetitions",
+            "columnName": "validRepetitions",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "bestMcv",
+            "columnName": "bestMcv",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "setVelocityLoss",
+            "columnName": "setVelocityLoss",
+            "affinity": "REAL",
+            "notNull": false
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_encoder_sessions_sessionKey",
+            "unique": true,
+            "columnNames": [
+              "sessionKey"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_encoder_sessions_sessionKey` ON `${TABLE_NAME}` (`sessionKey`)"
+          },
+          {
+            "name": "index_encoder_sessions_athleteId_dateTime_id",
+            "unique": false,
+            "columnNames": [
+              "athleteId",
+              "dateTime",
+              "id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_encoder_sessions_athleteId_dateTime_id` ON `${TABLE_NAME}` (`athleteId`, `dateTime`, `id`)"
+          },
+          {
+            "name": "index_encoder_sessions_testingSessionId_dateTime_id",
+            "unique": false,
+            "columnNames": [
+              "testingSessionId",
+              "dateTime",
+              "id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_encoder_sessions_testingSessionId_dateTime_id` ON `${TABLE_NAME}` (`testingSessionId`, `dateTime`, `id`)"
+          },
+          {
+            "name": "index_encoder_sessions_dateTime_id",
+            "unique": false,
+            "columnNames": [
+              "dateTime",
+              "id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_encoder_sessions_dateTime_id` ON `${TABLE_NAME}` (`dateTime`, `id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "athletes",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "athleteId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "encoder_samples",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`sessionId` INTEGER NOT NULL, `ordinal` INTEGER NOT NULL, `frameIndex` INTEGER NOT NULL, `sourcePtsUs` INTEGER NOT NULL, `physicalTimeUs` INTEGER, `rawPixelX` REAL, `rawPixelY` REAL, `rawMetricX` REAL, `rawMetricY` REAL, `smoothedMetricX` REAL, `smoothedMetricY` REAL, `velocityXMps` REAL, `velocityYMps` REAL, `confidence` REAL NOT NULL, `trackingStatus` TEXT NOT NULL, `observationKind` TEXT NOT NULL, `fitResidualM` REAL, `gapBeforeUs` INTEGER, PRIMARY KEY(`sessionId`, `ordinal`), FOREIGN KEY(`sessionId`) REFERENCES `encoder_sessions`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "sessionId",
+            "columnName": "sessionId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ordinal",
+            "columnName": "ordinal",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "frameIndex",
+            "columnName": "frameIndex",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourcePtsUs",
+            "columnName": "sourcePtsUs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "physicalTimeUs",
+            "columnName": "physicalTimeUs",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "rawPixelX",
+            "columnName": "rawPixelX",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "rawPixelY",
+            "columnName": "rawPixelY",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "rawMetricX",
+            "columnName": "rawMetricX",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "rawMetricY",
+            "columnName": "rawMetricY",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "smoothedMetricX",
+            "columnName": "smoothedMetricX",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "smoothedMetricY",
+            "columnName": "smoothedMetricY",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "velocityXMps",
+            "columnName": "velocityXMps",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "velocityYMps",
+            "columnName": "velocityYMps",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "confidence",
+            "columnName": "confidence",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "trackingStatus",
+            "columnName": "trackingStatus",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "observationKind",
+            "columnName": "observationKind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fitResidualM",
+            "columnName": "fitResidualM",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "gapBeforeUs",
+            "columnName": "gapBeforeUs",
+            "affinity": "INTEGER",
+            "notNull": false
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "sessionId",
+            "ordinal"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_encoder_samples_sessionId",
+            "unique": false,
+            "columnNames": [
+              "sessionId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_encoder_samples_sessionId` ON `${TABLE_NAME}` (`sessionId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "encoder_sessions",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "sessionId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "encoder_repetitions",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `sessionId` INTEGER NOT NULL, `ordinal` INTEGER NOT NULL, `startSample` INTEGER NOT NULL, `endSample` INTEGER NOT NULL, `eccentricStartSample` INTEGER NOT NULL, `eccentricEndSample` INTEGER NOT NULL, `concentricStartSample` INTEGER NOT NULL, `concentricEndSample` INTEGER NOT NULL, `quality` TEXT NOT NULL, `reasons` TEXT NOT NULL, FOREIGN KEY(`sessionId`) REFERENCES `encoder_sessions`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sessionId",
+            "columnName": "sessionId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ordinal",
+            "columnName": "ordinal",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startSample",
+            "columnName": "startSample",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endSample",
+            "columnName": "endSample",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "eccentricStartSample",
+            "columnName": "eccentricStartSample",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "eccentricEndSample",
+            "columnName": "eccentricEndSample",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "concentricStartSample",
+            "columnName": "concentricStartSample",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "concentricEndSample",
+            "columnName": "concentricEndSample",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "quality",
+            "columnName": "quality",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "reasons",
+            "columnName": "reasons",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_encoder_repetitions_sessionId",
+            "unique": false,
+            "columnNames": [
+              "sessionId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_encoder_repetitions_sessionId` ON `${TABLE_NAME}` (`sessionId`)"
+          },
+          {
+            "name": "index_encoder_repetitions_sessionId_ordinal",
+            "unique": true,
+            "columnNames": [
+              "sessionId",
+              "ordinal"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_encoder_repetitions_sessionId_ordinal` ON `${TABLE_NAME}` (`sessionId`, `ordinal`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "encoder_sessions",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "sessionId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "encoder_rep_metrics",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`repetitionId` INTEGER NOT NULL, `key` TEXT NOT NULL, `value` REAL, `unit` TEXT NOT NULL, `validity` TEXT NOT NULL, `reason` TEXT, PRIMARY KEY(`repetitionId`, `key`), FOREIGN KEY(`repetitionId`) REFERENCES `encoder_repetitions`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "repetitionId",
+            "columnName": "repetitionId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "key",
+            "columnName": "key",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "value",
+            "columnName": "value",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "unit",
+            "columnName": "unit",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "validity",
+            "columnName": "validity",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "reason",
+            "columnName": "reason",
+            "affinity": "TEXT",
+            "notNull": false
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "repetitionId",
+            "key"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_encoder_rep_metrics_repetitionId",
+            "unique": false,
+            "columnNames": [
+              "repetitionId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_encoder_rep_metrics_repetitionId` ON `${TABLE_NAME}` (`repetitionId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "encoder_repetitions",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "repetitionId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "athletes",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `displayName` TEXT NOT NULL, `birthDate` INTEGER, `sex` TEXT, `notes` TEXT, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `archivedAt` INTEGER)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "displayName",
+            "columnName": "displayName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "birthDate",
+            "columnName": "birthDate",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "sex",
+            "columnName": "sex",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "notes",
+            "columnName": "notes",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "archivedAt",
+            "columnName": "archivedAt",
+            "affinity": "INTEGER",
+            "notNull": false
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_athletes_archivedAt_displayName",
+            "unique": false,
+            "columnNames": [
+              "archivedAt",
+              "displayName"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_athletes_archivedAt_displayName` ON `${TABLE_NAME}` (`archivedAt`, `displayName`)"
+          },
+          {
+            "name": "index_athletes_displayName",
+            "unique": false,
+            "columnNames": [
+              "displayName"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_athletes_displayName` ON `${TABLE_NAME}` (`displayName`)"
+          }
+        ],
+        "foreignKeys": []
+      }
+    ],
+    "views": [],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '5b5ea1643ee9fde4350dded1aea01f11')"
+    ]
+  }
+}

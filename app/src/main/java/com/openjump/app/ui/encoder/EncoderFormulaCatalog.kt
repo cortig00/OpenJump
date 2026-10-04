@@ -1,0 +1,176 @@
+package com.openjump.app.ui.encoder
+
+import androidx.annotation.DrawableRes
+import androidx.annotation.StringRes
+import com.openjump.app.R
+import com.openjump.app.encoder.EncoderMetricKey
+
+enum class EncoderFormulaGroup { CONVERSION, METRICS, TECHNICAL }
+
+enum class EncoderFormulaId {
+    SCALE,
+    COORDINATES,
+    PHYSICAL_TIME,
+    MCV,
+    PEAK_VELOCITY,
+    ROM,
+    PHASE_TIMES,
+    PAUSE,
+    MEV,
+    VELOCITY_LOSS,
+    CUBIC_FIT,
+}
+
+data class EncoderFormulaSpec(
+    val id: EncoderFormulaId,
+    val group: EncoderFormulaGroup,
+    @param:StringRes val titleResource: Int,
+    @param:StringRes val summaryResource: Int,
+    val unit: String?,
+    @param:DrawableRes val drawable: Int,
+    @param:DrawableRes val compactDrawable: Int? = null,
+    @param:StringRes val explanationResource: Int,
+    @param:StringRes val symbolsResource: Int,
+    @param:StringRes val spokenEquationResource: Int,
+    val metricKeys: Set<EncoderMetricKey> = emptySet(),
+)
+
+val encoderFormulaCatalog: List<EncoderFormulaSpec> = listOf(
+    EncoderFormulaSpec(
+        EncoderFormulaId.SCALE,
+        EncoderFormulaGroup.CONVERSION,
+        R.string.formula_scale_title,
+        R.string.formula_scale_summary,
+        "m·px⁻¹",
+        R.drawable.encoder_formula_scale,
+        explanationResource = R.string.formula_scale_explanation,
+        symbolsResource = R.string.formula_scale_symbols,
+        spokenEquationResource = R.string.formula_scale_spoken,
+    ),
+    EncoderFormulaSpec(
+        EncoderFormulaId.COORDINATES,
+        EncoderFormulaGroup.CONVERSION,
+        R.string.formula_coordinates_title,
+        R.string.formula_coordinates_summary,
+        "m",
+        R.drawable.encoder_formula_coordinates,
+        explanationResource = R.string.formula_coordinates_explanation,
+        symbolsResource = R.string.formula_coordinates_symbols,
+        spokenEquationResource = R.string.formula_coordinates_spoken,
+    ),
+    EncoderFormulaSpec(
+        EncoderFormulaId.PHYSICAL_TIME,
+        EncoderFormulaGroup.CONVERSION,
+        R.string.formula_time_title,
+        R.string.formula_time_summary,
+        "s",
+        R.drawable.encoder_formula_physical_time,
+        explanationResource = R.string.formula_time_explanation,
+        symbolsResource = R.string.formula_time_symbols,
+        spokenEquationResource = R.string.formula_time_spoken,
+    ),
+    EncoderFormulaSpec(
+        EncoderFormulaId.MCV,
+        EncoderFormulaGroup.METRICS,
+        R.string.formula_mcv_title,
+        R.string.formula_mcv_summary,
+        "m·s⁻¹",
+        R.drawable.encoder_formula_mcv,
+        explanationResource = R.string.formula_mcv_explanation,
+        symbolsResource = R.string.formula_mcv_symbols,
+        spokenEquationResource = R.string.formula_mcv_spoken,
+        metricKeys = setOf(EncoderMetricKey.MCV),
+    ),
+    EncoderFormulaSpec(
+        EncoderFormulaId.PEAK_VELOCITY,
+        EncoderFormulaGroup.METRICS,
+        R.string.formula_peak_title,
+        R.string.formula_peak_summary,
+        "m·s⁻¹",
+        R.drawable.encoder_formula_pv,
+        explanationResource = R.string.formula_peak_explanation,
+        symbolsResource = R.string.formula_peak_symbols,
+        spokenEquationResource = R.string.formula_peak_spoken,
+        metricKeys = setOf(EncoderMetricKey.PEAK_VELOCITY),
+    ),
+    EncoderFormulaSpec(
+        EncoderFormulaId.ROM,
+        EncoderFormulaGroup.METRICS,
+        R.string.formula_rom_title,
+        R.string.formula_rom_summary,
+        "m",
+        R.drawable.encoder_formula_rom,
+        explanationResource = R.string.formula_rom_explanation,
+        symbolsResource = R.string.formula_rom_symbols,
+        spokenEquationResource = R.string.formula_rom_spoken,
+        metricKeys = setOf(EncoderMetricKey.ROM),
+    ),
+    EncoderFormulaSpec(
+        EncoderFormulaId.PHASE_TIMES,
+        EncoderFormulaGroup.METRICS,
+        R.string.formula_phase_times_title,
+        R.string.formula_phase_times_summary,
+        "s",
+        R.drawable.encoder_formula_phase_times,
+        compactDrawable = R.drawable.encoder_formula_phase_times_compact,
+        explanationResource = R.string.formula_phase_times_explanation,
+        symbolsResource = R.string.formula_phase_times_symbols,
+        spokenEquationResource = R.string.formula_phase_times_spoken,
+        metricKeys = setOf(EncoderMetricKey.CONCENTRIC_TIME, EncoderMetricKey.ECCENTRIC_TIME),
+    ),
+    EncoderFormulaSpec(
+        EncoderFormulaId.PAUSE,
+        EncoderFormulaGroup.METRICS,
+        R.string.formula_pause_title,
+        R.string.formula_pause_summary,
+        "s",
+        R.drawable.encoder_formula_pause,
+        explanationResource = R.string.formula_pause_explanation,
+        symbolsResource = R.string.formula_pause_symbols,
+        spokenEquationResource = R.string.formula_pause_spoken,
+        metricKeys = setOf(EncoderMetricKey.PAUSE_TIME),
+    ),
+    EncoderFormulaSpec(
+        EncoderFormulaId.MEV,
+        EncoderFormulaGroup.METRICS,
+        R.string.formula_mev_title,
+        R.string.formula_mev_summary,
+        "m·s⁻¹",
+        R.drawable.encoder_formula_mev,
+        explanationResource = R.string.formula_mev_explanation,
+        symbolsResource = R.string.formula_mev_symbols,
+        spokenEquationResource = R.string.formula_mev_spoken,
+        metricKeys = setOf(EncoderMetricKey.MEAN_ECCENTRIC_VELOCITY),
+    ),
+    EncoderFormulaSpec(
+        EncoderFormulaId.VELOCITY_LOSS,
+        EncoderFormulaGroup.METRICS,
+        R.string.formula_loss_title,
+        R.string.formula_loss_summary,
+        "%",
+        R.drawable.encoder_formula_velocity_loss,
+        compactDrawable = R.drawable.encoder_formula_velocity_loss_compact,
+        explanationResource = R.string.formula_loss_explanation,
+        symbolsResource = R.string.formula_loss_symbols,
+        spokenEquationResource = R.string.formula_loss_spoken,
+        metricKeys = setOf(EncoderMetricKey.VELOCITY_LOSS),
+    ),
+    EncoderFormulaSpec(
+        EncoderFormulaId.CUBIC_FIT,
+        EncoderFormulaGroup.TECHNICAL,
+        R.string.formula_cubic_title,
+        R.string.formula_cubic_summary,
+        null,
+        R.drawable.encoder_formula_cubic,
+        compactDrawable = R.drawable.encoder_formula_cubic_compact,
+        explanationResource = R.string.formula_cubic_explanation,
+        symbolsResource = R.string.formula_cubic_symbols,
+        spokenEquationResource = R.string.formula_cubic_spoken,
+    ),
+)
+
+fun formulasFor(group: EncoderFormulaGroup): List<EncoderFormulaSpec> =
+    encoderFormulaCatalog.filter { it.group == group }
+
+fun EncoderFormulaSpec.drawableFor(widthDp: Float, fontScale: Float): Int =
+    compactDrawable?.takeIf { widthDp < 360f || fontScale >= 1.3f } ?: drawable

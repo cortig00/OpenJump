@@ -1,0 +1,106 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "416bc5d6ba1cbfb7b320e08f83be1181",
+    "entities": [
+      {
+        "tableName": "jump_measurements",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `dateTime` INTEGER NOT NULL, `testType` TEXT NOT NULL, `jumpHeightCm` REAL NOT NULL, `flightTimeMs` REAL NOT NULL, `takeoffVelocity` REAL NOT NULL, `timeToTakeoffMs` REAL NOT NULL, `rsiMod` REAL NOT NULL, `movementStartTimestampUs` INTEGER NOT NULL, `takeoffTimestampUs` INTEGER NOT NULL, `landingTimestampUs` INTEGER NOT NULL, `videoUri` TEXT, `detectedFps` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dateTime",
+            "columnName": "dateTime",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "testType",
+            "columnName": "testType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "jumpHeightCm",
+            "columnName": "jumpHeightCm",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "flightTimeMs",
+            "columnName": "flightTimeMs",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "takeoffVelocity",
+            "columnName": "takeoffVelocity",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timeToTakeoffMs",
+            "columnName": "timeToTakeoffMs",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rsiMod",
+            "columnName": "rsiMod",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "movementStartTimestampUs",
+            "columnName": "movementStartTimestampUs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "takeoffTimestampUs",
+            "columnName": "takeoffTimestampUs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "landingTimestampUs",
+            "columnName": "landingTimestampUs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "videoUri",
+            "columnName": "videoUri",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "detectedFps",
+            "columnName": "detectedFps",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      }
+    ],
+    "views": [],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '416bc5d6ba1cbfb7b320e08f83be1181')"
+    ]
+  }
+}

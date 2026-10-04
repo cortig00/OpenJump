@@ -1,0 +1,45 @@
+# Android / Gradle local state
+.gradle/
+.kotlin/
+**/build/
+local.properties
+.idea/
+*.iml
+captures/
+
+# Signing keys, credentials and local configuration
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+*.key
+.env
+.env.*
+keystore.properties
+signing.properties
+
+# Generated binaries and personal data
+*.apk
+*.aab
+*.apks
+*.mp4
+*.mov
+*.db
+*.db-shm
+*.db-wal
+*.ojbackup.json
+artifacts/
+testdata/
+scratch/
+
+# Agent / workstation files
+.pi/
+.agents/
+.worktrees/
+AGENTS.md
+.tmp-*/
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db
