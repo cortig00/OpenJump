@@ -153,9 +153,11 @@ build-tools35.0.0, AGP8.9.2, Gradle8.11.1. No host signing configuration/keys.
 
 ## Upstream release state
 
-Keep `v1.0` immutable at the original Play source. The GitHub Release can be
-reviewed/published separately from F-Droid approval; it must not advertise an
-accepted F-Droid download yet. The preparation branch remains separate from main.
+Keep `v1.0` immutable at the original Play source. A **draft** GitHub Release
+`OpenJump 1.0 (7)` has been prepared with no attached binaries or signing material;
+it is not a published release. The maintainer can review/publish it separately
+from F-Droid approval; it must not advertise an accepted F-Droid download yet.
+The preparation branch remains separate from main.
 Before future releases, integrate its files without orphaning the pinned source
 commit (prefer fast-forward or a merge retaining history; do not discard/squash
 and delete its only reachable branch while the first recipe pins that commit).
