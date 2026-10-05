@@ -1,0 +1,1 @@
+First public release of OpenJump. Analyze jumps from video, measure six jump protocols and track athletes’ progress with profiles, history and comparisons. Offline processing on your device.

@@ -1,0 +1,12 @@
+OpenJump, kaydedilmiş veya içe aktarılmış videolardan sportif sıçramaları ölçer. Kalkış ve inişi kare kare seçin; hesaplamalar nominal kare hızı yerine videonun gerçek zaman damgalarını kullanır.
+
+• Altı protokol: karşı hareketli sıçrama (CMJ), squat jump (SJ), Abalakov, tek taraflı sıçrama, drop jump ve durarak uzun atlama.
+• Sıçrama yüksekliği, uçuş süresi, kalkış hızı ve protokole özgü ölçümler; kalibre edilmiş yatay mesafe.
+• Sporcu profilleri, takımlar, yerel geçmiş, gelişim ve karşılaştırmalar.
+• Deneysel video Encoder: ölçek kalibrasyonu, görsel takip, tekrar analizi, hız ve yörünge grafikleri ve yörüngeli video dışa aktarımı.
+• Manuel yedekler ve kullanıcı tarafından başlatılan JSON/CSV dışa aktarımları.
+• Ayarlanabilir birimler, açık/koyu tema ve sekiz arayüz dili.
+
+Analiz ve kaydedilen ölçümler cihazınızda kalır. Hesap, reklam, otomatik analiz veya İnternet izni yoktur. Paylaşım, dışa aktarma, yedekleme ve destek e-postaları sizin işleminizi gerektirir; hedef uygulamalar bu kopyaları aktarabilir. Manuel JSON yedekleri şifrelenmez.
+
+Sonuçlar video kalitesine, bakış açısına, kalibrasyona ve olay seçimine bağlıdır. Encoder deneyseldir ve fiziksel bir encoder ile doğrulanmamıştır. OpenJump tıbbi veya klinik olarak doğrulanmış bir cihaz değildir. Ayrılmadan önce analizi kaydedin: kaydedilmeyen çalışmalar işlem sonlandığında kaybolur.

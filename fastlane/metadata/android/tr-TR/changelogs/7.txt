@@ -1,0 +1,1 @@
+OpenJump’ın ilk herkese açık sürümü. Videoyla sıçramaları analiz edin, altı sıçrama protokolünü ölçün ve profiller, geçmiş ve karşılaştırmalarla sporcuların gelişimini takip edin. İşlemler cihazınızda çevrimdışı gerçekleştirilir.

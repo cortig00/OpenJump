@@ -1,0 +1,1 @@
+Primeira versão pública do OpenJump. Analisa saltos por vídeo, mede seis protocolos de salto e acompanha a evolução dos atletas com perfis, histórico e comparações. Processamento offline no teu dispositivo.

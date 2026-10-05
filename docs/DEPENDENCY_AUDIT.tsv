@@ -1,0 +1,458 @@
+scope	coordinate	declared_license	license_url	upstream_source
+releaseRuntimeClasspath	androidx.activity:activity-compose:1.10.1	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.activity:activity-ktx:1.10.1	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.activity:activity:1.10.1	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.annotation:annotation-experimental:1.4.1	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.annotation:annotation-jvm:1.8.1	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.appcompat:appcompat-resources:1.7.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.appcompat:appcompat:1.7.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.arch.core:core-common:2.2.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.arch.core:core-runtime:2.2.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.autofill:autofill:1.0.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://source.android.com
+releaseRuntimeClasspath	androidx.camera.featurecombinationquery:featurecombinationquery:1.6.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.camera.viewfinder:viewfinder-core:1.5.1	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.camera:camera-camera2-pipe:1.6.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.camera:camera-camera2:1.6.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.camera:camera-core:1.6.2	The Apache Software License, Version 2.0; BSD-3-Clause	http://www.apache.org/licenses/LICENSE-2.0.txt; https://opensource.org/licenses/BSD-3-Clause	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.camera:camera-lifecycle:1.6.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.camera:camera-video:1.6.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.camera:camera-view:1.6.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.collection:collection-jvm:1.4.4	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.collection:collection-ktx:1.4.4	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.compose.animation:animation-android:1.7.8	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.compose.animation:animation-core-android:1.7.8	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.compose.foundation:foundation-android:1.7.8	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.compose.foundation:foundation-layout-android:1.7.8	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.compose.material3:material3-android:1.3.1	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.compose.material:material-icons-core-android:1.7.8	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.compose.material:material-ripple-android:1.7.8	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.compose.runtime:runtime-android:1.7.8	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.compose.runtime:runtime-saveable-android:1.7.8	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.compose.ui:ui-android:1.7.8	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.compose.ui:ui-geometry-android:1.7.8	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.compose.ui:ui-graphics-android:1.7.8	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.compose.ui:ui-text-android:1.7.8	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.compose.ui:ui-tooling-preview-android:1.7.8	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.compose.ui:ui-unit-android:1.7.8	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.compose.ui:ui-util-android:1.7.8	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.concurrent:concurrent-futures-ktx:1.2.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.concurrent:concurrent-futures:1.2.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.core:core-backported-fixes:1.0.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.core:core-ktx:1.16.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.core:core-viewtree:1.0.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.core:core:1.16.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.core:core:1.16.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.cursoradapter:cursoradapter:1.0.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://source.android.com
+releaseRuntimeClasspath	androidx.customview:customview-poolingcontainer:1.0.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.customview:customview:1.0.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://source.android.com
+releaseRuntimeClasspath	androidx.drawerlayout:drawerlayout:1.0.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://source.android.com
+releaseRuntimeClasspath	androidx.emoji2:emoji2-views-helper:1.3.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.emoji2:emoji2:1.3.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.exifinterface:exifinterface:1.4.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.fragment:fragment:1.5.4	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.graphics:graphics-path:1.0.1	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.interpolator:interpolator:1.0.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://source.android.com
+releaseRuntimeClasspath	androidx.lifecycle:lifecycle-common-java8:2.8.7	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.lifecycle:lifecycle-common-jvm:2.8.7	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.lifecycle:lifecycle-livedata-core-ktx:2.8.7	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.lifecycle:lifecycle-livedata-core:2.8.7	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.lifecycle:lifecycle-livedata:2.8.7	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.lifecycle:lifecycle-livedata:2.8.7	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.lifecycle:lifecycle-process:2.8.7	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.lifecycle:lifecycle-runtime-android:2.8.7	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.lifecycle:lifecycle-runtime-compose-android:2.8.7	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.lifecycle:lifecycle-runtime-ktx-android:2.8.7	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.lifecycle:lifecycle-viewmodel-android:2.8.7	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.lifecycle:lifecycle-viewmodel-compose-android:2.8.7	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.lifecycle:lifecycle-viewmodel-savedstate:2.8.7	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.lifecycle:lifecycle-viewmodel:2.8.7	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.loader:loader:1.0.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://source.android.com
+releaseRuntimeClasspath	androidx.media3:media3-common:1.9.4	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/androidx/media
+releaseRuntimeClasspath	androidx.media3:media3-container:1.9.4	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/androidx/media
+releaseRuntimeClasspath	androidx.media3:media3-database:1.9.4	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/androidx/media
+releaseRuntimeClasspath	androidx.media3:media3-datasource:1.9.4	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/androidx/media
+releaseRuntimeClasspath	androidx.media3:media3-decoder:1.9.4	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/androidx/media
+releaseRuntimeClasspath	androidx.media3:media3-effect:1.9.4	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/androidx/media
+releaseRuntimeClasspath	androidx.media3:media3-exoplayer:1.9.4	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/androidx/media
+releaseRuntimeClasspath	androidx.media3:media3-extractor:1.9.4	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/androidx/media
+releaseRuntimeClasspath	androidx.media3:media3-inspector:1.9.4	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/androidx/media
+releaseRuntimeClasspath	androidx.media3:media3-muxer:1.9.4	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/androidx/media
+releaseRuntimeClasspath	androidx.media3:media3-transformer:1.9.4	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/androidx/media
+releaseRuntimeClasspath	androidx.media3:media3-ui:1.9.4	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/androidx/media
+releaseRuntimeClasspath	androidx.navigation:navigation-common-ktx:2.8.9	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.navigation:navigation-common:2.8.9	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.navigation:navigation-compose:2.8.9	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.navigation:navigation-runtime-ktx:2.8.9	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.navigation:navigation-runtime:2.8.9	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.profileinstaller:profileinstaller:1.4.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.recyclerview:recyclerview:1.3.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.resourceinspection:resourceinspection-annotation:1.0.1	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.room:room-common:2.6.1	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.room:room-ktx:2.6.1	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.room:room-runtime:2.6.1	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.savedstate:savedstate-ktx:1.2.1	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.savedstate:savedstate:1.2.1	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.sqlite:sqlite-framework:2.4.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.sqlite:sqlite:2.4.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.startup:startup-runtime:1.1.1	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.tracing:tracing-android:1.3.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.tracing:tracing-ktx:1.3.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+releaseRuntimeClasspath	androidx.vectordrawable:vectordrawable-animated:1.1.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://source.android.com
+releaseRuntimeClasspath	androidx.vectordrawable:vectordrawable:1.1.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://source.android.com
+releaseRuntimeClasspath	androidx.versionedparcelable:versionedparcelable:1.1.1	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://source.android.com
+releaseRuntimeClasspath	androidx.viewpager:viewpager:1.0.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://source.android.com
+releaseRuntimeClasspath	com.google.auto.value:auto-value-annotations:1.6.3	Apache 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://github.com/google/auto
+releaseRuntimeClasspath	com.google.code.findbugs:jsr305:3.0.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://code.google.com/p/jsr-305/
+releaseRuntimeClasspath	com.google.dagger:dagger:2.59	Apache 2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/google/dagger/
+releaseRuntimeClasspath	com.google.errorprone:error_prone_annotations:2.28.0	Apache 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	-
+releaseRuntimeClasspath	com.google.guava:failureaccess:1.0.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	-
+releaseRuntimeClasspath	com.google.guava:guava:33.3.1-android	Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/google/guava
+releaseRuntimeClasspath	com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	-
+releaseRuntimeClasspath	com.google.j2objc:j2objc-annotations:3.0.0	Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://github.com/google/j2objc
+releaseRuntimeClasspath	jakarta.inject:jakarta.inject-api:2.0.1	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/eclipse-ee4j/injection-api
+releaseRuntimeClasspath	javax.inject:javax.inject:1	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://code.google.com/p/atinject/source/checkout
+releaseRuntimeClasspath	net.sf.trove4j:trove4j:3.0.3	GNU Lesser General Public License 2.1	http://www.gnu.org/licenses/lgpl-2.1.txt	https://trove4j.svn.sourceforge.net/svnroot/trove4j
+releaseRuntimeClasspath	org.boofcv:boofcv-feature:1.4.0	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/lessthanoptimal/BoofCV
+releaseRuntimeClasspath	org.boofcv:boofcv-geo:1.4.0	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/lessthanoptimal/BoofCV
+releaseRuntimeClasspath	org.boofcv:boofcv-ip:1.4.0	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/lessthanoptimal/BoofCV
+releaseRuntimeClasspath	org.boofcv:boofcv-types:1.4.0	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/lessthanoptimal/BoofCV
+releaseRuntimeClasspath	org.checkerframework:checker-qual:3.43.0	The MIT License	http://opensource.org/licenses/MIT	https://github.com/typetools/checker-framework.git
+releaseRuntimeClasspath	org.ddogleg:ddogleg:0.25.1	The Apache License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/lessthanoptimal/ddogleg
+releaseRuntimeClasspath	org.ejml:ejml-cdense:0.45.1	The Apache License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/lessthanoptimal/ejml
+releaseRuntimeClasspath	org.ejml:ejml-core:0.45.1	The Apache License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/lessthanoptimal/ejml
+releaseRuntimeClasspath	org.ejml:ejml-ddense:0.45.1	The Apache License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/lessthanoptimal/ejml
+releaseRuntimeClasspath	org.ejml:ejml-dsparse:0.45.1	The Apache License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/lessthanoptimal/ejml
+releaseRuntimeClasspath	org.ejml:ejml-fdense:0.45.1	The Apache License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/lessthanoptimal/ejml
+releaseRuntimeClasspath	org.ejml:ejml-fsparse:0.45.1	The Apache License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/lessthanoptimal/ejml
+releaseRuntimeClasspath	org.ejml:ejml-simple:0.45.1	The Apache License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/lessthanoptimal/ejml
+releaseRuntimeClasspath	org.ejml:ejml-zdense:0.45.1	The Apache License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/lessthanoptimal/ejml
+releaseRuntimeClasspath	org.georegression:georegression:0.30.0	The Apache License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/lessthanoptimal/GeoRegression
+releaseRuntimeClasspath	org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/JetBrains/kotlin
+releaseRuntimeClasspath	org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/JetBrains/kotlin
+releaseRuntimeClasspath	org.jetbrains.kotlin:kotlin-stdlib:2.1.20	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/JetBrains/kotlin
+releaseRuntimeClasspath	org.jetbrains.kotlinx:atomicfu-jvm:0.28.0	Apache-2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/Kotlin/kotlinx.atomicfu
+releaseRuntimeClasspath	org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0	The Apache Software License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/Kotlin/kotlinx.coroutines
+releaseRuntimeClasspath	org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.9.0	The Apache Software License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/Kotlin/kotlinx.coroutines
+releaseRuntimeClasspath	org.jetbrains.kotlinx:kotlinx-coroutines-guava:1.9.0	The Apache Software License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/Kotlin/kotlinx.coroutines
+releaseRuntimeClasspath	org.jetbrains.kotlinx:kotlinx-serialization-core-jvm:1.8.0	The Apache Software License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/Kotlin/kotlinx.serialization
+releaseRuntimeClasspath	org.jetbrains.kotlinx:kotlinx-serialization-json-jvm:1.8.0	The Apache Software License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/Kotlin/kotlinx.serialization
+releaseRuntimeClasspath	org.jetbrains:annotations:23.0.0	The Apache Software License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/JetBrains/java-annotations
+releaseRuntimeClasspath	org.jspecify:jspecify:1.0.0	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/jspecify/jspecify/
+debugRuntimeClasspath	androidx.activity:activity-compose:1.10.1	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.activity:activity-ktx:1.10.1	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.activity:activity:1.10.1	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.annotation:annotation-experimental:1.4.1	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.annotation:annotation-jvm:1.8.1	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.appcompat:appcompat-resources:1.7.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.appcompat:appcompat:1.7.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.arch.core:core-common:2.2.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.arch.core:core-runtime:2.2.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.autofill:autofill:1.0.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://source.android.com
+debugRuntimeClasspath	androidx.camera.featurecombinationquery:featurecombinationquery:1.6.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.camera.viewfinder:viewfinder-core:1.5.1	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.camera:camera-camera2-pipe:1.6.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.camera:camera-camera2:1.6.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.camera:camera-core:1.6.2	The Apache Software License, Version 2.0; BSD-3-Clause	http://www.apache.org/licenses/LICENSE-2.0.txt; https://opensource.org/licenses/BSD-3-Clause	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.camera:camera-lifecycle:1.6.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.camera:camera-video:1.6.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.camera:camera-view:1.6.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.collection:collection-jvm:1.4.4	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.collection:collection-ktx:1.4.4	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.compose.animation:animation-android:1.7.8	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.compose.animation:animation-core-android:1.7.8	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.compose.foundation:foundation-android:1.7.8	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.compose.foundation:foundation-layout-android:1.7.8	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.compose.material3:material3-android:1.3.1	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.compose.material:material-android:1.7.8	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.compose.material:material-icons-core-android:1.7.8	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.compose.material:material-ripple-android:1.7.8	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.compose.runtime:runtime-android:1.7.8	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.compose.runtime:runtime-saveable-android:1.7.8	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.compose.ui:ui-android:1.7.8	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.compose.ui:ui-geometry-android:1.7.8	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.compose.ui:ui-graphics-android:1.7.8	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.compose.ui:ui-text-android:1.7.8	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.compose.ui:ui-tooling-android:1.7.8	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.compose.ui:ui-tooling-data-android:1.7.8	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.compose.ui:ui-tooling-preview-android:1.7.8	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.compose.ui:ui-unit-android:1.7.8	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.compose.ui:ui-util-android:1.7.8	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.concurrent:concurrent-futures-ktx:1.2.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.concurrent:concurrent-futures:1.2.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.core:core-backported-fixes:1.0.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.core:core-ktx:1.16.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.core:core-viewtree:1.0.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.core:core:1.16.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.core:core:1.16.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.cursoradapter:cursoradapter:1.0.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://source.android.com
+debugRuntimeClasspath	androidx.customview:customview-poolingcontainer:1.0.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.customview:customview:1.0.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://source.android.com
+debugRuntimeClasspath	androidx.drawerlayout:drawerlayout:1.0.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://source.android.com
+debugRuntimeClasspath	androidx.emoji2:emoji2-views-helper:1.3.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.emoji2:emoji2:1.3.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.exifinterface:exifinterface:1.4.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.fragment:fragment:1.5.4	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.graphics:graphics-path:1.0.1	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.interpolator:interpolator:1.0.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://source.android.com
+debugRuntimeClasspath	androidx.lifecycle:lifecycle-common-java8:2.8.7	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.lifecycle:lifecycle-common-jvm:2.8.7	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.lifecycle:lifecycle-livedata-core-ktx:2.8.7	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.lifecycle:lifecycle-livedata-core:2.8.7	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.lifecycle:lifecycle-livedata:2.8.7	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.lifecycle:lifecycle-livedata:2.8.7	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.lifecycle:lifecycle-process:2.8.7	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.lifecycle:lifecycle-runtime-android:2.8.7	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.lifecycle:lifecycle-runtime-compose-android:2.8.7	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.lifecycle:lifecycle-runtime-ktx-android:2.8.7	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.lifecycle:lifecycle-viewmodel-android:2.8.7	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.lifecycle:lifecycle-viewmodel-compose-android:2.8.7	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.lifecycle:lifecycle-viewmodel-savedstate:2.8.7	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.lifecycle:lifecycle-viewmodel:2.8.7	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.loader:loader:1.0.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://source.android.com
+debugRuntimeClasspath	androidx.media3:media3-common:1.9.4	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/androidx/media
+debugRuntimeClasspath	androidx.media3:media3-container:1.9.4	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/androidx/media
+debugRuntimeClasspath	androidx.media3:media3-database:1.9.4	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/androidx/media
+debugRuntimeClasspath	androidx.media3:media3-datasource:1.9.4	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/androidx/media
+debugRuntimeClasspath	androidx.media3:media3-decoder:1.9.4	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/androidx/media
+debugRuntimeClasspath	androidx.media3:media3-effect:1.9.4	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/androidx/media
+debugRuntimeClasspath	androidx.media3:media3-exoplayer:1.9.4	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/androidx/media
+debugRuntimeClasspath	androidx.media3:media3-extractor:1.9.4	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/androidx/media
+debugRuntimeClasspath	androidx.media3:media3-inspector:1.9.4	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/androidx/media
+debugRuntimeClasspath	androidx.media3:media3-muxer:1.9.4	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/androidx/media
+debugRuntimeClasspath	androidx.media3:media3-transformer:1.9.4	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/androidx/media
+debugRuntimeClasspath	androidx.media3:media3-ui:1.9.4	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/androidx/media
+debugRuntimeClasspath	androidx.navigation:navigation-common-ktx:2.8.9	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.navigation:navigation-common:2.8.9	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.navigation:navigation-compose:2.8.9	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.navigation:navigation-runtime-ktx:2.8.9	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.navigation:navigation-runtime:2.8.9	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.profileinstaller:profileinstaller:1.4.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.recyclerview:recyclerview:1.3.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.resourceinspection:resourceinspection-annotation:1.0.1	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.room:room-common:2.6.1	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.room:room-ktx:2.6.1	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.room:room-runtime:2.6.1	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.savedstate:savedstate-ktx:1.2.1	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.savedstate:savedstate:1.2.1	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.sqlite:sqlite-framework:2.4.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.sqlite:sqlite:2.4.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.startup:startup-runtime:1.1.1	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.tracing:tracing-android:1.3.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.tracing:tracing-ktx:1.3.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+debugRuntimeClasspath	androidx.vectordrawable:vectordrawable-animated:1.1.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://source.android.com
+debugRuntimeClasspath	androidx.vectordrawable:vectordrawable:1.1.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://source.android.com
+debugRuntimeClasspath	androidx.versionedparcelable:versionedparcelable:1.1.1	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://source.android.com
+debugRuntimeClasspath	androidx.viewpager:viewpager:1.0.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://source.android.com
+debugRuntimeClasspath	com.google.auto.value:auto-value-annotations:1.6.3	Apache 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://github.com/google/auto
+debugRuntimeClasspath	com.google.code.findbugs:jsr305:3.0.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://code.google.com/p/jsr-305/
+debugRuntimeClasspath	com.google.dagger:dagger:2.59	Apache 2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/google/dagger/
+debugRuntimeClasspath	com.google.errorprone:error_prone_annotations:2.28.0	Apache 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	-
+debugRuntimeClasspath	com.google.guava:failureaccess:1.0.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	-
+debugRuntimeClasspath	com.google.guava:guava:33.3.1-android	Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/google/guava
+debugRuntimeClasspath	com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	-
+debugRuntimeClasspath	com.google.j2objc:j2objc-annotations:3.0.0	Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://github.com/google/j2objc
+debugRuntimeClasspath	jakarta.inject:jakarta.inject-api:2.0.1	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/eclipse-ee4j/injection-api
+debugRuntimeClasspath	javax.inject:javax.inject:1	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://code.google.com/p/atinject/source/checkout
+debugRuntimeClasspath	net.sf.trove4j:trove4j:3.0.3	GNU Lesser General Public License 2.1	http://www.gnu.org/licenses/lgpl-2.1.txt	https://trove4j.svn.sourceforge.net/svnroot/trove4j
+debugRuntimeClasspath	org.boofcv:boofcv-feature:1.4.0	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/lessthanoptimal/BoofCV
+debugRuntimeClasspath	org.boofcv:boofcv-geo:1.4.0	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/lessthanoptimal/BoofCV
+debugRuntimeClasspath	org.boofcv:boofcv-ip:1.4.0	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/lessthanoptimal/BoofCV
+debugRuntimeClasspath	org.boofcv:boofcv-types:1.4.0	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/lessthanoptimal/BoofCV
+debugRuntimeClasspath	org.checkerframework:checker-qual:3.43.0	The MIT License	http://opensource.org/licenses/MIT	https://github.com/typetools/checker-framework.git
+debugRuntimeClasspath	org.ddogleg:ddogleg:0.25.1	The Apache License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/lessthanoptimal/ddogleg
+debugRuntimeClasspath	org.ejml:ejml-cdense:0.45.1	The Apache License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/lessthanoptimal/ejml
+debugRuntimeClasspath	org.ejml:ejml-core:0.45.1	The Apache License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/lessthanoptimal/ejml
+debugRuntimeClasspath	org.ejml:ejml-ddense:0.45.1	The Apache License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/lessthanoptimal/ejml
+debugRuntimeClasspath	org.ejml:ejml-dsparse:0.45.1	The Apache License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/lessthanoptimal/ejml
+debugRuntimeClasspath	org.ejml:ejml-fdense:0.45.1	The Apache License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/lessthanoptimal/ejml
+debugRuntimeClasspath	org.ejml:ejml-fsparse:0.45.1	The Apache License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/lessthanoptimal/ejml
+debugRuntimeClasspath	org.ejml:ejml-simple:0.45.1	The Apache License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/lessthanoptimal/ejml
+debugRuntimeClasspath	org.ejml:ejml-zdense:0.45.1	The Apache License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/lessthanoptimal/ejml
+debugRuntimeClasspath	org.georegression:georegression:0.30.0	The Apache License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/lessthanoptimal/GeoRegression
+debugRuntimeClasspath	org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/JetBrains/kotlin
+debugRuntimeClasspath	org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/JetBrains/kotlin
+debugRuntimeClasspath	org.jetbrains.kotlin:kotlin-stdlib:2.1.20	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/JetBrains/kotlin
+debugRuntimeClasspath	org.jetbrains.kotlinx:atomicfu-jvm:0.28.0	Apache-2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/Kotlin/kotlinx.atomicfu
+debugRuntimeClasspath	org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0	The Apache Software License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/Kotlin/kotlinx.coroutines
+debugRuntimeClasspath	org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.9.0	The Apache Software License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/Kotlin/kotlinx.coroutines
+debugRuntimeClasspath	org.jetbrains.kotlinx:kotlinx-coroutines-guava:1.9.0	The Apache Software License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/Kotlin/kotlinx.coroutines
+debugRuntimeClasspath	org.jetbrains.kotlinx:kotlinx-serialization-core-jvm:1.8.0	The Apache Software License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/Kotlin/kotlinx.serialization
+debugRuntimeClasspath	org.jetbrains.kotlinx:kotlinx-serialization-json-jvm:1.8.0	The Apache Software License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/Kotlin/kotlinx.serialization
+debugRuntimeClasspath	org.jetbrains:annotations:23.0.0	The Apache Software License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/JetBrains/java-annotations
+debugRuntimeClasspath	org.jspecify:jspecify:1.0.0	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/jspecify/jspecify/
+kspReleaseKotlinProcessorClasspath	androidx.annotation:annotation:1.3.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+kspReleaseKotlinProcessorClasspath	androidx.room:room-common:2.6.1	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+kspReleaseKotlinProcessorClasspath	androidx.room:room-compiler-processing:2.6.1	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+kspReleaseKotlinProcessorClasspath	androidx.room:room-compiler:2.6.1	The Apache Software License, Version 2.0; BSD licence	http://www.apache.org/licenses/LICENSE-2.0.txt; http://antlr.org/license.html	https://cs.android.com/androidx/platform/frameworks/support
+kspReleaseKotlinProcessorClasspath	androidx.room:room-migration:2.6.1	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+kspReleaseKotlinProcessorClasspath	com.google.auto.value:auto-value-annotations:1.6.3	Apache 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://github.com/google/auto
+kspReleaseKotlinProcessorClasspath	com.google.auto:auto-common:0.11	Apache 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://github.com/google/auto
+kspReleaseKotlinProcessorClasspath	com.google.code.findbugs:jsr305:3.0.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://code.google.com/p/jsr-305/
+kspReleaseKotlinProcessorClasspath	com.google.code.gson:gson:2.9.0	Apache-2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	-
+kspReleaseKotlinProcessorClasspath	com.google.devtools.ksp:symbol-processing-api:1.9.0-1.0.13	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/google/ksp
+kspReleaseKotlinProcessorClasspath	com.google.errorprone:error_prone_annotations:2.11.0	Apache 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	-
+kspReleaseKotlinProcessorClasspath	com.google.guava:failureaccess:1.0.1	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	-
+kspReleaseKotlinProcessorClasspath	com.google.guava:guava:31.1-jre	Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/google/guava
+kspReleaseKotlinProcessorClasspath	com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	-
+kspReleaseKotlinProcessorClasspath	com.google.j2objc:j2objc-annotations:1.3	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/google/j2objc/
+kspReleaseKotlinProcessorClasspath	com.intellij:annotations:12.0	Apache License 2	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/JetBrains/intellij-community
+kspReleaseKotlinProcessorClasspath	com.squareup:javapoet:1.13.0	Apache 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://github.com/square/javapoet/
+kspReleaseKotlinProcessorClasspath	com.squareup:kotlinpoet-javapoet:1.14.2	The Apache Software License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/square/kotlinpoet
+kspReleaseKotlinProcessorClasspath	com.squareup:kotlinpoet:1.14.2	The Apache Software License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/square/kotlinpoet
+kspReleaseKotlinProcessorClasspath	commons-codec:commons-codec:1.15	Apache License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/apache/commons-codec
+kspReleaseKotlinProcessorClasspath	org.checkerframework:checker-qual:3.12.0	The MIT License	http://opensource.org/licenses/MIT	https://github.com/typetools/checker-framework.git
+kspReleaseKotlinProcessorClasspath	org.jetbrains.kotlin:kotlin-reflect:1.8.21	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/JetBrains/kotlin
+kspReleaseKotlinProcessorClasspath	org.jetbrains.kotlin:kotlin-stdlib-common:1.9.0	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/JetBrains/kotlin
+kspReleaseKotlinProcessorClasspath	org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/JetBrains/kotlin
+kspReleaseKotlinProcessorClasspath	org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/JetBrains/kotlin
+kspReleaseKotlinProcessorClasspath	org.jetbrains.kotlin:kotlin-stdlib:1.9.0	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/JetBrains/kotlin
+kspReleaseKotlinProcessorClasspath	org.jetbrains:annotations:13.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/JetBrains/intellij-community
+kspReleaseKotlinProcessorClasspath	org.xerial:sqlite-jdbc:3.41.2.2	The Apache Software License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/xerial/sqlite-jdbc
+buildToolClasspath	androidx.databinding:databinding-common:8.9.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://tools.android.com/
+buildToolClasspath	androidx.databinding:databinding-compiler-common:8.9.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://tools.android.com/
+buildToolClasspath	com.android.databinding:baseLibrary:8.9.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://tools.android.com/
+buildToolClasspath	com.android.tools.analytics-library:crash:31.9.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://tools.android.com/
+buildToolClasspath	com.android.tools.analytics-library:protos:31.9.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://tools.android.com/
+buildToolClasspath	com.android.tools.analytics-library:shared:31.9.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://tools.android.com/
+buildToolClasspath	com.android.tools.analytics-library:tracker:31.9.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://tools.android.com/
+buildToolClasspath	com.android.tools.build.jetifier:jetifier-core:1.0.0-beta10	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+buildToolClasspath	com.android.tools.build.jetifier:jetifier-processor:1.0.0-beta10	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://cs.android.com/androidx/platform/frameworks/support
+buildToolClasspath	com.android.tools.build:aapt2-proto:8.9.2-12782657	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://android.googlesource.com/platform/tools/base
+buildToolClasspath	com.android.tools.build:aaptcompiler:8.9.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://android.googlesource.com/platform/tools/base
+buildToolClasspath	com.android.tools.build:apksig:8.9.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://tools.android.com/
+buildToolClasspath	com.android.tools.build:apkzlib:8.9.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://tools.android.com/
+buildToolClasspath	com.android.tools.build:builder-model:8.9.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://android.googlesource.com/platform/tools/base
+buildToolClasspath	com.android.tools.build:builder-test-api:8.9.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://android.googlesource.com/platform/tools/base
+buildToolClasspath	com.android.tools.build:builder:8.9.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://android.googlesource.com/platform/tools/base
+buildToolClasspath	com.android.tools.build:bundletool:1.17.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	-
+buildToolClasspath	com.android.tools.build:gradle-api:8.9.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://android.googlesource.com/platform/tools/base
+buildToolClasspath	com.android.tools.build:gradle-settings-api:8.9.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://android.googlesource.com/platform/tools/base
+buildToolClasspath	com.android.tools.build:gradle:8.9.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://android.googlesource.com/platform/tools/base
+buildToolClasspath	com.android.tools.build:manifest-merger:31.9.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://android.googlesource.com/platform/tools/base
+buildToolClasspath	com.android.tools.build:transform-api:2.0.0-deprecated-use-gradle-api	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://android.googlesource.com/platform/tools/base
+buildToolClasspath	com.android.tools.ddms:ddmlib:31.9.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://tools.android.com/
+buildToolClasspath	com.android.tools.layoutlib:layoutlib-api:31.9.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://tools.android.com/
+buildToolClasspath	com.android.tools.lint:lint-model:31.9.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://tools.android.com/
+buildToolClasspath	com.android.tools.lint:lint-typedef-remover:31.9.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://tools.android.com/
+buildToolClasspath	com.android.tools.utp:android-device-provider-ddmlib-proto:31.9.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://tools.android.com/
+buildToolClasspath	com.android.tools.utp:android-device-provider-gradle-proto:31.9.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://tools.android.com/
+buildToolClasspath	com.android.tools.utp:android-device-provider-profile-proto:31.9.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://tools.android.com/
+buildToolClasspath	com.android.tools.utp:android-test-plugin-host-additional-test-output-proto:31.9.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://tools.android.com/
+buildToolClasspath	com.android.tools.utp:android-test-plugin-host-apk-installer-proto:31.9.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://tools.android.com/
+buildToolClasspath	com.android.tools.utp:android-test-plugin-host-coverage-proto:31.9.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://tools.android.com/
+buildToolClasspath	com.android.tools.utp:android-test-plugin-host-emulator-control-proto:31.9.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://tools.android.com/
+buildToolClasspath	com.android.tools.utp:android-test-plugin-host-logcat-proto:31.9.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://tools.android.com/
+buildToolClasspath	com.android.tools.utp:android-test-plugin-host-retention-proto:31.9.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://tools.android.com/
+buildToolClasspath	com.android.tools.utp:android-test-plugin-result-listener-gradle-proto:31.9.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://tools.android.com/
+buildToolClasspath	com.android.tools:annotations:31.9.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://tools.android.com/
+buildToolClasspath	com.android.tools:common:31.9.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://tools.android.com/
+buildToolClasspath	com.android.tools:dvlib:31.9.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://tools.android.com/
+buildToolClasspath	com.android.tools:repository:31.9.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://tools.android.com/
+buildToolClasspath	com.android.tools:sdk-common:31.9.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://tools.android.com/
+buildToolClasspath	com.android.tools:sdklib:31.9.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://tools.android.com/
+buildToolClasspath	com.android:signflinger:8.9.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://tools.android.com/
+buildToolClasspath	com.android:zipflinger:8.9.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://tools.android.com/
+buildToolClasspath	com.google.android:annotations:4.1.1.4	Apache 2.0	http://www.apache.org/licenses/LICENSE-2.0	https://android.git.kernel.org/
+buildToolClasspath	com.google.api.grpc:proto-google-common-protos:2.17.0	Apache-2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/googleapis/gapic-generator-java
+buildToolClasspath	com.google.auto.value:auto-value-annotations:1.6.2	Apache 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://github.com/google/auto
+buildToolClasspath	com.google.code.findbugs:jsr305:3.0.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://code.google.com/p/jsr-305/
+buildToolClasspath	com.google.code.gson:gson:2.11.0	Apache-2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	-
+buildToolClasspath	com.google.crypto.tink:tink:1.7.0	Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/google/tink.git
+buildToolClasspath	com.google.dagger:dagger:2.28.3	Apache 2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/google/dagger/
+buildToolClasspath	com.google.devtools.ksp:symbol-processing-api:2.1.20-1.0.31	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/google/ksp
+buildToolClasspath	com.google.devtools.ksp:symbol-processing-common-deps:2.1.20-1.0.31	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/google/ksp
+buildToolClasspath	com.google.devtools.ksp:symbol-processing-gradle-plugin:2.1.20-1.0.31	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/google/ksp
+buildToolClasspath	com.google.errorprone:error_prone_annotations:2.27.0	Apache 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	-
+buildToolClasspath	com.google.flatbuffers:flatbuffers-java:1.12.0	Apache License V2.0	https://raw.githubusercontent.com/google/flatbuffers/master/LICENSE.txt	https://github.com/google/flatbuffers
+buildToolClasspath	com.google.guava:failureaccess:1.0.1	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	-
+buildToolClasspath	com.google.guava:guava:32.0.1-jre	Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/google/guava
+buildToolClasspath	com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	-
+buildToolClasspath	com.google.j2objc:j2objc-annotations:2.8	Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/google/j2objc/
+buildToolClasspath	com.google.jimfs:jimfs:1.1	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	-
+buildToolClasspath	com.google.protobuf:protobuf-java-util:3.22.3	BSD-3-Clause	https://opensource.org/licenses/BSD-3-Clause	-
+buildToolClasspath	com.google.protobuf:protobuf-java:3.24.4	BSD-3-Clause	https://opensource.org/licenses/BSD-3-Clause	-
+buildToolClasspath	com.google.testing.platform:core-proto:0.0.9-alpha03	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://developer.android.com/testing
+buildToolClasspath	com.googlecode.juniversalchardet:juniversalchardet:1.0.3	Mozilla Public License 1.1 (MPL 1.1)	http://www.mozilla.org/MPL/MPL-1.1.html	http://code.google.com/p/juniversalchardet/source/browse/
+buildToolClasspath	com.squareup:javapoet:1.10.0	Apache 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://github.com/square/javapoet/
+buildToolClasspath	com.squareup:javawriter:2.5.0	Apache 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://github.com/square/javawriter/
+buildToolClasspath	com.sun.activation:javax.activation:1.2.0	CDDL/GPLv2+CE	https://github.com/javaee/activation/blob/master/LICENSE.txt	-
+buildToolClasspath	com.sun.istack:istack-commons-runtime:3.0.8	Eclipse Distribution License - v 1.0	http://www.eclipse.org/org/documents/edl-v10.php	-
+buildToolClasspath	com.sun.xml.fastinfoset:FastInfoset:1.2.16	Apache License, Version 2.0; Eclipse Distribution License - v 1.0	http://www.opensource.org/licenses/apache2.0.php; http://www.eclipse.org/org/documents/edl-v10.php	-
+buildToolClasspath	commons-codec:commons-codec:1.11	Apache License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	http://svn.apache.org/viewvc/commons/proper/codec/trunk
+buildToolClasspath	commons-io:commons-io:2.16.1	Apache-2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://gitbox.apache.org/repos/asf?p=commons-io.git
+buildToolClasspath	commons-logging:commons-logging:1.2	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://svn.apache.org/repos/asf/commons/proper/logging/trunk
+buildToolClasspath	io.grpc:grpc-api:1.57.2	Apache 2.0	https://opensource.org/licenses/Apache-2.0	https://github.com/grpc/grpc-java
+buildToolClasspath	io.grpc:grpc-context:1.57.2	Apache 2.0	https://opensource.org/licenses/Apache-2.0	https://github.com/grpc/grpc-java
+buildToolClasspath	io.grpc:grpc-core:1.57.2	Apache 2.0	https://opensource.org/licenses/Apache-2.0	https://github.com/grpc/grpc-java
+buildToolClasspath	io.grpc:grpc-netty:1.57.2	Apache 2.0	https://opensource.org/licenses/Apache-2.0	https://github.com/grpc/grpc-java
+buildToolClasspath	io.grpc:grpc-protobuf-lite:1.57.2	Apache 2.0	https://opensource.org/licenses/Apache-2.0	https://github.com/grpc/grpc-java
+buildToolClasspath	io.grpc:grpc-protobuf:1.57.2	Apache 2.0	https://opensource.org/licenses/Apache-2.0	https://github.com/grpc/grpc-java
+buildToolClasspath	io.grpc:grpc-stub:1.57.2	Apache 2.0	https://opensource.org/licenses/Apache-2.0	https://github.com/grpc/grpc-java
+buildToolClasspath	io.netty:netty-buffer:4.1.93.Final	Apache License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0	-
+buildToolClasspath	io.netty:netty-codec-http2:4.1.93.Final	Apache License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0	-
+buildToolClasspath	io.netty:netty-codec-http:4.1.93.Final	Apache License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0	-
+buildToolClasspath	io.netty:netty-codec-socks:4.1.93.Final	Apache License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0	-
+buildToolClasspath	io.netty:netty-codec:4.1.93.Final	Apache License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0	-
+buildToolClasspath	io.netty:netty-common:4.1.93.Final	Apache License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0	-
+buildToolClasspath	io.netty:netty-handler-proxy:4.1.93.Final	Apache License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0	-
+buildToolClasspath	io.netty:netty-handler:4.1.93.Final	Apache License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0	-
+buildToolClasspath	io.netty:netty-resolver:4.1.93.Final	Apache License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0	-
+buildToolClasspath	io.netty:netty-transport-native-unix-common:4.1.93.Final	Apache License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0	-
+buildToolClasspath	io.netty:netty-transport:4.1.93.Final	Apache License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0	-
+buildToolClasspath	io.perfmark:perfmark-api:0.26.0	Apache 2.0	https://opensource.org/licenses/Apache-2.0	https://github.com/perfmark/perfmark
+buildToolClasspath	jakarta.activation:jakarta.activation-api:1.2.1	EDL 1.0	http://www.eclipse.org/org/documents/edl-v10.php	-
+buildToolClasspath	jakarta.xml.bind:jakarta.xml.bind-api:2.3.2	Eclipse Distribution License - v 1.0	http://www.eclipse.org/org/documents/edl-v10.php	-
+buildToolClasspath	javax.annotation:javax.annotation-api:1.3.2	CDDL + GPLv2 with classpath exception	https://github.com/javaee/javax.annotation/blob/master/LICENSE	https://github.com/javaee/javax.annotation
+buildToolClasspath	javax.inject:javax.inject:1	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://code.google.com/p/atinject/source/checkout
+buildToolClasspath	net.java.dev.jna:jna-platform:5.6.0	LGPL, version 2.1; Apache License v2.0	http://www.gnu.org/licenses/licenses.html; http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/java-native-access/jna
+buildToolClasspath	net.java.dev.jna:jna:5.6.0	LGPL, version 2.1; Apache License v2.0	http://www.gnu.org/licenses/licenses.html; http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/java-native-access/jna
+buildToolClasspath	net.sf.jopt-simple:jopt-simple:4.9	The MIT License	http://www.opensource.org/licenses/mit-license.php	http://github.com/pholser/jopt-simple
+buildToolClasspath	net.sf.kxml:kxml2:2.3.0	BSD style; Public Domain	http://kxml.cvs.sourceforge.net/viewvc/kxml/kxml2/license.txt?view=markup; http://creativecommons.org/licenses/publicdomain	http://kxml.cvs.sourceforge.net/viewvc/kxml/kxml2/
+buildToolClasspath	org.apache.commons:commons-compress:1.21	Apache License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://gitbox.apache.org/repos/asf?p=commons-compress.git
+buildToolClasspath	org.apache.httpcomponents:httpclient:4.5.14	Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://hc.apache.org/httpcomponents-client-ga
+buildToolClasspath	org.apache.httpcomponents:httpcore:4.4.16	Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://hc.apache.org/httpcomponents-core-ga
+buildToolClasspath	org.apache.httpcomponents:httpmime:4.5.6	Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	http://hc.apache.org/httpcomponents-client
+buildToolClasspath	org.bitbucket.b_c:jose4j:0.9.5	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://bitbucket.org/b_c/jose4j
+buildToolClasspath	org.bouncycastle:bcpkix-jdk18on:1.79	Bouncy Castle Licence	https://www.bouncycastle.org/licence.html	https://github.com/bcgit/bc-java
+buildToolClasspath	org.bouncycastle:bcprov-jdk18on:1.79	Bouncy Castle Licence	https://www.bouncycastle.org/licence.html	https://github.com/bcgit/bc-java
+buildToolClasspath	org.bouncycastle:bcutil-jdk18on:1.79	Bouncy Castle Licence	https://www.bouncycastle.org/licence.html	https://github.com/bcgit/bc-java
+buildToolClasspath	org.checkerframework:checker-qual:3.33.0	The MIT License	http://opensource.org/licenses/MIT	https://github.com/typetools/checker-framework.git
+buildToolClasspath	org.codehaus.mojo:animal-sniffer-annotations:1.23	MIT license	https://spdx.org/licenses/MIT.txt	-
+buildToolClasspath	org.glassfish.jaxb:jaxb-runtime:2.3.2	Eclipse Distribution License - v 1.0	http://www.eclipse.org/org/documents/edl-v10.php	-
+buildToolClasspath	org.glassfish.jaxb:txw2:2.3.2	Eclipse Distribution License - v 1.0	http://www.eclipse.org/org/documents/edl-v10.php	-
+buildToolClasspath	org.jdom:jdom2:2.0.6	Similar to Apache License but with the acknowledgment clause removed	https://raw.github.com/hunterhacker/jdom/master/LICENSE.txt	git@github.com:/hunterhacker/jdom
+buildToolClasspath	org.jetbrains.kotlin:compose-compiler-gradle-plugin:2.1.20	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/JetBrains/kotlin
+buildToolClasspath	org.jetbrains.kotlin:fus-statistics-gradle-plugin:2.1.20	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/JetBrains/kotlin
+buildToolClasspath	org.jetbrains.kotlin:kotlin-build-statistics:2.1.20	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/JetBrains/kotlin
+buildToolClasspath	org.jetbrains.kotlin:kotlin-build-tools-api:2.1.20	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/JetBrains/kotlin
+buildToolClasspath	org.jetbrains.kotlin:kotlin-compiler-runner:2.1.20	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/JetBrains/kotlin
+buildToolClasspath	org.jetbrains.kotlin:kotlin-daemon-client:2.1.20	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/JetBrains/kotlin
+buildToolClasspath	org.jetbrains.kotlin:kotlin-gradle-plugin-annotations:2.1.20	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/JetBrains/kotlin
+buildToolClasspath	org.jetbrains.kotlin:kotlin-gradle-plugin-api:2.1.20	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/JetBrains/kotlin
+buildToolClasspath	org.jetbrains.kotlin:kotlin-gradle-plugin-api:2.1.20	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/JetBrains/kotlin
+buildToolClasspath	org.jetbrains.kotlin:kotlin-gradle-plugin-idea-proto:2.1.20	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/JetBrains/kotlin
+buildToolClasspath	org.jetbrains.kotlin:kotlin-gradle-plugin-idea:2.1.20	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/JetBrains/kotlin
+buildToolClasspath	org.jetbrains.kotlin:kotlin-gradle-plugin-model:2.1.20	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/JetBrains/kotlin
+buildToolClasspath	org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.20	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/JetBrains/kotlin
+buildToolClasspath	org.jetbrains.kotlin:kotlin-klib-commonizer-api:2.1.20	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/JetBrains/kotlin
+buildToolClasspath	org.jetbrains.kotlin:kotlin-native-utils:2.1.20	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/JetBrains/kotlin
+buildToolClasspath	org.jetbrains.kotlin:kotlin-reflect:2.0.20	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/JetBrains/kotlin
+buildToolClasspath	org.jetbrains.kotlin:kotlin-stdlib-jdk7:2.1.0	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/JetBrains/kotlin
+buildToolClasspath	org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.1.0	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/JetBrains/kotlin
+buildToolClasspath	org.jetbrains.kotlin:kotlin-stdlib:2.0.20	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/JetBrains/kotlin
+buildToolClasspath	org.jetbrains.kotlin:kotlin-tooling-core:2.1.20	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/JetBrains/kotlin
+buildToolClasspath	org.jetbrains.kotlin:kotlin-util-io:2.1.20	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/JetBrains/kotlin
+buildToolClasspath	org.jetbrains.kotlin:kotlin-util-klib-metadata:2.1.20	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/JetBrains/kotlin
+buildToolClasspath	org.jetbrains.kotlin:kotlin-util-klib:2.1.20	The Apache License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/JetBrains/kotlin
+buildToolClasspath	org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.8.0	The Apache Software License, Version 2.0	https://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/Kotlin/kotlinx.coroutines
+buildToolClasspath	org.jetbrains:annotations:13.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/JetBrains/intellij-community
+buildToolClasspath	org.jvnet.staxex:stax-ex:1.8.1	Eclipse Distribution License - v 1.0	http://www.eclipse.org/org/documents/edl-v10.php	https://github.com/eclipse-ee4j/jaxb-stax-ex
+buildToolClasspath	org.ow2.asm:asm-analysis:9.7	BSD-3-Clause	https://asm.ow2.io/license.html	https://gitlab.ow2.org/asm/asm/
+buildToolClasspath	org.ow2.asm:asm-commons:9.7	BSD-3-Clause	https://asm.ow2.io/license.html	https://gitlab.ow2.org/asm/asm/
+buildToolClasspath	org.ow2.asm:asm-tree:9.7	BSD-3-Clause	https://asm.ow2.io/license.html	https://gitlab.ow2.org/asm/asm/
+buildToolClasspath	org.ow2.asm:asm-util:9.7	BSD-3-Clause	https://asm.ow2.io/license.html	https://gitlab.ow2.org/asm/asm/
+buildToolClasspath	org.ow2.asm:asm:9.7	BSD-3-Clause	https://asm.ow2.io/license.html	https://gitlab.ow2.org/asm/asm/
+buildToolClasspath	org.slf4j:slf4j-api:1.7.30	MIT License	http://www.opensource.org/licenses/mit-license.php	http://www.slf4j.org
+buildToolClasspath	org.tensorflow:tensorflow-lite-metadata:0.2.0	The Apache Software License, Version 2.0	http://www.apache.org/licenses/LICENSE-2.0.txt	https://github.com/tensorflow/tflite-support/tree/master

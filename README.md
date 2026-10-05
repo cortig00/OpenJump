@@ -30,8 +30,9 @@ rates—provide the timing used in calculations.
 
 ## Install
 
-The official Android package is **`com.openjump.app`**. Google Play is the official
-user distribution channel; listing availability depends on the production rollout.
+The official Android package is **`com.openjump.app`**. Google Play is the current official
+user distribution channel. Official F-Droid inclusion is being prepared; do not
+confuse this preparation with an accepted F-Droid listing.
 
 [OpenJump on Google Play](https://play.google.com/store/apps/details?id=com.openjump.app)
 
@@ -118,4 +119,20 @@ minimal source distribution does not include the development test corpus.
 ## License
 
 OpenJump is free software under **GNU GPL-3.0-or-later**. See [`LICENSE`](LICENSE).
-Third-party dependencies retain their respective licenses.
+Third-party dependencies retain their respective licenses. See
+[third-party notices](THIRD_PARTY_NOTICES.md) and [artwork licensing](ASSET_LICENSES.md).
+License texts and runtime attributions are bundled in the APK.
+
+## F-Droid
+
+See [F-Droid preparation](docs/FDROID.md) for the audited dependencies, shared
+Fastlane metadata, build recipe, signing differences and future release workflow.
+There is no special flavor and no removal of the analysis features. F-Droid and
+Play use different signing certificates: switching channels requires a manual
+backup and reinstall; neither channel can install an update over the other.
+
+Validate the eight-language store metadata with:
+
+```bash
+python tools/check_store_metadata.py
+```

@@ -1,0 +1,12 @@
+OpenJump misst sportliche Sprünge anhand aufgezeichneter oder importierter Videos. Absprung und Landung lassen sich Bild für Bild auswählen; die Berechnungen verwenden die tatsächlichen Zeitstempel des Videos statt der nominellen Bildrate.
+
+• Sechs Protokolle: Countermovement Jump (CMJ), Squat Jump (SJ), Abalakov, einbeiniger Sprung, Drop Jump und Standweitsprung.
+• Sprunghöhe, Flugzeit, Absprunggeschwindigkeit und protokollspezifische Werte; kalibrierte horizontale Distanz.
+• Athletenprofile, Teams, lokaler Verlauf, Fortschritt und Vergleiche.
+• Experimenteller Video-Encoder: Maßstabskalibrierung, visuelles Tracking, Wiederholungsanalyse, Geschwindigkeits- und Bahnkurven sowie Videoexport mit Bewegungsbahn.
+• Manuelle Backups und vom Nutzer gestartete JSON/CSV-Exporte.
+• Einstellbare Einheiten, helles/dunkles Design und acht Oberflächensprachen.
+
+Analyse und gespeicherte Messungen bleiben auf deinem Gerät. Keine Konten, Werbung, automatische Analyse oder Internetberechtigung. Teilen, Exporte, Backups und Support-E-Mails erfordern deine Aktion; Zielanwendungen können diese Kopien übertragen. Manuelle JSON-Backups sind nicht verschlüsselt.
+
+Ergebnisse hängen von Videoqualität, Blickwinkel, Kalibrierung und Ereignisauswahl ab. Der Encoder ist experimentell und nicht mit einem physischen Encoder validiert. OpenJump ist kein medizinisches oder klinisch validiertes Gerät. Speichere die Analyse vor dem Verlassen: Ungespeicherte Arbeit geht beim Beenden des Prozesses verloren.

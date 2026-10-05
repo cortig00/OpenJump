@@ -1,0 +1,1 @@
+Analizza salti e velocità degli esercizi tramite video, offline
