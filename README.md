@@ -127,6 +127,9 @@ License texts and runtime attributions are bundled in the APK.
 
 See [F-Droid preparation](docs/FDROID.md) for the audited dependencies, shared
 Fastlane metadata, build recipe, signing differences and future release workflow.
+[Local validation](docs/FDROID_VALIDATION.md) and the
+[ready-to-submit instructions](docs/FDROID_SUBMISSION.md) record what passed and
+what still requires F-Droid review.
 There is no special flavor and no removal of the analysis features. F-Droid and
 Play use different signing certificates: switching channels requires a manual
 backup and reinstall; neither channel can install an update over the other.

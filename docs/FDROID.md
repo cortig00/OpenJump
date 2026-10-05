@@ -2,7 +2,9 @@
 
 OpenJump uses a **single application and release variant**, not an `fdroid` flavor.
 Its identity stays `com.openjump.app`, **1.0 / versionCode 7**. The Google Play AAB
-and upload key are not modified or rebuilt by this work.
+and upload key are not modified or rebuilt by this work. See the measured
+[validation results](FDROID_VALIDATION.md) and [submission package](FDROID_SUBMISSION.md).
+Local validation is complete; official F-Droid inclusion and GitLab CI remain pending.
 
 ## Audited eligibility
 
@@ -19,9 +21,11 @@ and upload key are not modified or rebuilt by this work.
 - The only checked-in JAR is the Gradle wrapper. F-Droid automatically removes it
   and invokes its own checksum-checked Gradle launcher. No `scanignore`, vendored
   runtime binary, non-free source replacement or proprietary compiler is required.
-- Merged release permissions must remain CAMERA, WRITE_EXTERNAL_STORAGE limited
-  to API <=28, and the app's signature-level dynamic-receiver permission. INTERNET
-  is explicitly removed. No microphone, location or broad media-read permission.
+- The actual merged release requests CAMERA, WRITE_EXTERNAL_STORAGE limited to
+  API <=28, ACCESS_NETWORK_STATE, WAKE_LOCK and the app's signature-level dynamic-
+  receiver permission. The two normal network-state/wake permissions come from
+  media integration; they do not grant Internet access or introduce a backend.
+  INTERNET is explicitly removed. No microphone, location or broad media-read permission.
 - Analysis, Room history and calculation are local. Optional browser links to
   source/issues/privacy/donations/DOI and user-triggered sharing/email are not an
   in-app backend. The complete privacy information is available offline.
@@ -84,7 +88,10 @@ stays immutable. The first F-Droid recipe pins the later preparation source comm
 which adds licenses, store metadata and the generic donation icon, still code7.
 It does not pretend to be byte-identical to the previously signed Play APK.
 
-The recipe's full source hash is intentionally a separate earlier source commit:
+The pinned preparation source is
+`8cd1fea192bdd5e984e5bd5a74f8f6463129912f` on the public `fdroid/inclusion` branch.
+Keep this commit publicly reachable. The recipe's full source hash is intentionally
+a separate earlier source commit:
 a recipe cannot embed the hash of the commit containing itself. Never replace a
 published stable tag or reuse a version code for a subsequent Play/F-Droid update.
 
@@ -111,7 +118,9 @@ Initial inclusion uses ordinary F-Droid signing; `Binaries` and
 `AllowedAPKSigningKeys` are deliberately absent. Reproducible builds are not an
 inclusion requirement. Java/Kotlin, fixed tool versions and Maven-provided native
 libraries make a future investigation reasonable, but reproducibility must be
-measured, not inferred from matching source.
+measured, not inferred from matching source. Two local builds of the exact pinned
+source produced identical unsigned APK hashes; same-container/cache repeatability
+is not independent reproducibility or equivalence to the signed Play artifact.
 
 Potential differences include AGP's version-control metadata, R8/toolchain versions,
 ZIP/alignment/ordering and signing metadata. The public source snapshot and original
@@ -124,7 +133,8 @@ planning; independent signing is a deliberate first-release decision.
 
 1. Merge this preparation into the main development/publication base; keep one
    release variant and the license/metadata files. Preserve the recipe's pinned
-   source commit when merging; don't leave future releases based on the old tree.
+   source commit when merging (fast-forward/history-preserving merge, not an
+   orphaning squash-and-delete); don't leave future releases based on the old tree.
 2. Increase `VERSION_CODE` monotonically, update `VERSION_NAME` and add
    `changelogs/<new-code>.txt` in all eight locales. Stable names after 1.0 currently
    follow the existing MAJOR.MINOR.PATCH validation. Choose a name/tag not already
