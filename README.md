@@ -139,3 +139,40 @@ Validate the eight-language store metadata with:
 ```bash
 python tools/check_store_metadata.py
 ```
+
+### Checklist for future releases (Play + F-Droid)
+
+1. **Keep one release source and variant.** Integrate this preparation into the
+   development/publication base before the next release, retaining its licenses
+   and Fastlane files. Keep the first recipe's pinned commit publicly reachable;
+   do not orphan it by squashing and deleting its only branch.
+2. **Update versions and listing together.** Increase `VERSION_CODE` in
+   `version.properties`, choose an unused stable `VERSION_NAME` and add
+   `changelogs/<new-code>.txt` in all eight locales. Never reuse a published code
+   or move a published tag. Recheck dependency/asset licenses when they change.
+3. **Validate and build once locally.** Commit the exact release candidate, run
+   the normal code gates and applicable Android smoke on that source, and archive
+   the signed Play AAB with its checksum. If a sideload APK is also needed, request
+   `:app:assembleRelease` together with `:app:bundleRelease` in one Gradle invocation
+   so compilation tasks can be shared. Do not clean/rebuild another clone merely
+   to validate store text; the Python metadata check does not compile the app.
+4. **Publish the exact source.** Tag the validated commit `v<versionName>` and
+   prepare its GitHub Release; upload the already-built Play AAB manually, without
+   rebuilding an immutable artifact. F-Droid watches stable tags, not GitHub
+   Release drafts. If Play must be live first, publish the tag only after Play
+   acceptance. Beta/alpha tags do not trigger the configured stable updater.
+5. **Let F-Droid build its channel.** After initial inclusion, ordinary stable
+   updates are detected automatically; a new fdroiddata MR is normally needed
+   only for recipe changes. F-Droid's own source build and signing are separate
+   and unavoidable—not a second local Play build. Check the exact new source's
+   metadata/scanner results; reserve an additional full local `fdroid build` for
+   build-tool/dependency/recipe changes or diagnosing failures, rather than
+   routinely repeating a successful build. Official CI/review still must pass.
+6. **Keep channel signatures separate.** Never provide Play keys to F-Droid or
+   upload its APK to Play. Updates within each channel retain its signing identity;
+   switching channels needs manual backup, uninstall and restore. Keep backups
+   and videos outside the app; backups do not restore video links or preferences.
+
+See [the release workflow](docs/FDROID.md#future-simultaneous-releases) for details
+and [the first-inclusion checklist](docs/FDROID_SUBMISSION.md) for the still-pending
+submission. Local validation is not official F-Droid acceptance.
