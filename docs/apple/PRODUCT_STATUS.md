@@ -219,3 +219,41 @@ target, signing/provisioning, Apple-account use (free account, no paid
 requirement claimed for own-device testing), SDK/CI changes and any physical
 iOS 16 test remain outside this source slice and require separate
 user-authorized work.
+
+## Minimum-16 CI result and unsigned device-build slice (source-only pending new CI)
+
+Base for this slice is `dev/apple` `474ee039f4492ceef3f29e52ad48877fb258e650`,
+verified clean (`git status` empty) at authoring. Per the build-gate handoff,
+the minimum-16 snapshot reached actual native CI
+[run 37506677281](https://github.com/cortig00/OpenJump/actions/runs/37506677281)
+with 46/46 PASS (45 unit plus one UI method) on the iOS 26 simulator toolchain;
+that run is the minimum-16 execution evidence, recorded here from the handoff
+and not re-executed in this source slice. It does not qualify iOS 16 runtime
+or any physical device.
+
+The unsigned device slice authored on top adds, without touching math,
+Android, UI, assets, SDKs, versions, or the existing `prototype` job: a `device`
+job (`needs: prototype`, same SHA, `macos-15` ARM64, 25-minute budget) that
+builds the shared Kotlin `iosArm64()` Release framework under Xcode 16
+(iphoneos SDK 18 assertion) plus `lipo` ARM64, then the `OpenJumpApple` target
+only in Release for `generic/platform=iOS` under Xcode 26.0.1 (iphoneos SDK 26
+assertion) with `ARCHS=arm64`, isolated DerivedData, and
+`CODE_SIGNING_ALLOWED/REQUIRED=NO`, inheriting deployment target 16.0. A new
+pure-Python helper validates the actual app binary (Info plus Mach-O platform
+IOS not simulator, ARM64, minimum 16.0 agreeing, no encryption/signature/
+provisioning) and packages `Payload/OpenJumpApple.app` into an unsigned IPA
+with a SHA256 file and a small manifest (basename/SHA/source SHA/bundle
+id/min OS/arch/platform/signing none, physical test NOT_RUN). The existing
+pinned upload action publishes only those three runner-temp files for
+3 days after full device validation SUCCESS. The practical user-side route is
+described in [DEVICE_TESTING.md](DEVICE_TESTING.md): the IPA is not
+installable as-is and needs the downloader's own local signing (free Apple
+Account path, roughly 7-day re-provisioning, no paid membership required for
+own-device testing; TestFlight/store remain paid and out of scope).
+
+No device binary has been produced from this slice yet: the new `device` job
+has not run on the new SHA, so the current artifact state is public/unsigned
+definition only, not a store release and not installable proof. Only a green
+native `device` run on the published SHA — with its platform/minimum proof —
+can close the device-build result. This section appends without rewriting the
+history above.

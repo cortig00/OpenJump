@@ -196,3 +196,83 @@ jobs:
           path: ${{ runner.temp }}/apple-artifacts/*
           if-no-files-found: error
           retention-days: 3
+
+  device:
+    needs: prototype
+    if: github.repository == 'cortig00/OpenJump' && github.ref == 'refs/heads/dev/apple'
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - name: Validate local CI helper contracts
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s apple/ci -p 'test*.py' -v
+      - name: Verify supported host tools for device build
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = arm64
+          DEVELOPER_DIR=/Applications/Xcode_16.0.app/Contents/Developer xcodebuild -version | grep -Fx 'Xcode 16.0'
+          DEVELOPER_DIR=/Applications/Xcode_16.0.app/Contents/Developer xcrun --sdk iphoneos --show-sdk-version | grep -Fx '18.0'
+          DEVELOPER_DIR=/Applications/Xcode_26.0.1.app/Contents/Developer xcodebuild -version | grep -Fx 'Xcode 26.0.1'
+          DEVELOPER_DIR=/Applications/Xcode_26.0.1.app/Contents/Developer xcrun --sdk iphoneos --show-sdk-version | grep -Fx '26.0'
+          JAVA_HOME="$(/usr/libexec/java_home -F -v 21)"
+          "$JAVA_HOME/bin/java" -version
+          printf 'JAVA_HOME=%s\n' "$JAVA_HOME" >> "$GITHUB_ENV"
+          printf '%s/bin\n' "$JAVA_HOME" >> "$GITHUB_PATH"
+      - name: Build Kotlin Release framework for iOS devices
+        env:
+          DEVELOPER_DIR: /Applications/Xcode_16.0.app/Contents/Developer
+        run: |
+          set -euo pipefail
+          python3 apple/ci/run_command.py --timeout 420 -- ./gradlew --no-daemon -p apple/spikes/jump-core linkReleaseFrameworkIosArm64
+          test -d apple/spikes/jump-core/build/bin/iosArm64/releaseFramework/JumpCoreSpike.framework
+          test "$(xcrun lipo -archs apple/spikes/jump-core/build/bin/iosArm64/releaseFramework/JumpCoreSpike.framework/JumpCoreSpike)" = arm64
+      - name: Build unsigned Release app for generic iOS devices
+        timeout-minutes: 8
+        env:
+          DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer
+        run: |
+          set -euo pipefail
+          FRAMEWORK="$GITHUB_WORKSPACE/apple/spikes/jump-core/build/bin/iosArm64/releaseFramework"
+          python3 apple/ci/run_command.py --timeout 420 -- xcodebuild build \
+            -project apple/OpenJumpApple.xcodeproj \
+            -scheme OpenJumpApple \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/apple-device-derived" \
+            JUMP_FRAMEWORK_DIR="$FRAMEWORK" \
+            ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
+          test -d "$RUNNER_TEMP/apple-device-derived/Build/Products/Release-iphoneos/OpenJumpApple.app"
+      - name: Validate device binary and package unsigned IPA
+        env:
+          DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer
+        run: |
+          set -euo pipefail
+          APP="$RUNNER_TEMP/apple-device-derived/Build/Products/Release-iphoneos/OpenJumpApple.app"
+          OUT="$RUNNER_TEMP/apple-device-unsigned"
+          mkdir -p "$OUT"
+          python3 apple/ci/package_device_ipa.py \
+            --app "$APP" \
+            --ipa "$OUT/OpenJumpApple-unsigned.ipa" \
+            --manifest "$OUT/manifest.json" \
+            --sha256-file "$OUT/OpenJumpApple-unsigned.ipa.sha256" \
+            --source-sha "$GITHUB_SHA"
+          {
+            echo '## iPhone device unsigned build'
+            echo 'Unsigned Release IPA packaged; install requires the downloader own local signing. Physical-device test NOT_RUN.'
+            cat "$OUT/manifest.json"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload unsigned device artifact
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: iPhone-device-unsigned-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/apple-device-unsigned/OpenJumpApple-unsigned.ipa
+            ${{ runner.temp }}/apple-device-unsigned/manifest.json
+            ${{ runner.temp }}/apple-device-unsigned/OpenJumpApple-unsigned.ipa.sha256
+          if-no-files-found: error
+          retention-days: 3

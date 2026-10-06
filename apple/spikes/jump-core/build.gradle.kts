@@ -11,6 +11,7 @@ val syncSharedJumpMath by tasks.registering(Sync::class) {
 
 kotlin {
     jvm { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }
+    iosArm64()
     iosSimulatorArm64()
 
     sourceSets {
