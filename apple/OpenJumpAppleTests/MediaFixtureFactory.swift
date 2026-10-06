@@ -2,6 +2,7 @@ import AVFoundation
 import CoreVideo
 import CoreGraphics
 import Foundation
+@testable import OpenJumpApple
 
 /// Test-only owned H.264 clips; all files live in a unique temporary directory and are removed by the caller.
 struct MediaFixtureFactory {
