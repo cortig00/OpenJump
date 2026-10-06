@@ -53,6 +53,27 @@ after the correction; this is not native compilation evidence. The corrected
 snapshot still needs a new native build. Simulator discovery, boot, runtime
 tests and screenshot export were all **SKIPPED** in the failed run, not PASS.
 
+## Follow-up compiler diagnostics
+
+The overlay correction was published as
+`ba73c477b2af1b709139b6000f903e7814d71f79`.
+[Run 37489725873](https://github.com/cortig00/OpenJump/actions/runs/37489725873)
+no longer reported `PhotosPickerItem`, but still **FAILED** Swift compilation
+(exit 65). It exposed three diagnostics in the unchanged `ProfileViews.swift`,
+with two causes:
+
+- The String/system-image initializer of `ContentUnavailableView` does not accept
+  `actions`. The correction uses the documented label/description/actions
+  ViewBuilder initializer, preserving the localized add-profile action.
+- An implicit `catch` binding named `error` shadowed the error-message state. The
+  correction writes `self.error`, preserving the caught error as the formatter's
+  input.
+
+Kotlin JVM/framework gates passed again; simulator and native runtime gates were
+**SKIPPED**, with no screenshot artifact. These ProfileViews corrections have
+source-contract checks and need native recompilation; neither source checks nor
+the disappearance of the earlier diagnostic prove that the entire app compiles.
+
 ## Known boundaries
 
 - The coordinated-copy wrapper has a 60-second deadline, cooperative checks and

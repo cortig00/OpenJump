@@ -13,7 +13,14 @@ struct ProfilesView: View {
         NavigationStack {
             Group {
                 if visible.isEmpty {
-                    ContentUnavailableView(AppText.string(showArchived ? "profiles.archivedEmpty" : "profiles.empty", language: language), systemImage: "person.crop.circle", description: Text(AppText.string("profiles.emptyBody", language: language)), actions: { Button(AppText.string("profiles.add", language: language)) { creating = true }.buttonStyle(.borderedProminent).tint(.openJumpGreen) })
+                    ContentUnavailableView {
+                        Label(AppText.string(showArchived ? "profiles.archivedEmpty" : "profiles.empty", language: language), systemImage: "person.crop.circle")
+                    } description: {
+                        Text(AppText.string("profiles.emptyBody", language: language))
+                    } actions: {
+                        Button(AppText.string("profiles.add", language: language)) { creating = true }
+                            .buttonStyle(.borderedProminent).tint(.openJumpGreen)
+                    }
                 } else {
                     List {
                         ForEach(visible) { athlete in
@@ -164,7 +171,7 @@ private struct AthleteEditor: View {
             if var athlete { athlete.name = name; athlete.weightKg = w; athlete.heightCm = h; athlete.notes = notes; athlete.avatarKey = avatarKey; _ = try await store.updateAthlete(athlete) }
             else { _ = try await store.createAthlete(name: name, weightKg: w, heightCm: h, notes: notes, avatarKey: avatarKey) }
             saved(); dismiss()
-        } catch { error = displayError(error, language: language) }
+        } catch { self.error = displayError(error, language: language) }
     }
 }
 
