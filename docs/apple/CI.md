@@ -37,7 +37,12 @@ Antes de publicar: validación YAML/filters/permissions, `bash -n` de tres scrip
 
 Tras publicar: registrar commit y URL/runID, esperar conclusión y leer logs/summary del run concreto. Si falla o queda en cola, no inferir éxito ni elegir otro toolchain por fallback silencioso. No habilitar servicios pagos para evitar una cola o un bloqueo de Actions.
 
-**Estado inicial:** preparado para primera activación; el resultado real se añadirá después de consumir la ejecución.
+### Evidencia de la primera ejecución
+
+- Commit diagnóstico `69703f46e418a0063af4549cfbc927d1f769510c`; [run37423404794](https://github.com/cortig00/OpenJump/actions/runs/37423404794), **FAILURE** en49s.
+- Verificación de herramientas **PASS**: imagen `macos-15-arm64` / `20260907.0337.1`, macOS15.7.9, Xcode26.0.1 build17A400, Swift6.2, SDK iPhoneOS/simulator26.0.
+- Inventario de simuladores **NO COMPLETADO**: `xcrun simctl list runtimes --json` agotó30s. No prueba ausencia de simuladores ni host completamente cualificado; no hubo build/test/boot/firma de app.
+- Ajuste acotado para segunda comprobación: timeout120s solo para consultas `simctl`, manteniendo30s en las demás, timeout global5min, el mismo toolchain y todas las condiciones de disponibilidad. Sin retry automático, fallback de versión ni omisión de checks. **Resultado de ese ajuste pendiente de ejecución**.
 
 ## Rollback
 

@@ -71,11 +71,13 @@ jobs:
           import platform
           import subprocess
 
-          def capture(*args):
-              return subprocess.check_output(args, text=True, timeout=30).strip()
+          def capture(*args, timeout=30):
+              return subprocess.check_output(args, text=True, timeout=timeout).strip()
 
-          runtimes = json.loads(capture("xcrun", "simctl", "list", "runtimes", "--json"))["runtimes"]
-          devices = json.loads(capture("xcrun", "simctl", "list", "devices", "available", "--json"))["devices"]
+          # CoreSimulator discovery can exceed 30s on a fresh hosted runner.
+          # Keep discovery bounded; the whole job still has a five-minute limit.
+          runtimes = json.loads(capture("xcrun", "simctl", "list", "runtimes", "--json", timeout=120))["runtimes"]
+          devices = json.loads(capture("xcrun", "simctl", "list", "devices", "available", "--json", timeout=120))["devices"]
           candidates = []
           for runtime in runtimes:
               if not runtime.get("isAvailable"):
