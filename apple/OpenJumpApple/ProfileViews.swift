@@ -13,11 +13,11 @@ struct ProfilesView: View {
         NavigationStack {
             Group {
                 if visible.isEmpty {
-                    ContentUnavailableView {
-                        Label(AppText.string(showArchived ? "profiles.archivedEmpty" : "profiles.empty", language: language), systemImage: "person.crop.circle")
-                    } description: {
-                        Text(AppText.string("profiles.emptyBody", language: language))
-                    } actions: {
+                    OpenJumpEmptyState(
+                        title: AppText.string(showArchived ? "profiles.archivedEmpty" : "profiles.empty", language: language),
+                        systemImage: "person.crop.circle",
+                        description: Text(AppText.string("profiles.emptyBody", language: language))
+                    ) {
                         Button(AppText.string("profiles.add", language: language)) { creating = true }
                             .buttonStyle(.borderedProminent).tint(.openJumpGreen)
                     }

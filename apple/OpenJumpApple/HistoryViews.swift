@@ -45,7 +45,7 @@ struct HistoryView: View {
                 if loadingPage && rows.isEmpty && error == nil {
                     ProgressView()
                 } else if rows.isEmpty && error == nil {
-                    ContentUnavailableView(AppText.string("history.emptyTitle", language: language), systemImage: "clock", description: Text(AppText.string("history.emptyBody", language: language)))
+                    OpenJumpEmptyState(title: AppText.string("history.emptyTitle", language: language), systemImage: "clock", description: Text(AppText.string("history.emptyBody", language: language)))
                 } else {
                     List {
                         ForEach(rows) { measurement in
@@ -60,7 +60,7 @@ struct HistoryView: View {
             .navigationTitle(AppText.string("tab.history", language: language))
             .searchable(text: $query, prompt: AppText.string("history.search", language: language))
             .task { await reset() }
-            .onChange(of: query) { _, _ in
+            .onChange(of: query) { _ in
                 searchGeneration += 1
                 let request = searchGeneration
                 Task {
@@ -69,9 +69,9 @@ struct HistoryView: View {
                     await reset()
                 }
             }
-            .onChange(of: selectedProtocol) { _, _ in Task { await reset() } }
-            .onChange(of: selectedOwner) { _, _ in Task { await reset() } }
-            .onChange(of: state.historyRevision) { _, _ in Task { await reset() } }
+            .onChange(of: selectedProtocol) { _ in Task { await reset() } }
+            .onChange(of: selectedOwner) { _ in Task { await reset() } }
+            .onChange(of: state.historyRevision) { _ in Task { await reset() } }
             .sheet(item: $selected, onDismiss: { Task { await reset() } }) { item in MeasurementDetailView(state: state, initial: item) }
         }
     }
@@ -147,7 +147,7 @@ private struct MeasurementDetailView: View {
                 } else if let temporalAnalysis {
                     temporalAnalysisSection(temporalAnalysis)
                 }
-                Section(AppText.string("history.notes", language: language)) { TextField(AppText.string("history.notesHint", language: language), text: $notes, axis: .vertical).lineLimit(3...6).onChange(of: notes) { _, value in if value.count > 500 { notes = String(value.prefix(500)) } } }
+                Section(AppText.string("history.notes", language: language)) { TextField(AppText.string("history.notesHint", language: language), text: $notes, axis: .vertical).lineLimit(3...6).onChange(of: notes) { value in if value.count > 500 { notes = String(value.prefix(500)) } } }
                 if let alert { Text(verbatim: alert).foregroundStyle(.red) }
                 Section { Button(AppText.string("history.delete", language: language), role: .destructive) { confirmDelete = true }.disabled(busy).frame(minHeight: 48) }
             }

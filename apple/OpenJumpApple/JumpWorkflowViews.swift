@@ -76,15 +76,15 @@ struct JumpHomeView: View {
                 Text(AppText.string("jumps.discard.body", language: language))
             }
             .task { workflow.synchronize(with: state) }
-            .onChange(of: selectedPhoto) { _, item in
+            .onChange(of: selectedPhoto) { item in
                 if let item {
                     workflow.requestPhotos(item, app: state)
                     selectedPhoto = nil
                 }
             }
-            .onChange(of: state.preferences.units) { _, _ in workflow.preferenceContextChanged(app: state) }
-            .onChange(of: state.preferences.language) { _, _ in workflow.preferenceContextChanged(app: state) }
-            .onChange(of: state.preferences.selectedAthleteID) { _, id in
+            .onChange(of: state.preferences.units) { _ in workflow.preferenceContextChanged(app: state) }
+            .onChange(of: state.preferences.language) { _ in workflow.preferenceContextChanged(app: state) }
+            .onChange(of: state.preferences.selectedAthleteID) { id in
                 if id != workflow.activeOwnerID { workflow.requestOwner(id, app: state) }
             }
         }

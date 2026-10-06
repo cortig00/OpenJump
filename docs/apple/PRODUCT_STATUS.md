@@ -171,3 +171,51 @@ new methods have not been executed natively and no GREEN is claimed for them or
 for the VFR inspection; only a new fully green CI run can close the native
 result. This remains a source snapshot: no clinical, full-app UX, physical-device,
 or iOS 16 runtime qualification is implied.
+
+## Actual native green run 37504546687 on 687934c (46/46 PASS)
+
+[Run 37504546687](https://github.com/cortig00/OpenJump/actions/runs/37504546687)
+for commit `687934c2313965c5164740e4b86434e5918db171`: all three Swift bundles
+built and simulator boot/readiness passed. 46 executed cases — 45 authored
+native unit-test methods plus the one UI demonstration method — **46/46 PASS**.
+This run executes the zero-sample guard correction and its two new real-buffer
+regression methods (`CMSampleBufferCreate` bare-zero skippable vs. invalidated
+invalid), alongside the previously failing VFR inspection method which now
+passes. The UI demonstration remains the isolated `-openjump-demo` route, not
+full product-UI coverage. Its export artifact is metadata only
+(artifact id `11431845944`, `139118` bytes, expires `2026-10-09T17:42:57Z`);
+no persisted screenshot/export artifact content is claimed beyond that. This
+run compiled and executed with minimum 17.0; it does not qualify iOS 16
+runtime or any physical device.
+
+## Authored iOS 16 source-compatibility slice (minimum 16.0, unexecuted)
+
+Authored after `687934c` without changing functions, math, metrics, storage,
+owner/PTS/cancel controls, localization values, assets, or any of the 45 unit
+plus one UI authored tests: one reusable `OpenJumpEmptyState` SwiftUI view in
+`apple/OpenJumpApple/AppShell.swift` replaces the three iOS 17-only
+`ContentUnavailableView` uses (AppShell load-error with bottom retry overlay
+and 24-point padding kept; History empty; Profiles empty/archived-empty title
+toggle with add-profile bordered-prominent action and green tint kept). All
+user strings remain `AppText`-localized; no new strings or locale keys. The
+exact nine two-argument `onChange(of:initial:_:)` closures become the older
+single-new-value overload (old value ignored at all sites, no initial
+callbacks): JumpHome selected-photo import plus nil reset, units/language
+preference-context changes, selected-athlete-ID gate against the workflow
+active owner, History query debounce with cancellation/sleep/latest-generation,
+three selected-protocol/owner/history-revision resets, and the History notes
+500-character clamp consuming the new value. The two `.topBarLeading` and
+`.topBarTrailing` placements are kept (iOS 14 back-deployment, not blockers).
+Project Debug/Release `IPHONEOS_DEPLOYMENT_TARGET` lowers `17.0` to `16.0`
+(target configurations inherit; unique IDs, memberships, framework paths,
+linker, Swift 5, SDK root, unsigned signing and versions unchanged). This
+lowers the deployment target only; it is not an SDK upgrade or a new runtime
+permission. Availability-compile with minimum 16.0 on the current SDK 26
+toolchain is still pending a new SHA and a fresh native CI run: simulator-26
+PASS would still not prove physical iOS 16 behavior. The shared Kotlin
+framework currently builds `iosSimulatorArm64()` only and the app remains
+unsigned, so no installable iPhone XR IPA exists from this slice. Device
+target, signing/provisioning, Apple-account use (free account, no paid
+requirement claimed for own-device testing), SDK/CI changes and any physical
+iOS 16 test remain outside this source slice and require separate
+user-authorized work.

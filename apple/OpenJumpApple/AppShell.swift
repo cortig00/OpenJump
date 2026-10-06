@@ -48,7 +48,7 @@ struct AppShell: View {
             if state.loading {
                 ProgressView(AppText.string("app.loading", language: state.preferences.language))
             } else if let error = state.loadError {
-                ContentUnavailableView(AppText.string("app.problem", language: state.preferences.language), systemImage: "externaldrive.badge.exclamationmark", description: Text(verbatim: error))
+                OpenJumpEmptyState(title: AppText.string("app.problem", language: state.preferences.language), systemImage: "externaldrive.badge.exclamationmark", description: Text(verbatim: error))
                     .overlay(alignment: .bottom) { Button(AppText.string("common.retry", language: state.preferences.language)) { Task { await state.load() } }.padding(24) }
             } else {
                 TabView(selection: $selectedTab) {
@@ -77,4 +77,51 @@ struct AppShell: View {
 
 extension Color {
     static let openJumpGreen = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.40, green: 0.82, blue: 0.70, alpha: 1) : UIColor(red: 0.02, green: 0.43, blue: 0.35, alpha: 1) })
+}
+
+/// iOS 16-compatible centered empty/error state replacing the iOS 17-only
+/// `ContentUnavailableView`. Title, icon, description and actions mirror the
+/// previous call sites; all user strings remain `AppText`-localized at the call
+/// site. The stack fills and centers within the available area without
+/// imposing an unbounded minimum height, so it stays neutral inside
+/// `ScrollView`/`Form`. The icon is decorative (titles already convey meaning)
+/// and the title is exposed as a heading; text wraps with Dynamic Type.
+struct OpenJumpEmptyState<Actions: View>: View {
+    let title: String
+    let systemImage: String
+    let description: Text?
+    let actions: Actions
+    init(title: String, systemImage: String, description: Text? = nil, @ViewBuilder actions: () -> Actions) {
+        self.title = title
+        self.systemImage = systemImage
+        self.description = description
+        self.actions = actions()
+    }
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: systemImage)
+                .font(.system(size: 48))
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+            Text(title)
+                .font(.headline)
+                .multilineTextAlignment(.center)
+                .accessibilityAddTraits(.isHeader)
+            if let description {
+                description
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            actions
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding()
+    }
+}
+
+extension OpenJumpEmptyState where Actions == EmptyView {
+    init(title: String, systemImage: String, description: Text? = nil) {
+        self.init(title: title, systemImage: systemImage, description: description) { EmptyView() }
+    }
 }
