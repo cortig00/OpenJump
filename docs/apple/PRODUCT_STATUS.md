@@ -131,3 +131,43 @@ The VFR inspection failure remains unexplained; no speculative VFR/cadence fix i
 The Android source, toolchain, CI definitions and app release versions are
 unchanged by this snapshot. No private athlete data, videos, development corpus,
 signing material or local agent settings are included.
+
+## Actual native run 37500468909 and zero-sample guard correction (authored, unexecuted)
+
+[Run 37500468909](https://github.com/cortig00/OpenJump/actions/runs/37500468909):
+all three Swift bundles built and simulator boot passed. 44 executed cases: 43
+PASS, 1 FAIL. The failure is
+`JumpVideoServiceTests.testImportedVariableCadenceStillIsBoundToItsCompressedSourceIndexAndPTS`,
+which threw `Jump video inspection failed (stage=readSamples, readerStatus=1)`.
+The other pre-existing `JumpVideoServiceTests` ordering method passed, as did the
+copied-fixture byte-equality path, the precision and negative-PTS checks, and the
+six pilot `MediaProbe` VFR/CFR PTS-plus-pixel oracles. The actual failing buffer's
+validity and data-readiness remain unknown; no attachment, validity, or timing
+probe of that buffer existed in that run's source or logs.
+
+The source guard correction (not yet executed natively) implements the reconciled
+CoreMedia semantics: `CMSampleBufferCreate` legally permits `sampleCount` 0 with a
+nil format description and nil data buffer when `dataReady` is true, while
+`CMSampleBufferGetNumSamples` returns 0 on error. A new internal pure helper used
+by the `readSamples` loop therefore skips a buffer only when it is valid,
+data-ready, and zero-sample (no PTS, time, FPS, or frame-index contribution);
+an invalid buffer — or a zero-sample buffer that is not data-ready — still fails
+with `inspectionFailed`. Negative counts also fail closed. Positive counts gain
+an `IsValid` gate alongside the existing 250k-cap and per-sample timing checks. No attachment allowlist or marker cutoff is introduced.
+The fixed inspection diagnostic additionally records three privacy-safe
+primitives (`sampleCount`, `sampleValid`, `sampleReady`) before cancellation so a
+persisting native failure discriminates the invalid/unready branch.
+
+Two new authored regression methods in `JumpVideoServiceTests` construct real
+`CMSampleBufferCreate` bare-zero fixtures (nil data, `dataReady` true, nil
+format, zero timing/size entry counts and arrays): the valid ready zero must
+classify as a skippable non-frame, and the same buffer after
+`CMSampleBufferInvalidate` must classify as invalid. The not-ready-zero negative
+branch has no authored fixture: a NULL-data zero requires `dataReady` true per
+the `CMSampleBufferCreate` primary, so no legal fragile construction was
+invented; production still rejects that branch. Authored counts move from 43 unit
+plus one UI method (44 cases) to 45 unit plus one UI method (46 cases). The two
+new methods have not been executed natively and no GREEN is claimed for them or
+for the VFR inspection; only a new fully green CI run can close the native
+result. This remains a source snapshot: no clinical, full-app UX, physical-device,
+or iOS 16 runtime qualification is implied.

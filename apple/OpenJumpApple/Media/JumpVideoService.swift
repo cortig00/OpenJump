@@ -32,14 +32,26 @@ private struct JumpVideoInspectionDiagnostic: Error, CustomStringConvertible {
     let errorCode: Int?
     let readerStatus: Int?
     let timingOSStatus: OSStatus?
+    let sampleCount: Int?
+    let sampleValid: Bool?
+    let sampleReady: Bool?
 
     var description: String {
         var fields = ["stage=\(stage)"]
         if let errorDomain, let errorCode { fields.append("error=\(errorDomain):\(errorCode)") }
         if let readerStatus { fields.append("readerStatus=\(readerStatus)") }
         if let timingOSStatus { fields.append("timingOSStatus=\(timingOSStatus)") }
+        if let sampleCount { fields.append("sampleCount=\(sampleCount)") }
+        if let sampleValid { fields.append("sampleValid=\(sampleValid)") }
+        if let sampleReady { fields.append("sampleReady=\(sampleReady)") }
         return "Jump video inspection failed (\(fields.joined(separator: ", ")))"
     }
+}
+
+enum JumpVideoSampleDecision: Equatable {
+    case media(sampleCount: CMItemCount)
+    case skipEmptyNonFrame
+    case invalid
 }
 
 enum JumpVideoServiceError: Error, Equatable {
@@ -194,11 +206,30 @@ actor JumpVideoService {
         return result
     }
 
+    // Primary CoreMedia semantics: CMSampleBufferCreate permits sampleCount 0 with a
+    // nil format description and nil data buffer (dataReady must then be true), while
+    // CMSampleBufferGetNumSamples returns 0 on error. A valid, data-ready zero-sample
+    // buffer therefore carries no frame timing and is skipped as a non-frame; an
+    // invalid buffer, or a zero-sample buffer that is not data-ready, is
+    // indistinguishable from an error and fails inspection. No attachment check.
+    static func classifySampleBuffer(_ sample: CMSampleBuffer) -> JumpVideoSampleDecision {
+        let sampleCount = CMSampleBufferGetNumSamples(sample)
+        guard CMSampleBufferIsValid(sample), sampleCount >= 0 else { return .invalid }
+        if sampleCount == 0 {
+            guard CMSampleBufferDataIsReady(sample) else { return .invalid }
+            return .skipEmptyNonFrame
+        }
+        return .media(sampleCount: sampleCount)
+    }
+
     private static func buildManifest(video: ImportedJumpVideo, asset: AVURLAsset,
                                       control: JumpVideoOperationControl) async throws -> JumpVideoManifest {
         var stage = "loadTracks"
         var reader: AVAssetReader?
         var timingOSStatus: OSStatus?
+        var lastSampleCount: Int?
+        var lastSampleValid: Bool?
+        var lastSampleReady: Bool?
         do {
             let tracks = try await asset.load(.tracks)
             guard !control.isCancelled else { throw CancellationError() }
@@ -243,23 +274,29 @@ actor JumpVideoService {
                 stage = "readSamples"
                 guard let sample = output.copyNextSampleBuffer() else { break }
                 guard !control.isCancelled else { throw CancellationError() }
-                let sampleCount = CMSampleBufferGetNumSamples(sample)
-                guard sampleCount > 0, sampleCount <= maximumFrames - times.count else {
-                    if sampleCount > 0 {
+                lastSampleCount = CMSampleBufferGetNumSamples(sample)
+                lastSampleValid = CMSampleBufferIsValid(sample)
+                lastSampleReady = CMSampleBufferDataIsReady(sample)
+                switch Self.classifySampleBuffer(sample) {
+                case .skipEmptyNonFrame:
+                    continue
+                case .invalid:
+                    throw JumpVideoServiceError.inspectionFailed
+                case .media(let sampleCount):
+                    guard sampleCount <= maximumFrames - times.count else {
                         createdReader.cancelReading()
                         throw JumpVideoServiceError.tooManyFrames
                     }
-                    throw JumpVideoServiceError.inspectionFailed
-                }
-                for sampleIndex in 0..<sampleCount {
-                    var timing = CMSampleTimingInfo()
-                    stage = "sampleTiming"
-                    let status = CMSampleBufferGetSampleTimingInfo(sample, at: sampleIndex, timingInfoOut: &timing)
-                    guard status == noErr else {
-                        timingOSStatus = status
-                        throw JumpVideoServiceError.inspectionFailed
+                    for sampleIndex in 0..<sampleCount {
+                        var timing = CMSampleTimingInfo()
+                        stage = "sampleTiming"
+                        let status = CMSampleBufferGetSampleTimingInfo(sample, at: sampleIndex, timingInfoOut: &timing)
+                        guard status == noErr else {
+                            timingOSStatus = status
+                            throw JumpVideoServiceError.inspectionFailed
+                        }
+                        times.append(timing.presentationTimeStamp)
                     }
-                    times.append(timing.presentationTimeStamp)
                 }
             }
             guard !control.isCancelled else { throw CancellationError() }
@@ -288,7 +325,9 @@ actor JumpVideoService {
             reader?.cancelReading()
             throw JumpVideoInspectionDiagnostic(stage: stage, errorDomain: safeDomain,
                                                 errorCode: safeDomain == nil ? nil : platformError.code,
-                                                readerStatus: status, timingOSStatus: timingOSStatus)
+                                                readerStatus: status, timingOSStatus: timingOSStatus,
+                                                sampleCount: lastSampleCount, sampleValid: lastSampleValid,
+                                                sampleReady: lastSampleReady)
         }
     }
 

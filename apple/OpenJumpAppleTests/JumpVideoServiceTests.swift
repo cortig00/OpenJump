@@ -1,5 +1,6 @@
 import AVFoundation
 import CoreGraphics
+import CoreMedia
 import XCTest
 @testable import OpenJumpApple
 
@@ -58,6 +59,53 @@ final class JumpVideoServiceTests: XCTestCase {
             XCTAssertEqual(presented.ptsUs, manifest.frames[index].ptsUs)
             XCTAssertEqual(try decodedID(presented.image), expectedID, "pixels for compressed source PTS at index \(index)")
         }
+    }
+
+    func testValidReadyZeroSampleBufferClassifiesAsSkippableNonFrame() throws {
+        var created: CMSampleBuffer?
+        let status = CMSampleBufferCreate(
+            allocator: kCFAllocatorDefault,
+            dataBuffer: nil,
+            dataReady: true,
+            makeDataReadyCallback: nil,
+            refcon: nil,
+            formatDescription: nil,
+            sampleCount: 0,
+            sampleTimingEntryCount: 0,
+            sampleTimingArray: nil,
+            sampleSizeEntryCount: 0,
+            sampleSizeArray: nil,
+            sampleBufferOut: &created
+        )
+        XCTAssertEqual(status, noErr)
+        let sample = try XCTUnwrap(created)
+        XCTAssertTrue(CMSampleBufferIsValid(sample))
+        XCTAssertEqual(CMSampleBufferGetNumSamples(sample), 0)
+        XCTAssertTrue(CMSampleBufferDataIsReady(sample))
+        XCTAssertEqual(JumpVideoService.classifySampleBuffer(sample), .skipEmptyNonFrame)
+    }
+
+    func testInvalidatedZeroSampleBufferClassifiesAsInvalid() throws {
+        var created: CMSampleBuffer?
+        let status = CMSampleBufferCreate(
+            allocator: kCFAllocatorDefault,
+            dataBuffer: nil,
+            dataReady: true,
+            makeDataReadyCallback: nil,
+            refcon: nil,
+            formatDescription: nil,
+            sampleCount: 0,
+            sampleTimingEntryCount: 0,
+            sampleTimingArray: nil,
+            sampleSizeEntryCount: 0,
+            sampleSizeArray: nil,
+            sampleBufferOut: &created
+        )
+        XCTAssertEqual(status, noErr)
+        let sample = try XCTUnwrap(created)
+        _ = CMSampleBufferInvalidate(sample)
+        XCTAssertFalse(CMSampleBufferIsValid(sample))
+        XCTAssertEqual(JumpVideoService.classifySampleBuffer(sample), .invalid)
     }
 
     private func decodedID(_ image: CGImage) throws -> Int {
