@@ -23,7 +23,17 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           persist-credentials: false
+      - name: Validate local CI helper contracts
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s apple/ci -p 'test*.py' -v
+      - name: Initialize concise artifact summary
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/apple-artifacts"
+          printf 'Apple prototype evidence; PASS means only the named gate passed.\n' > "$RUNNER_TEMP/apple-artifacts/summary.txt"
       - name: Verify supported host tools
+        id: host
         run: |
           set -euo pipefail
           test "$(uname -m)" = arm64
@@ -36,14 +46,15 @@ jobs:
           printf 'JAVA_HOME=%s\n' "$JAVA_HOME" >> "$GITHUB_ENV"
           printf '%s/bin\n' "$JAVA_HOME" >> "$GITHUB_PATH"
       - name: Run shared Kotlin math JVM tests
+        id: jvm
         env:
           DEVELOPER_DIR: /Applications/Xcode_16.0.app/Contents/Developer
         run: |
           set -euo pipefail
           ./gradlew --no-daemon -p apple/spikes/jump-core jvmTest
-          mkdir -p "$RUNNER_TEMP/apple-artifacts"
           printf 'JVM shared-math tests: PASS\n' >> "$RUNNER_TEMP/apple-artifacts/summary.txt"
       - name: Build Kotlin static framework with Kotlin/Xcode 16 pair
+        id: framework
         env:
           DEVELOPER_DIR: /Applications/Xcode_16.0.app/Contents/Developer
         run: |
@@ -52,55 +63,102 @@ jobs:
           test -d apple/spikes/jump-core/build/bin/iosSimulatorArm64/debugFramework/JumpCoreSpike.framework
           test "$(xcrun lipo -archs apple/spikes/jump-core/build/bin/iosSimulatorArm64/debugFramework/JumpCoreSpike.framework/JumpCoreSpike)" = arm64
           printf 'Kotlin 2.1.20 static iOS simulator framework (Xcode 16.0): PASS\n' >> "$RUNNER_TEMP/apple-artifacts/summary.txt"
+      - name: Build Swift consumer and test bundles (compile only)
+        id: native_build
+        timeout-minutes: 8
+        env:
+          DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer
+        run: |
+          set -euo pipefail
+          FRAMEWORK="$GITHUB_WORKSPACE/apple/spikes/jump-core/build/bin/iosSimulatorArm64/debugFramework"
+          python3 apple/ci/run_command.py --timeout 420 -- xcodebuild build-for-testing \
+            -project apple/OpenJumpApple.xcodeproj \
+            -scheme OpenJumpApple \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/apple-derived" \
+            JUMP_FRAMEWORK_DIR="$FRAMEWORK" \
+            ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO
+          printf 'Swift consumer and test bundles BUILD-FOR-TESTING: PASS (compiled; tests not run).\n' >> "$RUNNER_TEMP/apple-artifacts/summary.txt"
       - name: Discover exact iOS 26 iPhone simulator
         id: simulator
+        timeout-minutes: 3
         env:
           DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer
         run: |
           set -euo pipefail
-          python3 - "$GITHUB_OUTPUT" <<'PY'
-          import json, subprocess, sys
-          raw = subprocess.check_output(['xcrun', 'simctl', 'list', 'devices', 'available', '-j'], timeout=120)
-          data = json.loads(raw)
-          matches = [(runtime, d) for runtime, devices in data['devices'].items()
-                     if runtime.endswith('iOS-26-0') for d in devices
-                     if d['name'].startswith('iPhone') and d['isAvailable'] and d['state'] == 'Shutdown']
-          if not matches:
-              raise SystemExit('No available iOS 26 iPhone simulator runtime/device')
-          runtime, device = matches[0]
-          with open(sys.argv[1], 'a') as output:
-              output.write(f"udid={device['udid']}\nname={device['name']}\nruntime={runtime}\n")
-          PY
+          python3 apple/ci/run_command.py --timeout 120 -- python3 apple/ci/select_simulator.py "$GITHUB_OUTPUT"
       - name: Boot discovered ephemeral iPhone simulator
+        id: boot
+        timeout-minutes: 7
         env:
           DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer
         run: |
           set -euo pipefail
-          xcrun simctl boot "${{ steps.simulator.outputs.udid }}"
-          xcrun simctl bootstatus "${{ steps.simulator.outputs.udid }}" -b
-      - name: Build and test SwiftUI bridge and simulator UI
+          DEVICE='${{ steps.simulator.outputs.udid }}'
+          python3 apple/ci/run_command.py --timeout 120 -- xcrun simctl boot "$DEVICE"
+          python3 apple/ci/run_command.py --timeout 240 -- xcrun simctl bootstatus "$DEVICE" -b
+      - name: Run Swift bridge and simulator UI tests
+        id: native_tests
+        timeout-minutes: 8
         env:
           DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer
         run: |
           set -euo pipefail
-          RESULT="$RUNNER_TEMP/OpenJumpApple.xcresult"
+          RESULT="$RUNNER_TEMP/OpenJumpApple-tests.xcresult"
           FRAMEWORK="$GITHUB_WORKSPACE/apple/spikes/jump-core/build/bin/iosSimulatorArm64/debugFramework"
-          xcodebuild test \
+          python3 apple/ci/run_command.py --timeout 420 -- xcodebuild test-without-building \
             -project apple/OpenJumpApple.xcodeproj \
             -scheme OpenJumpApple \
             -destination "platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}" \
             -derivedDataPath "$RUNNER_TEMP/apple-derived" \
             -resultBundlePath "$RESULT" \
+            -parallel-testing-enabled NO \
             JUMP_FRAMEWORK_DIR="$FRAMEWORK" \
-            ARCHS=arm64 ONLY_ACTIVE_ARCH=YES \
-            CODE_SIGNING_ALLOWED=NO
-          printf 'Swift XCTest real Kotlin bridge + invalid-marker NSError: PASS\n' >> "$RUNNER_TEMP/apple-artifacts/summary.txt"
-          printf 'iOS simulator UI/XCUITest screenshot attachment: PASS (%s, %s)\n' '${{ steps.simulator.outputs.name }}' '${{ steps.simulator.outputs.runtime }}' >> "$RUNNER_TEMP/apple-artifacts/summary.txt"
+            ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO
+          printf 'Swift bridge and UI XCTest runtime: PASS (real simulator execution).\n' >> "$RUNNER_TEMP/apple-artifacts/summary.txt"
+      - name: Export verified XCTest screenshot attachments
+        id: export
+        if: steps.native_tests.conclusion == 'success'
+        env:
+          DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer
+        run: |
+          set -euo pipefail
+          RESULT="$RUNNER_TEMP/OpenJumpApple-tests.xcresult"
           xcrun xcresulttool export attachments --path "$RESULT" --output-path "$RUNNER_TEMP/exported-attachments"
-          find "$RUNNER_TEMP/exported-attachments" -type f -name '*.png' -print -quit | grep -q .
-          find "$RUNNER_TEMP/exported-attachments" -type f -name '*.png' -exec cp {} "$RUNNER_TEMP/apple-artifacts/" \;
-          test -n "$(find "$RUNNER_TEMP/apple-artifacts" -maxdepth 1 -type f -name '*.png' -print -quit)"
-          printf '\nSimulator screenshot: verified XCTest app screenshot PNG attachment; no app binary or xcresult uploaded.\n' >> "$RUNNER_TEMP/apple-artifacts/summary.txt"
+          count=0
+          while IFS= read -r png; do
+            cp "$png" "$RUNNER_TEMP/apple-artifacts/"
+            count=$((count + 1))
+            [ "$count" -lt 3 ] || break
+          done < <(find "$RUNNER_TEMP/exported-attachments" -type f -name '*.png')
+          test "$count" -gt 0
+          printf 'Verified XCTest screenshot attachment PNG(s): %s (no app binary/full xcresult uploaded).\n' "$count" >> "$RUNNER_TEMP/apple-artifacts/summary.txt"
+      - name: Record gate conclusions in job summary
+        if: always()
+        env:
+          HOST: ${{ steps.host.conclusion }}
+          JVM: ${{ steps.jvm.conclusion }}
+          FRAMEWORK: ${{ steps.framework.conclusion }}
+          BUILD: ${{ steps.native_build.conclusion }}
+          DISCOVERY: ${{ steps.simulator.conclusion }}
+          BOOT: ${{ steps.boot.conclusion }}
+          TESTS: ${{ steps.native_tests.conclusion }}
+          EXPORT: ${{ steps.export.conclusion }}
+        run: |
+          {
+            echo '## Apple prototype gate evidence'
+            echo '| Gate | Conclusion |'
+            echo '|---|---|'
+            echo "| Host tools | ${HOST:-not-run} |"
+            echo "| JVM tests | ${JVM:-not-run} |"
+            echo "| Kotlin framework/lipo | ${FRAMEWORK:-not-run} |"
+            echo "| Swift consumer/test bundle build-for-testing (not runtime tests) | ${BUILD:-not-run} |"
+            echo "| Simulator discovery | ${DISCOVERY:-not-run} |"
+            echo "| Bounded simulator boot/readiness | ${BOOT:-not-run} |"
+            echo "| Swift bridge/UI runtime tests | ${TESTS:-not-run} |"
+            echo "| XCTest screenshot export | ${EXPORT:-not-run} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ -f "$RUNNER_TEMP/apple-artifacts/summary.txt" ]; then cat "$RUNNER_TEMP/apple-artifacts/summary.txt" >> "$GITHUB_STEP_SUMMARY"; fi
       - name: Upload prototype screenshot artifact
         if: success()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
