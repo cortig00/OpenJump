@@ -36,6 +36,23 @@ review, test count, or historical prototype run is not an SDK/runtime PASS.
 Pushing Apple sources to `dev/apple` triggers the existing hosted CI; its eventual
 compile, simulator-readiness and runtime conclusions must be recorded separately.
 
+## First product-snapshot CI attempt
+
+Commit `57fc438c169edcc28f04b1d55d5d9d20f879c4d2`,
+[run 37487334711](https://github.com/cortig00/OpenJump/actions/runs/37487334711):
+**FAILURE** at the Swift `build-for-testing` gate (exit 65). CI helpers, shared
+Kotlin JVM tests and the ARM64 Kotlin framework build passed. Swift module
+emission reported `JumpVideoImport.swift:149:38: cannot find type
+'PhotosPickerItem' in scope`; that file imported `PhotosUI` but not `SwiftUI`,
+needed to load the PhotosUI/SwiftUI cross-import overlay. The other two consumers
+already imported both modules.
+
+The minimal source correction adds `import SwiftUI` to the importer. Its source
+import-contract check fails on the old file and passes on all three consumers
+after the correction; this is not native compilation evidence. The corrected
+snapshot still needs a new native build. Simulator discovery, boot, runtime
+tests and screenshot export were all **SKIPPED** in the failed run, not PASS.
+
 ## Known boundaries
 
 - The coordinated-copy wrapper has a 60-second deadline, cooperative checks and

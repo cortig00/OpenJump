@@ -1,6 +1,7 @@
 import CoreTransferable
 import Foundation
 import PhotosUI
+import SwiftUI
 import UniformTypeIdentifiers
 
 final class ImportedJumpVideo: @unchecked Sendable {
