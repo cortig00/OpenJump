@@ -1,0 +1,109 @@
+name: Apple prototype screenshot
+
+'on':
+  push:
+    branches: [dev/apple]
+    paths:
+      - 'apple/**'
+      - '.github/workflows/apple-prototype.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apple-prototype-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prototype:
+    if: github.repository == 'cortig00/OpenJump' && github.ref == 'refs/heads/dev/apple'
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - name: Verify supported host tools
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = arm64
+          DEVELOPER_DIR=/Applications/Xcode_16.0.app/Contents/Developer xcodebuild -version | grep -Fx 'Xcode 16.0'
+          DEVELOPER_DIR=/Applications/Xcode_16.0.app/Contents/Developer xcrun --sdk iphonesimulator --show-sdk-version | grep -Fx '18.0'
+          DEVELOPER_DIR=/Applications/Xcode_26.0.1.app/Contents/Developer xcodebuild -version | grep -Fx 'Xcode 26.0.1'
+          DEVELOPER_DIR=/Applications/Xcode_26.0.1.app/Contents/Developer xcrun --sdk iphonesimulator --show-sdk-version | grep -Fx '26.0'
+          JAVA_HOME="$(/usr/libexec/java_home -F -v 21)"
+          "$JAVA_HOME/bin/java" -version
+          printf 'JAVA_HOME=%s\n' "$JAVA_HOME" >> "$GITHUB_ENV"
+          printf '%s/bin\n' "$JAVA_HOME" >> "$GITHUB_PATH"
+      - name: Run shared Kotlin math JVM tests
+        env:
+          DEVELOPER_DIR: /Applications/Xcode_16.0.app/Contents/Developer
+        run: |
+          set -euo pipefail
+          ./gradlew --no-daemon -p apple/spikes/jump-core jvmTest
+          mkdir -p "$RUNNER_TEMP/apple-artifacts"
+          printf 'JVM shared-math tests: PASS\n' >> "$RUNNER_TEMP/apple-artifacts/summary.txt"
+      - name: Build Kotlin static framework with Kotlin/Xcode 16 pair
+        env:
+          DEVELOPER_DIR: /Applications/Xcode_16.0.app/Contents/Developer
+        run: |
+          set -euo pipefail
+          ./gradlew --no-daemon -p apple/spikes/jump-core linkDebugFrameworkIosSimulatorArm64
+          test -d apple/spikes/jump-core/build/bin/iosSimulatorArm64/debugFramework/JumpCoreSpike.framework
+          printf 'Kotlin 2.1.20 static iOS simulator framework (Xcode 16.0): PASS\n' >> "$RUNNER_TEMP/apple-artifacts/summary.txt"
+      - name: Discover exact iOS 26 iPhone simulator
+        id: simulator
+        env:
+          DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer
+        run: |
+          set -euo pipefail
+          python3 - "$GITHUB_OUTPUT" <<'PY'
+          import json, subprocess, sys
+          raw = subprocess.check_output(['xcrun', 'simctl', 'list', 'devices', 'available', '-j'], timeout=120)
+          data = json.loads(raw)
+          matches = [(runtime, d) for runtime, devices in data['devices'].items()
+                     if runtime.endswith('iOS-26-0') for d in devices
+                     if d['name'].startswith('iPhone') and d['isAvailable'] and d['state'] == 'Shutdown']
+          if not matches:
+              raise SystemExit('No available iOS 26 iPhone simulator runtime/device')
+          runtime, device = matches[0]
+          with open(sys.argv[1], 'a') as output:
+              output.write(f"udid={device['udid']}\nname={device['name']}\nruntime={runtime}\n")
+          PY
+      - name: Boot discovered ephemeral iPhone simulator
+        env:
+          DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer
+        run: |
+          set -euo pipefail
+          xcrun simctl boot "${{ steps.simulator.outputs.udid }}"
+          xcrun simctl bootstatus "${{ steps.simulator.outputs.udid }}" -b
+      - name: Build and test SwiftUI bridge and simulator UI
+        env:
+          DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer
+        run: |
+          set -euo pipefail
+          RESULT="$RUNNER_TEMP/OpenJumpApple.xcresult"
+          FRAMEWORK="$GITHUB_WORKSPACE/apple/spikes/jump-core/build/bin/iosSimulatorArm64/debugFramework"
+          xcodebuild test \
+            -project apple/OpenJumpApple.xcodeproj \
+            -scheme OpenJumpApple \
+            -destination "platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}" \
+            -derivedDataPath "$RUNNER_TEMP/apple-derived" \
+            -resultBundlePath "$RESULT" \
+            JUMP_FRAMEWORK_DIR="$FRAMEWORK" \
+            CODE_SIGNING_ALLOWED=NO
+          printf 'Swift XCTest real Kotlin bridge + invalid-marker NSError: PASS\n' >> "$RUNNER_TEMP/apple-artifacts/summary.txt"
+          printf 'iOS simulator UI/XCUITest screenshot attachment: PASS (%s, %s)\n' '${{ steps.simulator.outputs.name }}' '${{ steps.simulator.outputs.runtime }}' >> "$RUNNER_TEMP/apple-artifacts/summary.txt"
+          xcrun xcresulttool export attachments --path "$RESULT" --output-path "$RUNNER_TEMP/exported-attachments"
+          find "$RUNNER_TEMP/exported-attachments" -type f -name '*.png' -print -quit | grep -q .
+          find "$RUNNER_TEMP/exported-attachments" -type f -name '*.png' -exec cp {} "$RUNNER_TEMP/apple-artifacts/" \;
+          test -n "$(find "$RUNNER_TEMP/apple-artifacts" -maxdepth 1 -type f -name '*.png' -print -quit)"
+          printf '\nSimulator screenshot: verified XCTest app screenshot PNG attachment; no app binary or xcresult uploaded.\n' >> "$RUNNER_TEMP/apple-artifacts/summary.txt"
+      - name: Upload prototype screenshot artifact
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: iphone-prototype-${{ github.sha }}
+          path: ${{ runner.temp }}/apple-artifacts/*
+          if-no-files-found: error
+          retention-days: 3

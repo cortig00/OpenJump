@@ -1,0 +1,14 @@
+"prototype.title" = "Prototipo de salto";
+"prototype.subtitle" = "Una primera vista SwiftUI nativa con matemáticas Kotlin compartidas.";
+"prototype.synthetic" = "Ejemplo sintético · no medido a partir de vídeo";
+"metric.height" = "Altura del salto";
+"metric.velocity" = "Velocidad de despegue";
+"metric.rsi" = "RSI-mod";
+"metric.flight" = "Tiempo de vuelo";
+"unit.cm" = "cm";
+"unit.mps" = "m/s";
+"unit.rsi" = "m/s";
+"unit.ms" = "ms";
+"prototype.recalculate" = "Recalcular ejemplo";
+"prototype.disclaimer" = "Solo prototipo ilustrativo. No es una medición de vídeo ni un resultado clínicamente validado.";
+"prototype.error" = "Error de cálculo: %@";

@@ -1,0 +1,14 @@
+"prototype.title" = "Jump prototype";
+"prototype.subtitle" = "A first native SwiftUI view, powered by shared Kotlin math.";
+"prototype.synthetic" = "Synthetic example · not measured from video";
+"metric.height" = "Jump height";
+"metric.velocity" = "Takeoff velocity";
+"metric.rsi" = "RSI-mod";
+"metric.flight" = "Flight time";
+"unit.cm" = "cm";
+"unit.mps" = "m/s";
+"unit.rsi" = "m/s";
+"unit.ms" = "ms";
+"prototype.recalculate" = "Recalculate example";
+"prototype.disclaimer" = "Illustrative prototype only. Not a video measurement or clinically validated result.";
+"prototype.error" = "Calculation failed: %@";
