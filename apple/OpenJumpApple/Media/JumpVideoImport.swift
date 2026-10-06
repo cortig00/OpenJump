@@ -171,7 +171,7 @@ enum JumpVideoImporter {
 
         let control = CoordinatedCopyControl()
         do {
-            try await CallbackDeadline.run(timeout: .seconds(60), cancel: { control.cancel() }) { complete in
+            try await CallbackDeadline.run(timeout: .seconds(60), cancel: { control.cancel() }) { (complete: @escaping (Result<Void, Error>) -> Void) in
                 guard control.reserveAdmission() else {
                     complete(.failure(JumpVideoImportError.unableToCopy))
                     return

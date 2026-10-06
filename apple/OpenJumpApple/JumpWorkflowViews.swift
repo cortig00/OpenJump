@@ -236,7 +236,7 @@ struct JumpHomeView: View {
             }
             if workflow.savedMeasurement != nil {
                 Label(AppText.string("jumps.results.saved", language: language), systemImage: "checkmark.circle.fill")
-                    .font(.headline).foregroundStyle(.openJumpGreen).accessibilityAddTraits(.updatesFrequently)
+                    .font(.headline).foregroundStyle(Color.openJumpGreen).accessibilityAddTraits(.updatesFrequently)
             }
         }
         .padding(16)

@@ -74,6 +74,30 @@ Kotlin JVM/framework gates passed again; simulator and native runtime gates were
 source-contract checks and need native recompilation; neither source checks nor
 the disappearance of the earlier diagnostic prove that the entire app compiles.
 
+## Remaining native type-check diagnostics
+
+[Run 37491083002](https://github.com/cortig00/OpenJump/actions/runs/37491083002)
+for `514206347b6d9c082bdaf3e2551eeb3058a4434f` no longer reported the PhotosUI
+or ProfileViews errors. It still **FAILED** Swift compilation (exit 65), exposing
+four errors in the workflow/media compile batch:
+
+- A selected-event guard binding hid the mutable property; assignment now
+  explicitly targets `self.selectedEvent`.
+- A generic `foregroundStyle` could not infer the custom Color member; the two
+  same-pattern call sites now use `Color.openJumpGreen`.
+- A deadline callback returning `Void` needed explicit generic type context; the
+  importer and matching test-fixture writer callback are explicitly typed.
+- Core Media format extensions are optional; HDR-marker inspection now unwraps
+  them before dictionary bridging. Absent extensions provide no known HDR marker,
+  not proof of SDR or of physically accurate timing.
+
+The grouped corrections preserve cancellation/deadline policy, event selection,
+colors and fixture assertions. Source-contract checks and a focused review are
+separate from native confirmation. Helpers, Kotlin JVM and framework gates passed
+in this run; simulator and runtime gates were again **SKIPPED**, with no artifact.
+The native unit-test bundle had not reached compilation, so its tests remained
+unexecuted. No tests are removed or skipped by the corrections.
+
 ## Known boundaries
 
 - The coordinated-copy wrapper has a 60-second deadline, cooperative checks and

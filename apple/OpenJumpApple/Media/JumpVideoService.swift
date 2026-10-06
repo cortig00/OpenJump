@@ -259,8 +259,8 @@ actor JumpVideoService {
     }
 
     private static func isHDR(_ description: CMFormatDescription) -> Bool {
-        let extensions = CMFormatDescriptionGetExtensions(description) as NSDictionary
-        let text = extensions.map { "\($0.key) \($0.value)" }.joined(separator: " ").lowercased()
+        guard let extensions = CMFormatDescriptionGetExtensions(description) else { return false }
+        let text = (extensions as NSDictionary).map { "\($0.key) \($0.value)" }.joined(separator: " ").lowercased()
         return ["2084", "2100_hlg", "2100-hlg", "dolby vision", "dolby_vision"].contains(where: text.contains)
     }
 }

@@ -337,7 +337,7 @@ final class JumpWorkflowState: ObservableObject {
         guard video.id == manifest.sourceID else { return }
         replaceEvent(mark)
         invalidateCalculation(); sessionKey = UUID().uuidString; errorKey = nil
-        selectedEvent = nextEventToMark ?? selectedEvent
+        self.selectedEvent = nextEventToMark ?? selectedEvent
     }
 
     func clearEvent(_ kind: JumpEventKind) {

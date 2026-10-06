@@ -80,7 +80,7 @@ struct MediaFixtureFactory {
         }
         writer.endSession(atSourceTime: CMTime(value: cadence.ticks[cadence.ticks.count - 1] + 20, timescale: 600))
         input.markAsFinished()
-        try await CallbackDeadline.run(timeout: .seconds(10), cancel: { writer.cancelWriting() }) { complete in
+        try await CallbackDeadline.run(timeout: .seconds(10), cancel: { writer.cancelWriting() }) { (complete: @escaping (Result<Void, Error>) -> Void) in
             writer.finishWriting {
                 if writer.status == .completed { complete(.success(())) }
                 else { complete(.failure(writer.error ?? FixtureError.writerSetup)) }

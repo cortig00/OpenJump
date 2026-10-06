@@ -28,7 +28,7 @@ struct ProfilesView: View {
                                 HStack(spacing: 12) {
                                     AthleteAvatarView(name: athlete.name, key: athlete.avatarKey, size: 44).accessibilityHidden(true)
                                     VStack(alignment: .leading) { Text(athlete.name).font(.headline); Text(athlete.archivedAt == nil ? AppText.string("profiles.active", language: language) : AppText.string("profiles.archived", language: language)).font(.caption).foregroundStyle(.secondary) }
-                                    Spacer(); if state.preferences.selectedAthleteID == athlete.id { Image(systemName: "checkmark.circle.fill").foregroundStyle(.openJumpGreen).accessibilityLabel(AppText.string("profiles.selected", language: language)) }
+                                    Spacer(); if state.preferences.selectedAthleteID == athlete.id { Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.openJumpGreen).accessibilityLabel(AppText.string("profiles.selected", language: language)) }
                                 }.frame(minHeight: 52).contentShape(Rectangle())
                             }.buttonStyle(.plain)
                                 .swipeActions { Button(AppText.string("profiles.edit", language: language)) { editor = athlete }.tint(.openJumpGreen) }
