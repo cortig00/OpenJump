@@ -1,0 +1,129 @@
+name: Apple environment diagnostic
+run-name: Apple environment inventory (not an iPhone app build)
+
+# Bootstrap only when this file changes on dev/apple, without touching main.
+# Existing runs can be rerun manually; no default-branch dispatch is required.
+"on":
+  push:
+    branches: [dev/apple]
+    paths:
+      - .github/workflows/apple-environment.yml
+
+permissions: {}
+
+concurrency:
+  group: apple-environment-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  environment:
+    if: github.repository == 'cortig00/OpenJump' && github.ref == 'refs/heads/dev/apple'
+    runs-on: macos-15
+    timeout-minutes: 5
+    defaults:
+      run:
+        shell: bash
+    env:
+      # macos-15 currently defaults to Xcode 16.4. Never silently use that default.
+      DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer
+    steps:
+      - name: Verify the pinned Apple toolchain
+        run: |
+          set -euo pipefail
+          echo "Available Xcode applications:"
+          for candidate in /Applications/Xcode*.app; do
+            if [[ -d "$candidate" ]]; then
+              printf '%s\n' "$candidate"
+            fi
+          done
+          if [[ ! -d "$DEVELOPER_DIR" ]]; then
+            echo "::error::Pinned Xcode 26.0.1 is unavailable. Review the runner image; do not fall back to the default Xcode."
+            exit 1
+          fi
+          if [[ "$(uname -m)" != "arm64" ]]; then
+            echo "::error::This probe expects an ARM64 macOS runner."
+            exit 1
+          fi
+          sw_vers
+          xcode_version="$(xcodebuild -version)"
+          printf '%s\n' "$xcode_version"
+          if ! grep -Fqx 'Xcode 26.0.1' <<< "$xcode_version"; then
+            echo "::error::The selected Xcode does not match the pinned version."
+            exit 1
+          fi
+          xcrun swift --version
+          xcodebuild -showsdks
+          for sdk in iphoneos iphonesimulator; do
+            sdk_version="$(xcrun --sdk "$sdk" --show-sdk-version)"
+            printf '%s SDK: %s\n' "$sdk" "$sdk_version"
+            if [[ "${sdk_version%%.*}" != "26" ]]; then
+              echo "::error::Expected an iOS 26 SDK for this environment probe."
+              exit 1
+            fi
+          done
+
+      - name: Inventory available iPhone and iPad simulators
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import platform
+          import subprocess
+
+          def capture(*args):
+              return subprocess.check_output(args, text=True, timeout=30).strip()
+
+          runtimes = json.loads(capture("xcrun", "simctl", "list", "runtimes", "--json"))["runtimes"]
+          devices = json.loads(capture("xcrun", "simctl", "list", "devices", "available", "--json"))["devices"]
+          candidates = []
+          for runtime in runtimes:
+              if not runtime.get("isAvailable"):
+                  continue
+              if not runtime["identifier"].startswith("com.apple.CoreSimulator.SimRuntime.iOS-"):
+                  continue
+              if runtime.get("version", "").split(".")[0] != "26":
+                  continue
+              available = [device for device in devices.get(runtime["identifier"], []) if device.get("isAvailable")]
+              phones = sorted(device["name"] for device in available if "iPhone" in device["name"])
+              tablets = sorted(device["name"] for device in available if "iPad" in device["name"])
+              if phones and tablets:
+                  candidates.append((runtime["version"], runtime["identifier"], phones, tablets))
+          if not candidates:
+              raise SystemExit("No available iOS 26 runtime with both iPhone and iPad simulators. No app build/test was attempted.")
+
+          version, identifier, phones, tablets = sorted(candidates)[0]
+          report = {
+              "schemaVersion": 1,
+              "purpose": "apple-environment-inventory",
+              "repository": os.environ["GITHUB_REPOSITORY"],
+              "ref": os.environ["GITHUB_REF"],
+              "sha": os.environ["GITHUB_SHA"],
+              "imageVersion": os.environ.get("ImageVersion", "not-reported"),
+              "macOS": capture("sw_vers", "-productVersion"),
+              "architecture": platform.machine(),
+              "developerDirectory": os.environ["DEVELOPER_DIR"],
+              "xcode": capture("xcodebuild", "-version"),
+              "swift": capture("xcrun", "swift", "--version"),
+              "iPhoneOSSDK": capture("xcrun", "--sdk", "iphoneos", "--show-sdk-version"),
+              "iPhoneSimulatorSDK": capture("xcrun", "--sdk", "iphonesimulator", "--show-sdk-version"),
+              "simulatorRuntime": {"version": version, "identifier": identifier},
+              "availableIPhones": phones,
+              "availableIPads": tablets,
+              "appBuilt": False,
+              "testsRun": False,
+              "simulatorBooted": False,
+              "signedOrUploaded": False,
+          }
+          print(json.dumps(report, indent=2))
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write("## Apple environment inventory\n\n")
+              summary.write("**Environment only: no iPhone app build, tests, simulator boot, signing or upload.**\n\n")
+              summary.write("```json\n" + json.dumps(report, indent=2) + "\n```\n")
+          PY
+
+      - name: State the verification boundary
+        if: always()
+        run: |
+          set -euo pipefail
+          printf '\n## Scope\n\nThis diagnostic does not qualify an iPhone app, camera, frame-exact video, physical timing or Android. The runner is ephemeral; no interactive Xcode session is provided.\n' >> "$GITHUB_STEP_SUMMARY"
