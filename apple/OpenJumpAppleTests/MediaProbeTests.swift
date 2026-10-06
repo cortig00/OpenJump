@@ -15,7 +15,10 @@ final class MediaProbeTests: XCTestCase {
         XCTAssertThrowsError(try MediaProbe.validatedFrames([CMTime(value: 1, timescale: 4_000_000), CMTime(value: 1, timescale: 3_000_000)]))
         XCTAssertThrowsError(try MediaProbe.validatedFrames([.invalid]))
         XCTAssertThrowsError(try MediaProbe.validatedFrames([CMTime(value: 1, timescale: 0)]))
-        XCTAssertThrowsError(try MediaProbe.validatedFrames([CMTime(value: 1, timescale: 1, epoch: 1)]))
+        let nonzeroEpoch = CMTime(value: 1, timescale: 1, flags: .valid, epoch: 1)
+        XCTAssertThrowsError(try MediaProbe.validatedFrames([nonzeroEpoch])) { error in
+            XCTAssertEqual(error as? MediaProbe.ProbeError, MediaProbe.ProbeError.timeOutOfRange)
+        }
         XCTAssertThrowsError(try MediaProbe.validatedFrames([CMTime(value: -1, timescale: 600)]))
         XCTAssertThrowsError(try MediaProbe.validatedFrames([.indefinite]))
         XCTAssertThrowsError(try MediaProbe.validatedFrames([.positiveInfinity]))
