@@ -22,19 +22,21 @@ validate this newer product UI or measurement workflow.
 - History displays saved metrics and analysis provenance/events. The synthetic
   `-openjump-demo` route remains isolated and is never saved as a measurement.
 
-## Evidence at publication
+## Evidence at initial publication (`57fc438`)
 
 Source-only independent reviews and static integrity checks completed. Checks
 covered approved file scope, Xcode source/test membership and reference identity,
 185 localization keys per language, unchanged previous localization values,
 placeholder parity, exact avatar pixels, and whitespace checks.
 
-**This product snapshot has not yet been compiled or tested natively.** There
-are 43 authored native unit-test methods and one UI-test method in the current
-scheme; these have not been executed against this snapshot. A successful source
-review, test count, or historical prototype run is not an SDK/runtime PASS.
-Pushing Apple sources to `dev/apple` triggers the existing hosted CI; its eventual
-compile, simulator-readiness and runtime conclusions must be recorded separately.
+**At the initial publication of commit `57fc438`, the product snapshot had not
+yet been compiled or tested natively.** The scheme then contained 43 authored
+native unit-test methods and one UI-test method, none executed against that
+snapshot at publication. Subsequent actual compile and execution outcomes are
+recorded below. A source review, authored test count, or historical prototype run
+is not an SDK/runtime PASS. Pushing Apple sources to `dev/apple` triggers the
+existing hosted CI; compile, simulator-readiness and runtime conclusions are
+recorded separately.
 
 ## First product-snapshot CI attempt
 
@@ -97,6 +99,14 @@ separate from native confirmation. Helpers, Kotlin JVM and framework gates passe
 in this run; simulator and runtime gates were again **SKIPPED**, with no artifact.
 The native unit-test bundle had not reached compilation, so its tests remained
 unexecuted. No tests are removed or skipped by the corrections.
+
+## Runtime CI attempt 37492693488
+
+The native attempt compiled all three Swift bundles and passed simulator boot/readiness. It executed all 43 unit-test methods and the one UI-test method (44 cases): 41 passed and three methods failed at four assertions. The UI demonstration passed, but exported zero artifacts; no persisted screenshot/export artifact was produced. This is **not** a native-green run or a full-app UX, physical-device, or scientific-accuracy qualification.
+
+Two confirmed source corrections retain the existing input grammar and timestamp rules: locale decimal input now returns the directly rounded `Double` after the existing `Decimal` validity gate, and all indexed timestamps are validated before the minimum-frame-count decision while the maximum-count guard remains early. Existing regression assertions are unchanged. A byte-for-byte imported-copy assertion now distinguishes source-copy corruption from later AVFoundation inspection behavior in the existing VFR test.
+
+The VFR inspection failure remains unexplained; no speculative VFR/cadence fix is claimed. Unexpected asset metadata/reader initialization failures and typed reader inspection failures now expose a fixed diagnostic stage, optional allowlisted platform error domain/code, reader status, and timing OSStatus. These diagnostics deliberately omit user media identifiers and contents, and do not replace the ordinary generic user-facing error route. The source changes still require a new native CI run; only a fully green run can close the native CI result.
 
 ## Known boundaries
 

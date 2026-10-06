@@ -37,6 +37,7 @@ final class JumpVideoServiceTests: XCTestCase {
 
         let video = try await JumpVideoImporter.importFile(sourceURL)
         defer { video.dispose() }
+        XCTAssertEqual(try Data(contentsOf: sourceURL), try Data(contentsOf: video.url), "Imported fixture must be an exact byte-for-byte copy")
         let service = JumpVideoService()
         let manifest = try await service.inspect(video)
         XCTAssertEqual(manifest.sourceID, video.id)

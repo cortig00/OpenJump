@@ -76,8 +76,9 @@ public enum MeasurementPresentation {
               pieces.count == 1 || !pieces[1].isEmpty else { return nil }
         let normalized = pieces.joined(separator: ".")
         guard let decimal = Decimal(string: normalized, locale: Locale(identifier: "en_US_POSIX")) else { return nil }
-        let result = NSDecimalNumber(decimal: decimal).doubleValue
-        guard result.isFinite, result > 0 else { return nil }
+        let decimalValue = NSDecimalNumber(decimal: decimal).doubleValue
+        guard decimalValue.isFinite, decimalValue > 0 else { return nil }
+        guard let result = Double(normalized), result.isFinite, result > 0 else { return nil }
         return result
     }
 }

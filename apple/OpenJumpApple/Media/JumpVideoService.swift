@@ -26,6 +26,22 @@ struct PresentedJumpFrame {
     let image: CGImage
 }
 
+private struct JumpVideoInspectionDiagnostic: Error, CustomStringConvertible {
+    let stage: String
+    let errorDomain: String?
+    let errorCode: Int?
+    let readerStatus: Int?
+    let timingOSStatus: OSStatus?
+
+    var description: String {
+        var fields = ["stage=\(stage)"]
+        if let errorDomain, let errorCode { fields.append("error=\(errorDomain):\(errorCode)") }
+        if let readerStatus { fields.append("readerStatus=\(readerStatus)") }
+        if let timingOSStatus { fields.append("timingOSStatus=\(timingOSStatus)") }
+        return "Jump video inspection failed (\(fields.joined(separator: ", ")))"
+    }
+}
+
 enum JumpVideoServiceError: Error, Equatable {
     case unsupportedVideo
     case unsupportedRotation
@@ -99,6 +115,8 @@ actor JumpVideoService {
             }
         } catch let error as JumpVideoServiceError {
             throw error
+        } catch let diagnostic as JumpVideoInspectionDiagnostic {
+            throw diagnostic
         } catch is CancellationError {
             throw CancellationError()
         } catch CallbackDeadline.DeadlineError.timedOut {
@@ -156,12 +174,13 @@ actor JumpVideoService {
     }
 
     static func indexedFrames(from times: [CMTime]) throws -> [JumpVideoFrame] {
-        guard times.count >= 2 else { throw JumpVideoServiceError.insufficientFrames }
         guard times.count <= maximumFrames else { throw JumpVideoServiceError.tooManyFrames }
-        let sorted: [(time: CMTime, ptsUs: Int64)] = try times.map { time in
+        let validated: [(time: CMTime, ptsUs: Int64)] = try times.map { time in
             do { return (time, try MediaProbe.microseconds(for: time)) }
             catch { throw JumpVideoServiceError.invalidTimestamp }
-        }.sorted { CMTimeCompare($0.time, $1.time) < 0 }
+        }
+        guard times.count >= 2 else { throw JumpVideoServiceError.insufficientFrames }
+        let sorted = validated.sorted { CMTimeCompare($0.time, $1.time) < 0 }
 
         var result: [JumpVideoFrame] = []
         result.reserveCapacity(sorted.count)
@@ -177,59 +196,100 @@ actor JumpVideoService {
 
     private static func buildManifest(video: ImportedJumpVideo, asset: AVURLAsset,
                                       control: JumpVideoOperationControl) async throws -> JumpVideoManifest {
-        let tracks = try await asset.load(.tracks)
-        guard !control.isCancelled else { throw CancellationError() }
-        let videoTracks = tracks.filter { $0.mediaType == .video }
-        guard videoTracks.count == 1 else { throw JumpVideoServiceError.unsupportedVideo }
-        let track = videoTracks[0]
-        let naturalSize = try await track.load(.naturalSize)
-        let transform = try await track.load(.preferredTransform)
-        let descriptions = try await track.load(.formatDescriptions)
-        let segments = try await track.load(.segments)
-        guard !control.isCancelled else { throw CancellationError() }
-
-        guard naturalSize.width.isFinite, naturalSize.height.isFinite,
-              abs(naturalSize.width - naturalSize.width.rounded()) < 0.0001,
-              abs(naturalSize.height - naturalSize.height.rounded()) < 0.0001,
-              naturalSize.width >= 1, naturalSize.height >= 1,
-              naturalSize.width <= CGFloat(maximumDimension), naturalSize.height <= CGFloat(maximumDimension) else {
-            throw JumpVideoServiceError.unsupportedVideo
-        }
-        guard supportsRotation(transform) else { throw JumpVideoServiceError.unsupportedRotation }
-        guard !track.hasMediaCharacteristic(.containsHDRVideo), !descriptions.contains(where: isHDR) else {
-            throw JumpVideoServiceError.unsupportedHDR
-        }
-        guard !hasRetiming(segments) else { throw JumpVideoServiceError.unsupportedRetiming }
-
-        let reader = try AVAssetReader(asset: asset)
-        control.install(reader: reader)
-        let output = AVAssetReaderTrackOutput(track: track, outputSettings: nil)
-        guard reader.canAdd(output) else { throw JumpVideoServiceError.unsupportedVideo }
-        reader.add(output)
-        guard reader.startReading() else { throw JumpVideoServiceError.inspectionFailed }
-
-        var times: [CMTime] = []
-        while let sample = output.copyNextSampleBuffer() {
+        var stage = "loadTracks"
+        var reader: AVAssetReader?
+        var timingOSStatus: OSStatus?
+        do {
+            let tracks = try await asset.load(.tracks)
             guard !control.isCancelled else { throw CancellationError() }
-            let sampleCount = CMSampleBufferGetNumSamples(sample)
-            guard sampleCount > 0, sampleCount <= maximumFrames - times.count else {
-                reader.cancelReading()
-                throw sampleCount > 0 ? JumpVideoServiceError.tooManyFrames : JumpVideoServiceError.inspectionFailed
+            let videoTracks = tracks.filter { $0.mediaType == .video }
+            guard videoTracks.count == 1 else { throw JumpVideoServiceError.unsupportedVideo }
+            let track = videoTracks[0]
+            stage = "loadNaturalSize"
+            let naturalSize = try await track.load(.naturalSize)
+            stage = "loadPreferredTransform"
+            let transform = try await track.load(.preferredTransform)
+            stage = "loadFormatDescriptions"
+            let descriptions = try await track.load(.formatDescriptions)
+            stage = "loadSegments"
+            let segments = try await track.load(.segments)
+            guard !control.isCancelled else { throw CancellationError() }
+
+            guard naturalSize.width.isFinite, naturalSize.height.isFinite,
+                  abs(naturalSize.width - naturalSize.width.rounded()) < 0.0001,
+                  abs(naturalSize.height - naturalSize.height.rounded()) < 0.0001,
+                  naturalSize.width >= 1, naturalSize.height >= 1,
+                  naturalSize.width <= CGFloat(maximumDimension), naturalSize.height <= CGFloat(maximumDimension) else {
+                throw JumpVideoServiceError.unsupportedVideo
             }
-            for sampleIndex in 0..<sampleCount {
-                var timing = CMSampleTimingInfo()
-                guard CMSampleBufferGetSampleTimingInfo(sample, at: sampleIndex, timingInfoOut: &timing) == noErr else {
-                    reader.cancelReading()
+            guard supportsRotation(transform) else { throw JumpVideoServiceError.unsupportedRotation }
+            guard !track.hasMediaCharacteristic(.containsHDRVideo), !descriptions.contains(where: isHDR) else {
+                throw JumpVideoServiceError.unsupportedHDR
+            }
+            guard !hasRetiming(segments) else { throw JumpVideoServiceError.unsupportedRetiming }
+
+            stage = "createReader"
+            let createdReader = try AVAssetReader(asset: asset)
+            reader = createdReader
+            control.install(reader: createdReader)
+            let output = AVAssetReaderTrackOutput(track: track, outputSettings: nil)
+            guard createdReader.canAdd(output) else { throw JumpVideoServiceError.unsupportedVideo }
+            createdReader.add(output)
+            stage = "startReading"
+            guard createdReader.startReading() else { throw JumpVideoServiceError.inspectionFailed }
+
+            var times: [CMTime] = []
+            while true {
+                stage = "readSamples"
+                guard let sample = output.copyNextSampleBuffer() else { break }
+                guard !control.isCancelled else { throw CancellationError() }
+                let sampleCount = CMSampleBufferGetNumSamples(sample)
+                guard sampleCount > 0, sampleCount <= maximumFrames - times.count else {
+                    if sampleCount > 0 {
+                        createdReader.cancelReading()
+                        throw JumpVideoServiceError.tooManyFrames
+                    }
                     throw JumpVideoServiceError.inspectionFailed
                 }
-                times.append(timing.presentationTimeStamp)
+                for sampleIndex in 0..<sampleCount {
+                    var timing = CMSampleTimingInfo()
+                    stage = "sampleTiming"
+                    let status = CMSampleBufferGetSampleTimingInfo(sample, at: sampleIndex, timingInfoOut: &timing)
+                    guard status == noErr else {
+                        timingOSStatus = status
+                        throw JumpVideoServiceError.inspectionFailed
+                    }
+                    times.append(timing.presentationTimeStamp)
+                }
             }
+            guard !control.isCancelled else { throw CancellationError() }
+            stage = "readerCompletion"
+            guard createdReader.status == .completed else { throw JumpVideoServiceError.inspectionFailed }
+            let frames = try indexedFrames(from: times)
+            return JumpVideoManifest(video: video, frames: frames,
+                                     width: Int(naturalSize.width), height: Int(naturalSize.height))
+        } catch {
+            if error is CancellationError || control.isCancelled { throw CancellationError() }
+            if let diagnostic = error as? JumpVideoInspectionDiagnostic { throw diagnostic }
+            if let serviceError = error as? JumpVideoServiceError, serviceError != .inspectionFailed {
+                throw serviceError
+            }
+            let diagnosticError: Error
+            if let serviceError = error as? JumpVideoServiceError, serviceError == .inspectionFailed,
+               let readerError = reader?.error {
+                diagnosticError = readerError
+            } else {
+                diagnosticError = error
+            }
+            let platformError = diagnosticError as NSError
+            let safeDomains = ["AVFoundationErrorDomain", "NSOSStatusErrorDomain", "NSCocoaErrorDomain", "CoreMediaErrorDomain"]
+            let safeDomain = safeDomains.contains(platformError.domain) ? platformError.domain : nil
+            let status = reader?.status.rawValue
+            reader?.cancelReading()
+            throw JumpVideoInspectionDiagnostic(stage: stage, errorDomain: safeDomain,
+                                                errorCode: safeDomain == nil ? nil : platformError.code,
+                                                readerStatus: status, timingOSStatus: timingOSStatus)
         }
-        guard !control.isCancelled else { throw CancellationError() }
-        guard reader.status == .completed else { throw JumpVideoServiceError.inspectionFailed }
-        let frames = try indexedFrames(from: times)
-        return JumpVideoManifest(video: video, frames: frames,
-                                 width: Int(naturalSize.width), height: Int(naturalSize.height))
     }
 
     private static func supportsRotation(_ transform: CGAffineTransform) -> Bool {
