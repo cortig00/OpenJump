@@ -50,6 +50,7 @@ jobs:
           set -euo pipefail
           ./gradlew --no-daemon -p apple/spikes/jump-core linkDebugFrameworkIosSimulatorArm64
           test -d apple/spikes/jump-core/build/bin/iosSimulatorArm64/debugFramework/JumpCoreSpike.framework
+          test "$(xcrun lipo -archs apple/spikes/jump-core/build/bin/iosSimulatorArm64/debugFramework/JumpCoreSpike.framework/JumpCoreSpike)" = arm64
           printf 'Kotlin 2.1.20 static iOS simulator framework (Xcode 16.0): PASS\n' >> "$RUNNER_TEMP/apple-artifacts/summary.txt"
       - name: Discover exact iOS 26 iPhone simulator
         id: simulator
@@ -91,6 +92,7 @@ jobs:
             -derivedDataPath "$RUNNER_TEMP/apple-derived" \
             -resultBundlePath "$RESULT" \
             JUMP_FRAMEWORK_DIR="$FRAMEWORK" \
+            ARCHS=arm64 ONLY_ACTIVE_ARCH=YES \
             CODE_SIGNING_ALLOWED=NO
           printf 'Swift XCTest real Kotlin bridge + invalid-marker NSError: PASS\n' >> "$RUNNER_TEMP/apple-artifacts/summary.txt"
           printf 'iOS simulator UI/XCUITest screenshot attachment: PASS (%s, %s)\n' '${{ steps.simulator.outputs.name }}' '${{ steps.simulator.outputs.runtime }}' >> "$RUNNER_TEMP/apple-artifacts/summary.txt"
