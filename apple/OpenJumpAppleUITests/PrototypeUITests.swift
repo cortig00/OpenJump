@@ -3,6 +3,7 @@ import XCTest
 final class PrototypeUITests: XCTestCase {
     func testPrototypeRendersAndAttachAppScreenshot() {
         let app = XCUIApplication()
+        app.launchArguments.append("-openjump-demo")
         app.launch()
         XCTAssertTrue(app.staticTexts["prototypeTitle"].waitForExistence(timeout: 20))
         let height = app.staticTexts["heightMetric"]
