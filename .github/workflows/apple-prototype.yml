@@ -97,8 +97,23 @@ jobs:
           DEVICE='${{ steps.simulator.outputs.udid }}'
           python3 apple/ci/run_command.py --timeout 120 -- xcrun simctl boot "$DEVICE"
           python3 apple/ci/run_command.py --timeout 240 -- xcrun simctl bootstatus "$DEVICE" -b
+      - name: Collect bounded read-only simulator readiness evidence
+        id: simulator_diagnostics
+        if: always() && steps.boot.conclusion == 'failure'
+        continue-on-error: true
+        timeout-minutes: 1
+        env:
+          DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer
+          SIMULATOR_UDID: ${{ steps.simulator.outputs.udid }}
+          SIMULATOR_NAME: ${{ steps.simulator.outputs.name }}
+          SIMULATOR_RUNTIME: ${{ steps.simulator.outputs.runtime }}
+        run: |
+          set -euo pipefail
+          python3 apple/ci/diagnose_simulator.py --udid "$SIMULATOR_UDID" \
+            --output "$RUNNER_TEMP/apple-simulator-diagnostics"
       - name: Run Swift bridge and simulator UI tests
         id: native_tests
+        if: success() && steps.boot.conclusion == 'success'
         timeout-minutes: 8
         env:
           DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer
@@ -118,7 +133,7 @@ jobs:
           printf 'Swift bridge and UI XCTest runtime: PASS (real simulator execution).\n' >> "$RUNNER_TEMP/apple-artifacts/summary.txt"
       - name: Export verified XCTest screenshot attachments
         id: export
-        if: steps.native_tests.conclusion == 'success'
+        if: success() && steps.native_tests.conclusion == 'success'
         env:
           DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer
         run: |
@@ -142,6 +157,7 @@ jobs:
           BUILD: ${{ steps.native_build.conclusion }}
           DISCOVERY: ${{ steps.simulator.conclusion }}
           BOOT: ${{ steps.boot.conclusion }}
+          DIAGNOSTICS: ${{ steps.simulator_diagnostics.outcome }}
           TESTS: ${{ steps.native_tests.conclusion }}
           EXPORT: ${{ steps.export.conclusion }}
         run: |
@@ -155,10 +171,23 @@ jobs:
             echo "| Swift consumer/test bundle build-for-testing (not runtime tests) | ${BUILD:-not-run} |"
             echo "| Simulator discovery | ${DISCOVERY:-not-run} |"
             echo "| Bounded simulator boot/readiness | ${BOOT:-not-run} |"
+            echo "| Read-only readiness diagnostics (collection outcome, not health PASS) | ${DIAGNOSTICS:-not-run} |"
             echo "| Swift bridge/UI runtime tests | ${TESTS:-not-run} |"
             echo "| XCTest screenshot export | ${EXPORT:-not-run} |"
           } >> "$GITHUB_STEP_SUMMARY"
           if [ -f "$RUNNER_TEMP/apple-artifacts/summary.txt" ]; then cat "$RUNNER_TEMP/apple-artifacts/summary.txt" >> "$GITHUB_STEP_SUMMARY"; fi
+          if [ -f "$RUNNER_TEMP/apple-simulator-diagnostics/report.txt" ]; then cat "$RUNNER_TEMP/apple-simulator-diagnostics/report.txt" >> "$GITHUB_STEP_SUMMARY"; fi
+      - name: Upload bounded simulator readiness evidence only
+        if: always() && steps.boot.conclusion == 'failure'
+        continue-on-error: true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: simulator-readiness-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/apple-simulator-diagnostics/report.json
+            ${{ runner.temp }}/apple-simulator-diagnostics/report.txt
+          if-no-files-found: warn
+          retention-days: 3
       - name: Upload prototype screenshot artifact
         if: success()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
