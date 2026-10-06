@@ -100,6 +100,19 @@ class SimulatorDiagnosticsTests(unittest.TestCase):
             result, raw = diagnose_simulator.run_probe(["unsupported-probe"], 2)
         self.assertEqual((result["status"], result["exit_code"], raw), ("unknown", None, ""))
 
+    def test_stdout_cap_remains_independent_while_stderr_is_discarded(self):
+        secret = "PRIVATE_STDERR_SENTINEL"
+        code = ("import sys; sys.stdout.write('x' * 200000); sys.stdout.flush(); "
+                "sys.stderr.write(('PRIVATE_' + 'STDERR_' + 'SENTINEL') * 10000)")
+        result, raw = diagnose_simulator.run_probe([sys.executable, "-c", code], 2)
+        self.assertEqual(result["exit_code"], 0)
+        self.assertEqual(len(raw), 65536)
+        self.assertTrue(result["stdout_capture_truncated"])
+        self.assertTrue(result["stdout_capture_complete"])
+        self.assertTrue(result["stderr_drain_complete"])
+        self.assertEqual(result["stderr_discarded_bytes"], len(secret) * 10000)
+        self.assertNotIn(secret, json.dumps(result))
+
     def test_probe_timeout_is_bounded_and_not_health_pass(self):
         started = time.monotonic()
         result, _ = diagnose_simulator.run_probe(
@@ -116,12 +129,25 @@ class SimulatorDiagnosticsTests(unittest.TestCase):
         result, raw = diagnose_simulator.run_probe(
             [sys.executable, "-c", "print('x' * 200000)"], 2)
         self.assertEqual(result["exit_code"], 0)
-        self.assertTrue(result["capture_truncated"])
-        self.assertTrue(result["capture_complete"])
+        self.assertTrue(result["stdout_capture_truncated"])
+        self.assertTrue(result["stdout_capture_complete"])
         self.assertEqual(len(raw), diagnose_simulator.CAPTURE_BYTES)
 
+    def test_probe_separates_large_private_stderr_from_stdout_json(self):
+        secret = "PRIVATE_STDERR_SENTINEL"
+        payload = json.dumps({"devices": {}})
+        code = ("import sys; sys.stdout.write(" + repr(payload) + "); "
+                "sys.stdout.flush(); sys.stderr.write(('PRIVATE_' + 'STDERR_' + 'SENTINEL') * 10000)")
+        result, raw = diagnose_simulator.run_probe([sys.executable, "-c", code], 2)
+        self.assertEqual(result["exit_code"], 0)
+        self.assertEqual(raw, payload)
+        self.assertFalse(result["stdout_capture_truncated"])
+        self.assertTrue(result["stdout_capture_complete"])
+        self.assertEqual(result["stderr_discarded_bytes"], len(secret) * 10000)
+        self.assertNotIn(secret, json.dumps(result))
+
     def test_report_filters_selected_uuid_and_omits_private_output(self):
-        secret = "PRIVATE_ERROR_PATH_AND_ENV"
+        secret = "PRIVATE_STDERR_SENTINEL"
         devices = {"devices": {self.RUNTIME: [
             {"udid": self.UDID, "name": "iPhone\x1b[31m 17\nPro", "state": "Booted",
              "isAvailable": True, "private": secret},
@@ -130,14 +156,18 @@ class SimulatorDiagnosticsTests(unittest.TestCase):
         runtimes = {"runtimes": [{"identifier": self.RUNTIME, "name": "iOS 26.0",
                                   "isAvailable": True, "bundlePath": secret}]}
         pairs = {"pairs": {"other": {"phone": {"udid": "other"}, "state": secret}}}
-        responses = [json.dumps(devices), json.dumps(runtimes), json.dumps(pairs),
+        # Published generic list usage, not placeholders invented for this parser.
+        help_text = ("Usage: list [-j|--json] [-e|--enc] "
+                     "[devices|devicetypes|runtimes|pairs] [<search term>|available]\n")
+        responses = [help_text, json.dumps(devices), json.dumps(runtimes),
                      "Xcode 26.0.1\nBuild version 17A400\n" + secret,
                      "state = running\npid = 123\nenvironment = " + secret]
 
         def probe(command, timeout):
             self.assertLessEqual(timeout, diagnose_simulator.COMMAND_SECONDS)
             return {"command": command, "exit_code": 0, "timed_out": False,
-                    "capture_truncated": False, "capture_complete": True,
+                    "stdout_capture_truncated": False, "stdout_capture_complete": True,
+                    "stderr_drain_complete": True, "stderr_discarded_bytes": 0,
                     "status": "unknown"}, responses.pop(0)
 
         with patch.object(diagnose_simulator, "run_probe", side_effect=probe) as run, \
@@ -146,10 +176,18 @@ class SimulatorDiagnosticsTests(unittest.TestCase):
         commands = [call.args[0] for call in run.call_args_list]
         self.assertEqual(len(commands), 5)
         self.assertTrue(all("boot" not in cmd and "bootstatus" not in cmd for cmd in commands))
+        self.assertEqual(commands[0], ["xcrun", "simctl", "help", "list"])
+        self.assertEqual(commands[1], ["xcrun", "simctl", "list", "-j", "devices", self.UDID])
+        self.assertEqual(commands[2], ["xcrun", "simctl", "list", "-j", "runtimes", self.RUNTIME])
         self.assertEqual(commands[-1], ["launchctl", "print",
                          "gui/501/com.apple.CoreSimulator.CoreSimulatorService"])
-        self.assertEqual(report["probes"][0]["data"]["name"], "iPhone 17Pro")
-        self.assertEqual(report["probes"][2]["data"]["matching_pairs"], [])
+        self.assertEqual(report["probes"][1]["data"]["name"], "iPhone 17Pro")
+        self.assertEqual(report["probes"][1]["data"]["udid"], self.UDID)
+        self.assertEqual(report["probes"][2]["data"]["identifier"], self.RUNTIME)
+        self.assertEqual(report["probes"][0]["data"], {
+            "device_filter_advertised": True, "runtime_filter_advertised": True})
+        self.assertEqual(diagnose_simulator.selected_data(
+            "pairs", json.dumps(pairs), self.UDID, self.RUNTIME)["matching_pairs"], [])
         with tempfile.TemporaryDirectory() as temp:
             output = Path(temp) / "diagnostics"
             diagnose_simulator.write_report(report, output)
@@ -162,12 +200,66 @@ class SimulatorDiagnosticsTests(unittest.TestCase):
             self.assertEqual(json.loads((output / "report.json").read_text())["selected"]["udid"],
                              self.UDID)
 
+    def test_list_help_recognizes_generic_usage_not_placeholder_guesses(self):
+        cases = [
+            ("Usage: list [-j|--json] [-e|--enc] "
+             "[devices|devicetypes|runtimes|pairs] [<search term>|available]",
+             {"device_filter_advertised": True, "runtime_filter_advertised": True}),
+            ("usage: simctl list devices <search term>",
+             {"device_filter_advertised": True, "runtime_filter_advertised": False}),
+            ("Usage: list [devices|runtimes]",
+             {"device_filter_advertised": False, "runtime_filter_advertised": False}),
+            ("devices [--json] <device>\nruntimes [--json] <runtime>",
+             {"device_filter_advertised": False, "runtime_filter_advertised": False}),
+            ("Example: list [devices|runtimes] [<search term>]",
+             {"device_filter_advertised": False, "runtime_filter_advertised": False}),
+        ]
+        for text, expected in cases:
+            with self.subTest(help=text):
+                self.assertEqual(diagnose_simulator.list_filter_support(text), expected)
+
+    def test_unsupported_help_skips_inventory_without_global_fallback(self):
+        help_output = "usage: simctl list [devices|runtimes]"
+        responses = [help_output, "Xcode 26.0.1\nBuild version 17A400\n", ""]
+
+        def probe(command, timeout):
+            return ({"command": command, "exit_code": 0, "timed_out": False,
+                     "stdout_capture_truncated": False, "stdout_capture_complete": True,
+                     "stderr_drain_complete": True, "stderr_discarded_bytes": 0,
+                     "status": "unknown"}, responses.pop(0))
+
+        with patch.object(diagnose_simulator, "run_probe", side_effect=probe) as run:
+            report = diagnose_simulator.collect(self.UDID, "iPhone", self.RUNTIME, 501)
+        commands = [call.args[0] for call in run.call_args_list]
+        self.assertEqual(commands, [["xcrun", "simctl", "help", "list"],
+                                    ["xcodebuild", "-version"],
+                                    ["launchctl", "print",
+                                     "gui/501/com.apple.CoreSimulator.CoreSimulatorService"]])
+        self.assertEqual(len(report["probes"]), 5)
+        self.assertTrue(all("skipped" in report["probes"][index]["error"]
+                            for index in (1, 2)))
+        self.assertNotIn("devices", json.dumps(commands))
+        self.assertNotIn("runtimes", json.dumps(commands))
+
+    def test_target_parser_rejects_absent_or_wrong_uuid_and_runtime(self):
+        self.assertEqual(diagnose_simulator.selected_data("device", json.dumps({
+            "devices": {self.RUNTIME: [{"udid": "OTHER"}]}}), self.UDID, self.RUNTIME), {})
+        self.assertEqual(diagnose_simulator.selected_data("device", json.dumps({
+            "devices": {self.RUNTIME: []}}), self.UDID, self.RUNTIME), {})
+        self.assertEqual(diagnose_simulator.selected_data("device", json.dumps({
+            "devices": {"other-runtime": [{"udid": self.UDID}]}}), self.UDID, self.RUNTIME), {})
+        self.assertEqual(diagnose_simulator.selected_data("runtime", json.dumps({
+            "runtimes": [{"identifier": "OTHER"}]}), self.UDID, self.RUNTIME), {})
+
     def test_failed_truncated_and_malformed_probes_stay_unknown(self):
-        for exit_code, truncated, raw in [(3, False, "private unsupported error"),
-                                           (0, True, "private clipped output"),
-                                           (0, False, "invalid JSON")]:
-            result = {"exit_code": exit_code, "capture_truncated": truncated,
-                      "timed_out": False, "capture_complete": True, "status": "unknown"}
+        for exit_code, truncated, stderr_complete, raw in [
+                (3, False, True, "private unsupported error"),
+                (0, True, True, "private clipped output"),
+                (0, False, True, "invalid JSON"),
+                (0, False, False, "private incomplete drain")]:
+            result = {"exit_code": exit_code, "stdout_capture_truncated": truncated,
+                      "stdout_capture_complete": True, "stderr_drain_complete": stderr_complete,
+                      "timed_out": False, "status": "unknown"}
             with patch.object(diagnose_simulator, "run_probe",
                               side_effect=lambda *args: (dict(result), raw)):
                 report = diagnose_simulator.collect(self.UDID, "iPhone", self.RUNTIME, 501)
