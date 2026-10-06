@@ -199,8 +199,9 @@ struct MediaProbe {
         generator.requestedTimeToleranceBefore = .zero
         generator.requestedTimeToleranceAfter = .zero
         do {
-            let (image, actualTime) = try await CallbackDeadline.run(timeout: Self.operationTimeout,
-                                                                      cancel: { generator.cancelAllCGImageGeneration() }) { complete in
+            let (image, actualTime): (CGImage, CMTime) = try await CallbackDeadline.run(
+                timeout: Self.operationTimeout, cancel: { generator.cancelAllCGImageGeneration() }
+            ) { (complete: @escaping (Result<(CGImage, CMTime), Error>) -> Void) in
                 generator.generateCGImagesAsynchronously(forTimes: [NSValue(time: frame.sourceTime)]) { _, image, actualTime, result, error in
                     switch result {
                     case .succeeded:
