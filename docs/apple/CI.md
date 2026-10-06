@@ -42,12 +42,22 @@ Tras publicar: registrar commit y URL/runID, esperar conclusión y leer logs/sum
 - Commit diagnóstico `69703f46e418a0063af4549cfbc927d1f769510c`; [run37423404794](https://github.com/cortig00/OpenJump/actions/runs/37423404794), **FAILURE** en49s.
 - Verificación de herramientas **PASS**: imagen `macos-15-arm64` / `20260907.0337.1`, macOS15.7.9, Xcode26.0.1 build17A400, Swift6.2, SDK iPhoneOS/simulator26.0.
 - Inventario de simuladores **NO COMPLETADO**: `xcrun simctl list runtimes --json` agotó30s. No prueba ausencia de simuladores ni host completamente cualificado; no hubo build/test/boot/firma de app.
-- Ajuste acotado para segunda comprobación: timeout120s solo para consultas `simctl`, manteniendo30s en las demás, timeout global5min, el mismo toolchain y todas las condiciones de disponibilidad. Sin retry automático, fallback de versión ni omisión de checks. **Resultado de ese ajuste pendiente de ejecución**.
+- Ajuste acotado: timeout120s solo para consultas `simctl`, manteniendo30s en las demás, timeout global5min, el mismo toolchain y todas las condiciones de disponibilidad. Sin retry automático, fallback de versión ni omisión de checks. Validación local12/12casos con mocks y revisión fresca Luna **OK**.
+
+### Segunda ejecución: entorno confirmado
+
+- Commit `8494d112af87df2c58c5f190353d5783ffa0d89e`; [run37423959805](https://github.com/cortig00/OpenJump/actions/runs/37423959805), **SUCCESS**, job1m55s. Logs y resultado consumidos2026-10-06, no inferidos del YAML.
+- Misma imagen/macOS/arquitectura y pareja Xcode/Swift/SDK indicados arriba.
+- Runtime disponible **iOS26.0.1** (`com.apple.CoreSimulator.SimRuntime.iOS-26-0`): 10dispositivos iPhone y11iPad. Incluye iPhone16/17/SE3 e iPad/Air/Pro/mini. Solo inventario; ninguno arrancado por este workflow.
+- El reporte confirma `appBuilt=false`, `testsRun=false`, `simulatorBooted=false`, `signedOrUploaded=false`. No hay todavía proyecto Apple compilado, cobertura física, firma ni distribución. Tampoco prueba compatibilidad KMP/Xcode ni frame-exact.
+- `main` público permaneció en `5c47e887dc06b294f9b9a1f6458df6b670f854aa`; Android/source/dependencias intactos. No se creó PR ni se fusionó.
+
+**Conclusión:** hay host CI macOS para los siguientes spikes de la app iPhone sin depender del Mac antiguo para compilar. P0 completo/G0 y el siguiente cambio de app siguen sujetos a sus gates; disponibilidad de simuladores no equivale a un test de app PASS.
 
 ## Rollback
 
 1. Cancelar runs propios activos y, si procede, deshabilitar el workflow registrado.
-2. Con autorización, revertir únicamente el commit de esta slice en `dev/apple` y publicar el revert.
+2. Con autorización, revertir únicamente los commits CI/documentación de esta slice en `dev/apple` (más recientes primero) y publicar el revert. Los commits de implementación son `69703f4` y `8494d11`; incluir también su actualización documental de evidencia, no commits Android ni ajenos.
 3. No hacer reset/clean/stash/force-push, no modificar `main`, no borrar trabajo ajeno ni retargetear el checkout privado.
 
 El diagnóstico no toca teléfono/base de datos. Los logs/ejecuciones ya realizados no se deshacen; las futuras migraciones de datos exigirán su propio plan de backup/rollback.
