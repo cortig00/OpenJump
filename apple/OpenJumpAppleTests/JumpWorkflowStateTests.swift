@@ -244,4 +244,139 @@ final class JumpWorkflowStateTests: XCTestCase {
         app.athletes = try await store.athletes(includeArchived: true)
         XCTAssertFalse(workflow.canCalculate(for: app))
     }
+
+    @MainActor
+    func testTemporalReferenceImportMarkCalculateSaveReopen() async throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("openjump-p0-\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let store = try SQLiteStore(databaseURL: url)
+        let athlete = try await store.createAthlete(name: "P0 Temporal")
+        let (app, defaults, suite) = try isolatedApp(store: store, athletes: [athlete])
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let workflow = JumpWorkflowState()
+        workflow.synchronize(with: app)
+        defer { workflow.cancelAnalysis(); workflow.confirmDiscard() }
+        XCTAssertEqual(workflow.requiredEvents, [.movementStart, .takeoff, .landing])
+
+        let sourceURL = try await MediaFixtureFactory.make(cadence: .temporalReference)
+        let sourceDirectory = sourceURL.deletingLastPathComponent()
+        defer { try? FileManager.default.removeItem(at: sourceDirectory) }
+        workflow.requestFile(sourceURL, app: app)
+
+        let manifestReady = await waitFor(timeoutNanoseconds: 60_000_000_000, condition: { workflow.manifest != nil })
+        if !manifestReady {
+            XCTFail("temporalReference fixture must index within the bounded wait")
+            return
+        }
+        let manifest = try XCTUnwrap(workflow.manifest)
+        let video = try XCTUnwrap(workflow.video)
+        XCTAssertEqual(manifest.sourceID, video.id)
+        let videoID = video.id
+        XCTAssertEqual(manifest.frames.count, 6)
+        XCTAssertEqual(manifest.frames.map(\.ptsUs), [0, 100_000, 200_000, 400_000, 700_000, 800_000])
+        guard manifest.frames.count == 6 else {
+            XCTFail("temporalReference manifest must contain exactly 6 frames")
+            return
+        }
+
+        let frameReady = await waitFor(timeoutNanoseconds: 30_000_000_000, condition: { workflow.presentedFrame != nil })
+        if !frameReady {
+            XCTFail("first exact frame must present within the bounded wait")
+            return
+        }
+
+        let targets = [0, 2, 4]
+        let expectedPTS: [Int64] = [0, 200_000, 700_000]
+        let kinds = workflow.requiredEvents
+        XCTAssertEqual(kinds, [.movementStart, .takeoff, .landing])
+        XCTAssertEqual(kinds.count, 3)
+        guard kinds == [.movementStart, .takeoff, .landing], kinds.count == 3,
+              targets.count == 3, expectedPTS.count == 3 else {
+            XCTFail("temporalReference targets must align exactly with required events")
+            return
+        }
+        for (position, kind) in kinds.enumerated() {
+            guard targets.indices.contains(position), expectedPTS.indices.contains(position) else {
+                XCTFail("target/PTS index out of range")
+                return
+            }
+            let target = targets[position]
+            let expected = expectedPTS[position]
+            guard manifest.frames.indices.contains(target) else {
+                XCTFail("temporalReference frame \(target) out of range")
+                return
+            }
+            let expectedFramePTS = manifest.frames[target].ptsUs
+            workflow.selectEvent(kind)
+            workflow.requestFrame(target)
+            let shown = await waitFor(timeoutNanoseconds: 30_000_000_000, condition: {
+                guard let presented = workflow.presentedFrame else { return false }
+                return presented.sourceID == videoID && presented.index == target && presented.ptsUs == expectedFramePTS
+            })
+            if !shown {
+                XCTFail("exact frame \(target) must match source identity before marking")
+                return
+            }
+            XCTAssertEqual(workflow.presentedFrame?.ptsUs, expected)
+            XCTAssertTrue(workflow.canMarkDisplayedFrame)
+            workflow.markSelectedEvent()
+            let recorded = workflow.event(for: kind)
+            XCTAssertEqual(recorded?.frameIndex, target)
+            XCTAssertEqual(recorded?.ptsUs, expected)
+            XCTAssertEqual(workflow.video?.id, videoID)
+            XCTAssertEqual(workflow.manifest?.sourceID, videoID)
+        }
+
+        workflow.setRealtimeDeclared(true)
+        XCTAssertTrue(workflow.realtimeDeclared)
+        XCTAssertTrue(workflow.canCalculate(for: app))
+        workflow.calculate(using: app)
+        let calculated = await waitFor(timeoutNanoseconds: 30_000_000_000, condition: { workflow.metrics != nil })
+        if !calculated {
+            XCTFail("shared calculation must finish within the bounded wait")
+            return
+        }
+        let metrics = try XCTUnwrap(workflow.metrics)
+        XCTAssertEqual(metrics.count, 5)
+        XCTAssertEqual(metrics.map(\.key), ["HEIGHT_CM", "FLIGHT_TIME_MS", "TAKEOFF_VELOCITY_MPS", "TIME_TO_TAKEOFF_MS", "RSI_MOD"])
+        XCTAssertEqual(metrics.map(\.unit), ["CENTIMETER", "MILLISECOND", "METER_PER_SECOND", "MILLISECOND", "METER_PER_SECOND"])
+        guard metrics.count == 5 else {
+            XCTFail("temporalReference metrics must contain exactly 5 ordered values")
+            return
+        }
+        XCTAssertEqual(metrics[0].value, 30.64578125, accuracy: 1e-10)
+        XCTAssertEqual(metrics[1].value, 500, accuracy: 1e-10)
+        XCTAssertEqual(metrics[2].value, 2.4516625, accuracy: 1e-10)
+        XCTAssertEqual(metrics[3].value, 200, accuracy: 1e-10)
+        XCTAssertEqual(metrics[4].value, 1.5322890625, accuracy: 1e-10)
+
+        var didOpenHistory = false
+        await workflow.save(using: app, openHistory: { didOpenHistory = true })
+        let saved = try XCTUnwrap(workflow.savedMeasurement)
+        XCTAssertTrue(didOpenHistory)
+        XCTAssertEqual(saved.ownerID, athlete.id)
+        XCTAssertEqual(saved.protocolKey, .cmj)
+
+        let reopened = try SQLiteStore(databaseURL: url)
+        let graph = try await reopened.temporalAnalysis(measurementID: saved.id)
+        let analysis = try XCTUnwrap(graph)
+        XCTAssertEqual(analysis.measurementID, saved.id)
+        XCTAssertEqual(analysis.source, .files)
+        XCTAssertEqual(analysis.sourceFrameCount, 6)
+        XCTAssertEqual(analysis.sourceOriginUs, 0)
+        XCTAssertEqual(analysis.temporalState, .realtimeDeclared)
+        XCTAssertEqual(analysis.events.map(\.kind), kinds)
+        XCTAssertEqual(analysis.events.map(\.frameIndex), targets)
+        XCTAssertEqual(analysis.events.map(\.ptsUs), expectedPTS)
+        XCTAssertEqual(analysis.events.map(\.previousPtsUs), [nil, 100_000, 400_000])
+        XCTAssertEqual(analysis.events.map(\.nextPtsUs), [100_000, 400_000, 800_000])
+        XCTAssertEqual(saved.metrics, metrics)
+
+        let history = try await reopened.history()
+        XCTAssertEqual(history.items.count, 1)
+        let item = try XCTUnwrap(history.items.first)
+        XCTAssertEqual(item.id, saved.id)
+        XCTAssertEqual(item.sessionKey, saved.sessionKey)
+        XCTAssertEqual(item.ownerID, athlete.id)
+    }
 }

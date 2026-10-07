@@ -1,4 +1,6 @@
+import AVFoundation
 import CoreGraphics
+import CoreMedia
 import Foundation
 import PhotosUI
 import SwiftUI
@@ -30,6 +32,388 @@ final class JumpWorkflowState: ObservableObject {
     @Published private(set) var isCalculating = false
     @Published private(set) var isSaving = false
     @Published var showDiscardConfirmation = false
+
+    // MARK: - P1b native preview transport (NAV only; exact proof stays CG)
+
+    private let playbackController = JumpVideoPlaybackController()
+    @Published private(set) var playbackPhase: JumpVideoPlaybackController.Phase = .idle
+    @Published private(set) var playbackReadiness: JumpVideoPlaybackController.Readiness = .none
+    @Published private(set) var playbackWantsPlayback = false
+    @Published private(set) var isPlaybackFailed = false
+    @Published private(set) var isScrubbing = false
+    @Published private(set) var scrubRequestedIndex = 0
+    @Published private(set) var showsNativePreview = false
+    @Published private(set) var isViewerActive = true
+    @Published private(set) var nativePreviewIndex: Int? = nil
+
+    var previewPlayer: AVPlayer? { playbackController.nativePlayer }
+    var isTransportPlaying: Bool { playbackPhase == .playing }
+    var isTransportBusy: Bool { playbackPhase == .seeking || isScrubbing }
+    /// Toggle gate kept separate from `playbackEnabled` so exact ±1 steps keep
+    /// working while readiness is unknown; pausing current playback (or a
+    /// pending seek with intent) stays available even before ready.
+    var canTogglePlayback: Bool {
+        if playbackPhase == .playing || (playbackPhase == .seeking && playbackWantsPlayback) {
+            return playbackEnabled
+        }
+        return playbackEnabled && playbackReadiness == .ready && !isPlaybackFailed && !isScrubbing
+    }
+    var playbackEnabled: Bool {
+        guard savedMeasurement == nil, !isSaving, !isImporting, !isIndexing, !isCalculating,
+              isViewerActive, let video, let manifest,
+              manifest.sourceID == video.id, !manifest.frames.isEmpty else { return false }
+        return true
+    }
+
+    init() {
+        // Controller already calls back on MainActor; same-actor direct calls
+        // avoid a second hop that could retarget stale sources between hops.
+        playbackController.onChange = { [weak self] in self?.handlePlaybackChange() }
+        playbackController.onEnd = { [weak self] in self?.handlePlaybackEnd() }
+        playbackController.onFailure = { [weak self] in self?.handlePlaybackFailure() }
+    }
+
+    private func handlePlaybackChange() {
+        let priorPhase = playbackPhase
+        guard let video, let manifest, manifest.sourceID == video.id,
+              playbackController.attachedSourceID == video.id else {
+            playbackPhase = playbackController.phase
+            playbackReadiness = playbackController.readiness
+            playbackWantsPlayback = playbackController.wantsPlayback
+            showsNativePreview = false
+            nativePreviewIndex = nil
+            return
+        }
+        playbackPhase = playbackController.phase
+        playbackReadiness = playbackController.readiness
+        playbackWantsPlayback = playbackController.wantsPlayback
+        if playbackPhase == .failed { isPlaybackFailed = true }
+        // Periodic ticks update labels only; never decode here.
+        if let nativeTime = playbackController.currentNativeTime,
+              (playbackPhase == .playing || playbackPhase == .seeking) {
+            nativePreviewIndex = playbackController.navigationIndex(for: nativeTime, in: manifest)
+            showsNativePreview = isViewerActive && nativePreviewIndex != nil
+        } else if isScrubbing {
+            // Gesture owns the target: never show stale backend pixels as the
+            // requested frame and never decode per tick.
+            showsNativePreview = false
+        } else {
+            // Paused exact review hides the native layer so only CG proof shows.
+            showsNativePreview = false
+            if playbackPhase != .playing && playbackPhase != .seeking { nativePreviewIndex = nil }
+        }
+        // Failed-seek settle (SEEKING→PAUSED): one exact CG restore at the kept
+        // index. Periodic ticks never reach here; scrub/loading/presented/error
+        // states suppress the restore so no stale decode is generated.
+        if priorPhase == .seeking && (playbackPhase == .paused || playbackPhase == .idle) {
+            restoreExactAfterSettle(manifest: manifest, video: video)
+        }
+    }
+
+    /// One paused exact-CG restore after a transport settle. Requires a bound
+    /// current source, the kept index and its PTS; never clears valid errors
+    /// and never decodes per periodic tick.
+    private func restoreExactAfterSettle(manifest: JumpVideoManifest, video: ImportedJumpVideo) {
+        guard !isScrubbing, isViewerActive, savedMeasurement == nil, !isSaving,
+              presentedFrame == nil, !isFrameLoading, errorKey == nil,
+              manifest.sourceID == video.id,
+              manifest.frames.indices.contains(frameIndex) else { return }
+        requestFrameInternal(frameIndex)
+    }
+
+    private func handlePlaybackEnd() {
+        // Genuine end already gated natively; settle to paused logical viewer.
+        guard let video, let manifest, manifest.sourceID == video.id,
+              playbackController.attachedSourceID == video.id else { return }
+        playbackPhase = playbackController.phase
+        playbackWantsPlayback = playbackController.wantsPlayback
+        showsNativePreview = false
+        // Keep the NAV index for the user; one paused exact CG restore brings
+        // back proof at the resolved current-source index when the viewer is
+        // active with unsaved work and no CG is already shown or loading.
+        let kept: Int?
+        if let nativeTime = playbackController.currentNativeTime,
+           let resolved = playbackController.navigationIndex(for: nativeTime, in: manifest) {
+            kept = min(max(resolved, 0), manifest.frames.count - 1)
+            nativePreviewIndex = kept
+        } else {
+            kept = nil
+            nativePreviewIndex = nil
+        }
+        guard let target = kept, isViewerActive, savedMeasurement == nil, !isSaving,
+              !isScrubbing, presentedFrame == nil, !isFrameLoading, errorKey == nil,
+              manifest.frames.indices.contains(target) else { return }
+        requestFrameInternal(target)
+    }
+
+    private func handlePlaybackFailure() {
+        guard let video, playbackController.attachedSourceID == video.id else { return }
+        playbackPhase = playbackController.phase
+        playbackReadiness = playbackController.readiness
+        playbackWantsPlayback = false
+        isPlaybackFailed = true
+        showsNativePreview = false
+        nativePreviewIndex = nil
+    }
+
+    private func ensurePlaybackAttached() {
+        guard isViewerActive, savedMeasurement == nil, !isSaving,
+              let video, let manifest, manifest.sourceID == video.id,
+              !manifest.frames.isEmpty else { return }
+        if playbackController.attachedSourceID == video.id { return }
+        isPlaybackFailed = false
+        playbackController.attach(video: video)
+        handlePlaybackChange()
+    }
+
+    private func teardownPlaybackForSourceChange() {
+        playbackController.teardown()
+        playbackPhase = .idle
+        playbackReadiness = .none
+        playbackWantsPlayback = false
+        showsNativePreview = false
+        nativePreviewIndex = nil
+        isScrubbing = false
+    }
+
+    private func pausePlaybackBackend() {
+        playbackController.pause()
+        playbackPhase = playbackController.phase
+        playbackWantsPlayback = false
+        showsNativePreview = false
+    }
+
+    func viewerAppeared() {
+        isViewerActive = true
+        ensurePlaybackAttached()
+        // Resume shows the kept exact frame; never autoplays.
+        if savedMeasurement == nil, video != nil, manifest != nil, presentedFrame == nil, !isFrameLoading {
+            requestExactFrameAtKeptIndex()
+        } else {
+            handlePlaybackChange()
+        }
+    }
+
+    func viewerDisappeared() {
+        // Pause + detach observers; preserve every analysis artifact.
+        // Intent first: deactivation before the synchronous pause callback so
+        // no exact restore is generated while leaving.
+        captureNativeIndexIntoSelection()
+        isViewerActive = false
+        isScrubbing = false
+        playbackController.pause()
+        playbackController.teardown()
+        playbackPhase = .idle
+        playbackReadiness = .none
+        playbackWantsPlayback = false
+        showsNativePreview = false
+        nativePreviewIndex = nil
+        frameTask?.cancel(); frameTask = nil
+        isFrameLoading = false
+        frameGeneration += 1
+    }
+
+    func suspendViewerForBackground() {
+        guard isViewerActive else { return }
+        captureNativeIndexIntoSelection()
+        // Suspend intent before the synchronous pause callback: no restore
+        // while backgrounded.
+        isViewerActive = false
+        isScrubbing = false
+        playbackController.pause()
+        playbackController.teardown()
+        playbackPhase = .idle
+        playbackReadiness = .none
+        playbackWantsPlayback = false
+        showsNativePreview = false
+        nativePreviewIndex = nil
+        frameTask?.cancel(); frameTask = nil
+        isFrameLoading = false
+        frameGeneration += 1
+    }
+
+    func resumeViewerFromBackground() {
+        guard !isViewerActive else { return }
+        isViewerActive = true
+        ensurePlaybackAttached()
+        if savedMeasurement == nil, video != nil, manifest != nil, presentedFrame == nil, !isFrameLoading {
+            requestExactFrameAtKeptIndex()
+        } else {
+            handlePlaybackChange()
+        }
+    }
+
+    private func captureNativeIndexIntoSelection() {
+        guard let video, let manifest, manifest.sourceID == video.id,
+              playbackController.attachedSourceID == video.id,
+              let nativeTime = playbackController.currentNativeTime,
+              (playbackPhase == .playing || playbackPhase == .seeking),
+              let resolved = playbackController.navigationIndex(for: nativeTime, in: manifest),
+              manifest.frames.indices.contains(resolved) else { return }
+        frameIndex = resolved
+        scrubRequestedIndex = resolved
+        nativePreviewIndex = resolved
+    }
+
+    private func requestExactFrameAtKeptIndex() {
+        guard let video, let manifest, manifest.sourceID == video.id,
+              manifest.frames.indices.contains(frameIndex) else { return }
+        requestFrameInternal(frameIndex)
+    }
+
+    func togglePlayback() {
+        guard playbackEnabled, let video, let manifest, manifest.sourceID == video.id,
+              manifest.frames.indices.contains(frameIndex) else { return }
+        // Pending-seek cancel stays available even before ready.
+        if playbackPhase == .playing || (playbackPhase == .seeking && playbackWantsPlayback) {
+            pauseTransportAndShowExactAtNativeIndex()
+            return
+        }
+        // Start from the CURRENT selected indexed time, never FPS math.
+        // Never clear CG proof until the native backend/source/index is ready.
+        ensurePlaybackAttached()
+        guard playbackController.attachedSourceID == video.id,
+              playbackController.readiness == .ready, playbackReadiness == .ready,
+              !isPlaybackFailed, !isScrubbing else { return }
+        // Clear stale CG proof + block marking BEFORE the native seek.
+        frameGeneration += 1
+        frameTask?.cancel(); frameTask = nil
+        presentedFrame = nil
+        isFrameLoading = false
+        isPlaybackFailed = false
+        errorKey = nil
+        let targetTime = manifest.frames[frameIndex].time
+        playbackController.play(from: targetTime)
+        playbackPhase = playbackController.phase
+        playbackWantsPlayback = playbackController.wantsPlayback
+        handlePlaybackChange()
+    }
+
+    func retryPlaybackAttachment() {
+        guard let video, let manifest, manifest.sourceID == video.id, isViewerActive,
+              savedMeasurement == nil else { return }
+        isPlaybackFailed = false
+        errorKey = nil
+        playbackController.teardown()
+        playbackController.attach(video: video)
+        handlePlaybackChange()
+        requestExactFrameAtKeptIndex()
+    }
+
+    private func pauseTransportAndShowExactAtNativeIndex() {
+        guard let video, let manifest, manifest.sourceID == video.id,
+              playbackController.attachedSourceID == video.id else {
+            pausePlaybackBackend()
+            return
+        }
+        let resolved: Int?
+        if let nativeTime = playbackController.currentNativeTime {
+            resolved = playbackController.navigationIndex(for: nativeTime, in: manifest)
+        } else { resolved = nil }
+        let target = resolved.flatMap { manifest.frames.indices.contains($0) ? $0 : nil } ?? frameIndex
+        guard manifest.frames.indices.contains(target) else {
+            pausePlaybackBackend()
+            return
+        }
+        // Intent before the synchronous pause callback so any auto-restore
+        // targets the same index the explicit request below decodes.
+        frameIndex = target
+        scrubRequestedIndex = target
+        pausePlaybackBackend()
+        requestFrameInternal(target)
+    }
+
+    func beginScrubbing() {
+        guard playbackEnabled else { return }
+        // Scrub intent BEFORE the synchronous pause callback so it never
+        // generates a stale exact restore mid-gesture.
+        if !isScrubbing {
+            isScrubbing = true
+            scrubRequestedIndex = frameIndex
+        }
+        playbackController.pause()
+        playbackPhase = playbackController.phase
+        playbackWantsPlayback = false
+        // Gesture start clears CG proof + blocks marking; no decode storm.
+        frameGeneration += 1
+        frameTask?.cancel(); frameTask = nil
+        presentedFrame = nil
+        isFrameLoading = false
+        ensurePlaybackAttached()
+        handlePlaybackChange()
+        // Hide stale backend pixels during the drag; labels show the
+        // requested target until endScrubbing decodes the exact CG.
+        showsNativePreview = false
+    }
+
+    func updateScrubTarget(_ index: Int) {
+        guard let manifest, manifest.frames.indices.contains(index) else { return }
+        guard isScrubbing else { return }
+        let clamped = min(max(index, 0), manifest.frames.count - 1)
+        scrubRequestedIndex = clamped
+        frameIndex = clamped
+        // Track the target for labels/slider, but hide the stale native layer
+        // so old pixels are never mislabeled as the new exact frame.
+        nativePreviewIndex = clamped
+        showsNativePreview = false
+    }
+
+    func endScrubbing() {
+        guard isScrubbing else { return }
+        isScrubbing = false
+        showsNativePreview = false
+        guard let manifest, manifest.frames.indices.contains(scrubRequestedIndex) else { return }
+        requestFrameInternal(scrubRequestedIndex)
+    }
+
+    func stepFrameForAccessibility(by offset: Int) {
+        guard let manifest, !manifest.frames.isEmpty else { return }
+        guard savedMeasurement == nil, !isSaving else { return }
+        // ±1 always pauses first, even on a clamped boundary.
+        playbackController.pause()
+        playbackPhase = playbackController.phase
+        playbackWantsPlayback = false
+        showsNativePreview = false
+        let base = nativePreviewIndex ?? frameIndex
+        let clampedBase = min(max(base, 0), manifest.frames.count - 1)
+        let target = min(max(clampedBase + offset, 0), manifest.frames.count - 1)
+        scrubRequestedIndex = target
+        requestFrameInternal(target)
+    }
+
+    private func requestFrameInternal(_ index: Int) {
+        guard !isSaving, isViewerActive, let video, let manifest, manifest.sourceID == video.id,
+              manifest.frames.indices.contains(index), savedMeasurement == nil else { return }
+        // Exact review hides the native layer while paused.
+        showsNativePreview = false
+        nativePreviewIndex = nil
+        frameGeneration += 1
+        let request = frameGeneration
+        let sourceID = video.id
+        let expectedPTS = manifest.frames[index].ptsUs
+        frameTask?.cancel()
+        frameIndex = index
+        scrubRequestedIndex = index
+        presentedFrame = nil
+        isFrameLoading = true
+        if errorKey == "jumps.error.frame" { errorKey = nil }
+        frameTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                let frame = try await videoService.frame(manifest: manifest, index: index)
+                guard !Task.isCancelled, request == frameGeneration, self.video?.id == sourceID,
+                      self.manifest?.sourceID == sourceID, frame.sourceID == sourceID,
+                      frame.index == index, frame.ptsUs == expectedPTS else { return }
+                presentedFrame = frame
+                isFrameLoading = false
+            } catch {
+                guard request == frameGeneration, !Task.isCancelled, self.video?.id == sourceID else { return }
+                presentedFrame = nil
+                isFrameLoading = false
+                errorKey = "jumps.error.frame"
+            }
+        }
+    }
 
     private enum DeferredAction {
         case setup(Setup, UnitProfile, Locale)
@@ -69,8 +453,14 @@ final class JumpWorkflowState: ObservableObject {
     var requiredEvents: [JumpEventKind] { TemporalJumpDraft.requiredEvents(for: setup.protocolKey) }
     var nextEventToMark: JumpEventKind? { requiredEvents.first { event(for: $0) == nil } }
     var canMarkDisplayedFrame: Bool {
-        guard savedMeasurement == nil, !isSaving, !isFrameLoading, let video, let manifest, let presentedFrame,
+        guard savedMeasurement == nil, !isSaving, !isFrameLoading, !isScrubbing, isViewerActive,
+              let video, let manifest, let presentedFrame,
               manifest.frames.indices.contains(frameIndex) else { return false }
+        // Transport fail-closed: never mark while previewing, seeking or failed.
+        if playbackPhase == .playing || playbackPhase == .seeking || playbackPhase == .failed { return false }
+        if playbackWantsPlayback { return false }
+        // No blanket AVPlayer-readiness gate: a valid exact CG frame can mark
+        // while the native layer stays hidden, even if readiness is unknown.
         return presentedFrame.sourceID == video.id && presentedFrame.index == frameIndex
             && presentedFrame.ptsUs == manifest.frames[frameIndex].ptsUs && manifest.sourceID == video.id
     }
@@ -132,6 +522,7 @@ final class JumpWorkflowState: ObservableObject {
     }
 
     private func applySetup(_ next: Setup, app: AppState) {
+        pausePlaybackBackend()
         setup = next
         capturedUnits = app.preferences.units
         capturedLocale = app.preferences.effectiveLocale
@@ -184,6 +575,7 @@ final class JumpWorkflowState: ObservableObject {
 
     func cancelAnalysis() {
         guard !isSaving else { return }
+        pausePlaybackBackend()
         if savedMeasurement != nil || !isDirty {
             discardAnalysis()
         } else {
@@ -194,6 +586,7 @@ final class JumpWorkflowState: ObservableObject {
 
     func confirmDiscard() {
         guard !isSaving else { return }
+        pausePlaybackBackend()
         let action = deferredAction
         deferredAction = nil
         showDiscardConfirmation = false
@@ -217,6 +610,7 @@ final class JumpWorkflowState: ObservableObject {
 
     private func beginImport(_ action: DeferredAction) {
         guard !isSaving else { return }
+        teardownPlaybackForSourceChange()
         switch action {
         case .file(_, let units, let locale), .photos(_, let units, let locale):
             adoptPreferences(units: units, locale: locale)
@@ -260,10 +654,12 @@ final class JumpWorkflowState: ObservableObject {
                 video = candidate
                 manifest = indexed
                 frameIndex = 0
+                scrubRequestedIndex = 0
                 selectedEvent = TemporalJumpDraft.requiredEvents(for: setup.protocolKey).first
                 isIndexing = false
                 sessionKey = UUID().uuidString
-                requestFrame(0)
+                if isViewerActive { ensurePlaybackAttached() }
+                requestFrameInternal(0)
             } catch {
                 candidate?.dispose()
                 guard request == sourceGeneration, !Task.isCancelled else { return }
@@ -274,6 +670,7 @@ final class JumpWorkflowState: ObservableObject {
 
     private func discardAnalysis() {
         guard !isSaving else { return }
+        teardownPlaybackForSourceChange()
         sourceGeneration += 1; frameGeneration += 1; calculationGeneration += 1
         importTask?.cancel(); frameTask?.cancel(); calculationTask?.cancel()
         importTask = nil; frameTask = nil; calculationTask = nil
@@ -304,6 +701,7 @@ final class JumpWorkflowState: ObservableObject {
         guard savedMeasurement != nil, !isSaving, !isImporting, !isIndexing,
               let video, let manifest, manifest.sourceID == video.id,
               (2...250_000).contains(manifest.frames.count) else { return }
+        pausePlaybackBackend()
         restartDraft()
         let units = app.preferences.units
         let locale = app.preferences.effectiveLocale
@@ -322,48 +720,54 @@ final class JumpWorkflowState: ObservableObject {
             setup = next
         }
         let kept = min(max(frameIndex, 0), manifest.frames.count - 1)
-        requestFrame(kept)
+        scrubRequestedIndex = kept
+        if isViewerActive { ensurePlaybackAttached() }
+        requestFrameInternal(kept)
     }
 
     func requestFrame(_ index: Int) {
-        guard !isSaving, let video, let manifest, manifest.sourceID == video.id,
-              manifest.frames.indices.contains(index), savedMeasurement == nil else { return }
-        frameGeneration += 1
-        let request = frameGeneration
-        let sourceID = video.id
-        let expectedPTS = manifest.frames[index].ptsUs
-        frameTask?.cancel()
-        frameIndex = index
-        presentedFrame = nil
-        isFrameLoading = true
-        errorKey = nil
-        frameTask = Task { [weak self] in
-            guard let self else { return }
-            do {
-                let frame = try await videoService.frame(manifest: manifest, index: index)
-                guard !Task.isCancelled, request == frameGeneration, self.video?.id == sourceID,
-                      self.manifest?.sourceID == sourceID, frame.sourceID == sourceID,
-                      frame.index == index, frame.ptsUs == expectedPTS else { return }
-                presentedFrame = frame
-                isFrameLoading = false
-            } catch {
-                guard request == frameGeneration, !Task.isCancelled, self.video?.id == sourceID else { return }
-                presentedFrame = nil
-                isFrameLoading = false
-                errorKey = "jumps.error.frame"
-            }
+        // Public exact path always pauses transport first; periodic callbacks
+        // never re-enter here, so no recursive seek loop is possible.
+        pausePlaybackBackend()
+        guard !isScrubbing else {
+            // Scrub gesture owns decoding; without a gesture this is an
+            // accessible step and still needs one exact decode.
+            requestFrameInternal(index)
+            return
         }
+        requestFrameInternal(index)
     }
 
     func moveFrame(by offset: Int) {
         guard !isSaving, let manifest else { return }
-        let target = min(max(frameIndex + offset, 0), manifest.frames.count - 1)
-        if target != frameIndex { requestFrame(target) }
+        guard savedMeasurement == nil else { return }
+        // ±1 steps pause transport and decode from the current NAV position.
+        if isScrubbing { endScrubbing() }
+        let base = (playbackPhase == .playing || playbackPhase == .seeking) ? (nativePreviewIndex ?? frameIndex) : frameIndex
+        let clampedBase = min(max(base, 0), manifest.frames.count - 1)
+        let target = min(max(clampedBase + offset, 0), manifest.frames.count - 1)
+        pausePlaybackBackend()
+        if target != frameIndex || offset != 0 { requestFrameInternal(target) }
     }
 
     func selectEvent(_ kind: JumpEventKind) {
         guard !isSaving, savedMeasurement == nil, requiredEvents.contains(kind) else { return }
         selectedEvent = kind
+    }
+
+    /// Read-only review helper: selects the kind, then re-requests the
+    /// existing mark's exact source index after pausing. Never infers a mark
+    /// from player PTS/FPS and never mutates or stores events.
+    func reviewEvent(_ kind: JumpEventKind) {
+        guard !isSaving, savedMeasurement == nil, isViewerActive, !isScrubbing,
+              requiredEvents.contains(kind),
+              let video, let manifest, manifest.sourceID == video.id else { return }
+        selectedEvent = kind
+        guard let mark = event(for: kind),
+              manifest.frames.indices.contains(mark.frameIndex),
+              manifest.frames[mark.frameIndex].ptsUs == mark.ptsUs else { return }
+        pausePlaybackBackend()
+        requestFrameInternal(mark.frameIndex)
     }
 
     func markSelectedEvent() {
@@ -453,6 +857,10 @@ final class JumpWorkflowState: ObservableObject {
     func save(using app: AppState, openHistory: () -> Void) async {
         guard !isSaving, savedMeasurement == nil, let store = app.store,
               let draft = calculatedDraft, metrics != nil else { return }
+        // Immediate transport stop before the async commit; never autoplays after.
+        pausePlaybackBackend()
+        showsNativePreview = false
+        nativePreviewIndex = nil
         do { try draft.validate() } catch { errorKey = "jumps.error.events"; return }
         isSaving = true; errorKey = nil
         defer { isSaving = false }

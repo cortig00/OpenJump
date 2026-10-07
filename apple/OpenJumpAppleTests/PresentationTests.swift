@@ -65,4 +65,197 @@ final class PresentationTests: XCTestCase {
         _ = ProtocolPresentation.primaryMetric(in: input, protocolKey: .dropJump)
         XCTAssertEqual(input, [first, second])
     }
+
+    func testTimingPreviewCountermovementReportsMovementAndFlight() {
+        let marks = [
+            JumpEventMark(kind: .movementStart, frameIndex: 1, ptsUs: 100_000, previousPtsUs: 0, nextPtsUs: 200_000),
+            JumpEventMark(kind: .takeoff, frameIndex: 4, ptsUs: 600_000, previousPtsUs: 500_000, nextPtsUs: 700_000),
+            JumpEventMark(kind: .landing, frameIndex: 9, ptsUs: 1_100_000, previousPtsUs: 1_000_000, nextPtsUs: nil)
+        ]
+        for protocolKey in [SavedProtocol.cmj, .abalakov, .unilateral] {
+            let previews = JumpWorkflowPresentation.timingPreview(for: protocolKey, marks: marks)
+            XCTAssertEqual(previews.map(\.id), ["movement", "flight"])
+            XCTAssertEqual(previews.map(\.metricKey), ["TIME_TO_TAKEOFF_MS", "FLIGHT_TIME_MS"])
+            XCTAssertEqual(previews.map(\.startPtsUs), [100_000, 600_000])
+            XCTAssertEqual(previews.map(\.endPtsUs), [600_000, 1_100_000])
+            XCTAssertEqual(previews.map(\.durationUs), [500_000, 500_000])
+            XCTAssertEqual(previews.map(\.durationMs), [500.0, 500.0])
+        }
+    }
+
+    func testTimingPreviewSquatJumpFlightOnlyAndDropJumpContactAndFlight() {
+        let sj = [
+            JumpEventMark(kind: .takeoff, frameIndex: 3, ptsUs: 300_000, previousPtsUs: 200_000, nextPtsUs: 400_000),
+            JumpEventMark(kind: .landing, frameIndex: 8, ptsUs: 800_000, previousPtsUs: 700_000, nextPtsUs: nil)
+        ]
+        let sjPreviews = JumpWorkflowPresentation.timingPreview(for: .sj, marks: sj)
+        XCTAssertEqual(sjPreviews.map(\.id), ["flight"])
+        XCTAssertEqual(sjPreviews.map(\.metricKey), ["FLIGHT_TIME_MS"])
+        XCTAssertEqual(sjPreviews.map(\.startPtsUs), [300_000])
+        XCTAssertEqual(sjPreviews.map(\.endPtsUs), [800_000])
+        XCTAssertEqual(sjPreviews.map(\.durationUs), [500_000])
+        XCTAssertEqual(sjPreviews.map(\.durationMs), [500.0])
+        let dj = [
+            JumpEventMark(kind: .initialContact, frameIndex: 1, ptsUs: 100_000, previousPtsUs: 0, nextPtsUs: 200_000),
+            JumpEventMark(kind: .takeoff, frameIndex: 3, ptsUs: 300_000, previousPtsUs: 200_000, nextPtsUs: 400_000),
+            JumpEventMark(kind: .landing, frameIndex: 8, ptsUs: 800_000, previousPtsUs: 700_000, nextPtsUs: nil)
+        ]
+        let djPreviews = JumpWorkflowPresentation.timingPreview(for: .dropJump, marks: dj)
+        XCTAssertEqual(djPreviews.map(\.id), ["contact", "flight"])
+        XCTAssertEqual(djPreviews.map(\.metricKey), ["CONTACT_TIME_MS", "FLIGHT_TIME_MS"])
+        XCTAssertEqual(djPreviews.map(\.startPtsUs), [100_000, 300_000])
+        XCTAssertEqual(djPreviews.map(\.endPtsUs), [300_000, 800_000])
+        XCTAssertEqual(djPreviews.map(\.durationUs), [200_000, 500_000])
+        XCTAssertEqual(djPreviews.map(\.durationMs), [200.0, 500.0])
+    }
+
+    func testTimingPreviewPartialMarksYieldOnlyCompletePairs() {
+        let movementOnly = [
+            JumpEventMark(kind: .movementStart, frameIndex: 1, ptsUs: 100_000, previousPtsUs: 0, nextPtsUs: 200_000),
+            JumpEventMark(kind: .takeoff, frameIndex: 4, ptsUs: 600_000, previousPtsUs: 500_000, nextPtsUs: nil)
+        ]
+        let movementPreviews = JumpWorkflowPresentation.timingPreview(for: .cmj, marks: movementOnly)
+        XCTAssertEqual(movementPreviews.map(\.id), ["movement"])
+        XCTAssertEqual(movementPreviews.map(\.startPtsUs), [100_000])
+        XCTAssertEqual(movementPreviews.map(\.endPtsUs), [600_000])
+        XCTAssertEqual(movementPreviews.map(\.durationUs), [500_000])
+        XCTAssertEqual(movementPreviews.map(\.durationMs), [500.0])
+        XCTAssertFalse(movementPreviews.contains(where: { $0.durationUs == 0 }))
+        let flightOnly = [
+            JumpEventMark(kind: .takeoff, frameIndex: 4, ptsUs: 600_000, previousPtsUs: 500_000, nextPtsUs: 700_000),
+            JumpEventMark(kind: .landing, frameIndex: 9, ptsUs: 1_100_000, previousPtsUs: 1_000_000, nextPtsUs: nil)
+        ]
+        let flightPreviews = JumpWorkflowPresentation.timingPreview(for: .cmj, marks: flightOnly)
+        XCTAssertEqual(flightPreviews.map(\.id), ["flight"])
+        XCTAssertEqual(flightPreviews.map(\.startPtsUs), [600_000])
+        XCTAssertEqual(flightPreviews.map(\.endPtsUs), [1_100_000])
+        XCTAssertEqual(flightPreviews.map(\.durationUs), [500_000])
+        XCTAssertEqual(flightPreviews.map(\.durationMs), [500.0])
+        let loneTakeoff = [
+            JumpEventMark(kind: .takeoff, frameIndex: 4, ptsUs: 600_000, previousPtsUs: 500_000, nextPtsUs: 700_000)
+        ]
+        XCTAssertTrue(JumpWorkflowPresentation.timingPreview(for: .sj, marks: loneTakeoff).isEmpty)
+        XCTAssertTrue(JumpWorkflowPresentation.timingPreview(for: .cmj, marks: []).isEmpty)
+    }
+
+    func testTimingPreviewInvalidMarksFailClosed() {
+        let movement = JumpEventMark(kind: .movementStart, frameIndex: 1, ptsUs: 100_000, previousPtsUs: 0, nextPtsUs: 200_000)
+        let takeoff = JumpEventMark(kind: .takeoff, frameIndex: 4, ptsUs: 600_000, previousPtsUs: 500_000, nextPtsUs: 700_000)
+        let landing = JumpEventMark(kind: .landing, frameIndex: 9, ptsUs: 1_100_000, previousPtsUs: 1_000_000, nextPtsUs: nil)
+        XCTAssertTrue(JumpWorkflowPresentation.timingPreview(for: .cmj, marks: [movement, takeoff, landing, takeoff]).isEmpty)
+        let negativeIndex = [
+            JumpEventMark(kind: .movementStart, frameIndex: -1, ptsUs: 100_000, previousPtsUs: nil, nextPtsUs: 200_000),
+            takeoff,
+            landing
+        ]
+        XCTAssertEqual(JumpWorkflowPresentation.timingPreview(for: .cmj, marks: negativeIndex).map(\.id), ["flight"])
+        let negativePts = [
+            movement,
+            takeoff,
+            JumpEventMark(kind: .landing, frameIndex: 9, ptsUs: -10, previousPtsUs: nil, nextPtsUs: nil)
+        ]
+        XCTAssertEqual(JumpWorkflowPresentation.timingPreview(for: .cmj, marks: negativePts).map(\.id), ["movement"])
+        let reversed = [
+            movement,
+            JumpEventMark(kind: .takeoff, frameIndex: 4, ptsUs: 1_100_000, previousPtsUs: 1_000_000, nextPtsUs: nil),
+            JumpEventMark(kind: .landing, frameIndex: 9, ptsUs: 600_000, previousPtsUs: 500_000, nextPtsUs: nil)
+        ]
+        XCTAssertEqual(JumpWorkflowPresentation.timingPreview(for: .cmj, marks: reversed).map(\.id), ["movement"])
+        let equalStamps = [
+            movement,
+            takeoff,
+            JumpEventMark(kind: .landing, frameIndex: 9, ptsUs: 600_000, previousPtsUs: 500_000, nextPtsUs: nil)
+        ]
+        XCTAssertEqual(JumpWorkflowPresentation.timingPreview(for: .cmj, marks: equalStamps).map(\.id), ["movement"])
+        let reversedFrameIndex = [
+            movement,
+            JumpEventMark(kind: .takeoff, frameIndex: 9, ptsUs: 600_000, previousPtsUs: 500_000, nextPtsUs: 700_000),
+            JumpEventMark(kind: .landing, frameIndex: 4, ptsUs: 1_100_000, previousPtsUs: 1_000_000, nextPtsUs: nil)
+        ]
+        XCTAssertEqual(JumpWorkflowPresentation.timingPreview(for: .cmj, marks: reversedFrameIndex).map(\.id), ["movement"])
+        let equalFrameIndex = [
+            movement,
+            JumpEventMark(kind: .takeoff, frameIndex: 4, ptsUs: 600_000, previousPtsUs: 500_000, nextPtsUs: 700_000),
+            JumpEventMark(kind: .landing, frameIndex: 4, ptsUs: 1_100_000, previousPtsUs: 1_000_000, nextPtsUs: nil)
+        ]
+        XCTAssertEqual(JumpWorkflowPresentation.timingPreview(for: .cmj, marks: equalFrameIndex).map(\.id), ["movement"])
+    }
+
+    func testTimingPreviewInt64BoundaryOffsetsStaySafe() {
+        let low = [
+            JumpEventMark(kind: .takeoff, frameIndex: 3, ptsUs: 300_000, previousPtsUs: 200_000, nextPtsUs: 400_000),
+            JumpEventMark(kind: .landing, frameIndex: 8, ptsUs: 800_000, previousPtsUs: 700_000, nextPtsUs: nil)
+        ]
+        let high = [
+            JumpEventMark(kind: .takeoff, frameIndex: 3, ptsUs: Int64.max - 600_000, previousPtsUs: Int64.max - 700_000, nextPtsUs: Int64.max - 500_000),
+            JumpEventMark(kind: .landing, frameIndex: 8, ptsUs: Int64.max - 100_000, previousPtsUs: Int64.max - 200_000, nextPtsUs: nil)
+        ]
+        let lowPreviews = JumpWorkflowPresentation.timingPreview(for: .sj, marks: low)
+        let highPreviews = JumpWorkflowPresentation.timingPreview(for: .sj, marks: high)
+        XCTAssertEqual(lowPreviews.map(\.id), ["flight"])
+        XCTAssertEqual(lowPreviews.map(\.startPtsUs), [300_000])
+        XCTAssertEqual(lowPreviews.map(\.endPtsUs), [800_000])
+        XCTAssertEqual(lowPreviews.map(\.durationUs), [500_000])
+        XCTAssertEqual(lowPreviews.map(\.durationMs), [500.0])
+        XCTAssertEqual(highPreviews.map(\.id), ["flight"])
+        XCTAssertEqual(highPreviews.map(\.metricKey), ["FLIGHT_TIME_MS"])
+        XCTAssertEqual(highPreviews.map(\.startPtsUs), [Int64.max - 600_000])
+        XCTAssertEqual(highPreviews.map(\.endPtsUs), [Int64.max - 100_000])
+        XCTAssertEqual(highPreviews.map(\.durationUs), [500_000])
+        XCTAssertEqual(highPreviews.map(\.durationMs), [500.0])
+        XCTAssertEqual(highPreviews.map(\.durationUs), lowPreviews.map(\.durationUs))
+    }
+
+    func testTimingPreviewUnsupportedProtocolsEmptyAndInputsUnchanged() {
+        let marks = [
+            JumpEventMark(kind: .movementStart, frameIndex: 1, ptsUs: 100_000, previousPtsUs: 0, nextPtsUs: 200_000),
+            JumpEventMark(kind: .takeoff, frameIndex: 4, ptsUs: 600_000, previousPtsUs: 500_000, nextPtsUs: 700_000),
+            JumpEventMark(kind: .landing, frameIndex: 9, ptsUs: 1_100_000, previousPtsUs: 1_000_000, nextPtsUs: nil)
+        ]
+        XCTAssertTrue(JumpWorkflowPresentation.timingPreview(for: .horizontal, marks: marks).isEmpty)
+        XCTAssertTrue(JumpWorkflowPresentation.timingPreview(for: .asymmetry, marks: marks).isEmpty)
+        let snapshot = marks
+        _ = JumpWorkflowPresentation.timingPreview(for: .cmj, marks: marks)
+        XCTAssertEqual(marks, snapshot)
+    }
+
+    func testBuildIdentityUsesSuppliedMetadataWithoutAssumingSource() {
+        let identity = AppBuildIdentity(infoDictionary: ["CFBundleShortVersionString": "0.0.2", "CFBundleVersion": "2"])
+        XCTAssertEqual(identity.version, "0.0.2")
+        XCTAssertEqual(identity.build, "2")
+        XCTAssertNil(identity.sourceRevision)
+        XCTAssertNil(identity.shortSourceRevision)
+        let validRevision = "0123456789abcdef0123456789abcdef01234567"
+        XCTAssertEqual(validRevision.count, 40)
+        let withRevision = AppBuildIdentity(infoDictionary: ["CFBundleShortVersionString": "0.0.2", "CFBundleVersion": "2", "OpenJumpSourceRevision": validRevision])
+        XCTAssertEqual(withRevision.version, "0.0.2")
+        XCTAssertEqual(withRevision.build, "2")
+        XCTAssertEqual(withRevision.sourceRevision, validRevision)
+        XCTAssertEqual(withRevision.shortSourceRevision, String(validRevision.prefix(7)))
+    }
+
+    func testBuildIdentityMissingMetadataDoesNotInventVersionOrRevision() {
+        XCTAssertNil(AppBuildIdentity(infoDictionary: nil).version)
+        XCTAssertNil(AppBuildIdentity(infoDictionary: nil).build)
+        XCTAssertNil(AppBuildIdentity(infoDictionary: nil).sourceRevision)
+        XCTAssertNil(AppBuildIdentity(infoDictionary: [:]).version)
+        XCTAssertNil(AppBuildIdentity(infoDictionary: [:]).build)
+        XCTAssertNil(AppBuildIdentity(infoDictionary: [:]).sourceRevision)
+        XCTAssertNil(AppBuildIdentity(infoDictionary: ["CFBundleShortVersionString": "", "CFBundleVersion": "   ", "OpenJumpSourceRevision": "abc123"]).version)
+        XCTAssertNil(AppBuildIdentity(infoDictionary: ["CFBundleShortVersionString": "", "CFBundleVersion": "   ", "OpenJumpSourceRevision": "abc123"]).build)
+        XCTAssertNil(AppBuildIdentity(infoDictionary: ["CFBundleShortVersionString": "", "CFBundleVersion": "   ", "OpenJumpSourceRevision": "abc123"]).sourceRevision)
+        let nonString = AppBuildIdentity(infoDictionary: ["CFBundleShortVersionString": 123, "CFBundleVersion": 2, "OpenJumpSourceRevision": 12345])
+        XCTAssertNil(nonString.version)
+        XCTAssertNil(nonString.build)
+        XCTAssertNil(nonString.sourceRevision)
+        let invalidHex = AppBuildIdentity(infoDictionary: ["CFBundleShortVersionString": "0.0.2", "CFBundleVersion": "2", "OpenJumpSourceRevision": "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"])
+        XCTAssertEqual(invalidHex.version, "0.0.2")
+        XCTAssertEqual(invalidHex.build, "2")
+        XCTAssertNil(invalidHex.sourceRevision)
+        let missingBuild = AppBuildIdentity(infoDictionary: ["CFBundleShortVersionString": "0.0.2"])
+        XCTAssertEqual(missingBuild.version, "0.0.2")
+        XCTAssertNil(missingBuild.build)
+        XCTAssertNil(missingBuild.sourceRevision)
+        XCTAssertNotEqual(missingBuild.version, "0.0.1")
+    }
 }

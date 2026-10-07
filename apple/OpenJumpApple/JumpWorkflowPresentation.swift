@@ -40,3 +40,106 @@ enum JumpWorkflowPresentation {
         return CGSize(width: imageWidth * scale, height: imageHeight * scale)
     }
 }
+
+// MARK: - Video timing preview (display-only, S6 trust slice)
+
+/// One complete VIDEO timeline interval derived from already-marked event PTS.
+///
+/// Display-only preview of raw video timestamp differences. It is not a
+/// canonical measurement, not physical-clock validation, and carries no
+/// height, velocity, or physics. Durations are raw PTS differences in
+/// microseconds; `durationMs` is a display-only `durationUs / 1_000` value.
+struct JumpTimingPreviewInterval: Equatable, Sendable {
+    /// Stable identifier for UI and accessibility: "movement", "contact" or "flight".
+    let id: String
+    /// Existing canonical metric key reused only for its localized label via
+    /// `metricName(_:language:)`. No `SavedMetric` is created here.
+    let metricKey: String
+    /// Raw start/end presentation timestamps in microseconds, exactly as marked.
+    let startPtsUs: Int64
+    let endPtsUs: Int64
+    /// Raw duration in microseconds (`endPtsUs - startPtsUs`), overflow-checked.
+    let durationUs: Int64
+    /// Display-only milliseconds (`Double(durationUs) / 1_000`). No clock factor.
+    var durationMs: Double { Double(durationUs) / 1_000.0 }
+}
+
+extension JumpWorkflowPresentation {
+    /// Pure VIDEO interval preview for the analysis screen.
+    ///
+    /// - Parameters:
+    ///   - protocolKey: Supported temporal protocol. Unsupported protocols
+    ///     (horizontal, asymmetry) return empty.
+    ///   - marks: Already-marked events. Inputs are never mutated.
+    /// - Returns: Complete valid pairs only, in temporal order
+    ///   (movement/contact then flight). Partial marks yield only the complete
+    ///   pairs; duplicates, negative indices/PTS, non-increasing index/PTS,
+    ///   or overflow-unsafe differences yield no interval for that pair
+    ///   (duplicates yield empty overall). No zeros are invented.
+    static func timingPreview(
+        for protocolKey: SavedProtocol,
+        marks: [JumpEventMark]
+    ) -> [JumpTimingPreviewInterval] {
+        guard TemporalJumpDraft.supportedProtocols.contains(protocolKey) else { return [] }
+        // Fail closed on ambiguous duplicate kinds: never guess which mark wins.
+        var seen = Set<JumpEventKind>()
+        for mark in marks {
+            if !seen.insert(mark.kind).inserted {
+                return []
+            }
+        }
+        func uniqueMark(_ kind: JumpEventKind) -> JumpEventMark? {
+            marks.first { $0.kind == kind }
+        }
+        func validInterval(
+            id: String,
+            metricKey: String,
+            start: JumpEventMark?,
+            end: JumpEventMark?
+        ) -> JumpTimingPreviewInterval? {
+            guard let start, let end else { return nil }
+            guard start.frameIndex >= 0, end.frameIndex >= 0,
+                  start.ptsUs >= 0, end.ptsUs >= 0 else { return nil }
+            guard start.frameIndex < end.frameIndex, start.ptsUs < end.ptsUs else { return nil }
+            let (diff, overflow) = end.ptsUs.subtractingReportingOverflow(start.ptsUs)
+            guard !overflow, diff > 0 else { return nil }
+            return JumpTimingPreviewInterval(
+                id: id,
+                metricKey: metricKey,
+                startPtsUs: start.ptsUs,
+                endPtsUs: end.ptsUs,
+                durationUs: diff
+            )
+        }
+        let takeoff = uniqueMark(.takeoff)
+        let landing = uniqueMark(.landing)
+        let flight = validInterval(
+            id: "flight",
+            metricKey: "FLIGHT_TIME_MS",
+            start: takeoff,
+            end: landing
+        )
+        switch protocolKey {
+        case .cmj, .abalakov, .unilateral:
+            let movement = validInterval(
+                id: "movement",
+                metricKey: "TIME_TO_TAKEOFF_MS",
+                start: uniqueMark(.movementStart),
+                end: takeoff
+            )
+            return [movement, flight].compactMap { $0 }
+        case .dropJump:
+            let contact = validInterval(
+                id: "contact",
+                metricKey: "CONTACT_TIME_MS",
+                start: uniqueMark(.initialContact),
+                end: takeoff
+            )
+            return [contact, flight].compactMap { $0 }
+        case .sj:
+            return [flight].compactMap { $0 }
+        case .horizontal, .asymmetry:
+            return []
+        }
+    }
+}

@@ -172,74 +172,48 @@ private struct AvatarPicker: View {
         return AppText.string("avatars.option", language: language)
             .replacingOccurrences(of: "%ld", with: "\(ordinal)")
     }
+    /// Localized preview label: initials, the selected face ordinal, or the
+    /// legacy placeholder for unknown pending keys. The raw pending key is
+    /// never shown and never normalized; Confirm applies it byte-for-byte.
+    private var previewLabel: String {
+        if pending == nil {
+            return AppText.string("avatars.initials", language: language)
+        }
+        if let highlighted = highlightedKey {
+            return optionLabel(highlighted)
+        }
+        return AppText.string("avatars.legacy", language: language)
+    }
+
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: OpenJumpSpacing.md) {
-                    HStack(spacing: OpenJumpSpacing.md) {
-                        AthleteAvatarView(name: name, key: pending, size: 72).accessibilityHidden(true)
-                        Text(pending == nil
-                            ? AppText.string("avatars.initials", language: language)
-                            : (highlightedKey ?? pending ?? ""))
-                            .font(.headline)
-                            .lineLimit(2)
-                        Spacer()
-                    }
-                    .padding(OpenJumpSpacing.md)
-                    .background(Color.openJumpSurface, in: RoundedRectangle(cornerRadius: 16))
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 72))], spacing: OpenJumpSpacing.sm) {
-                        Button { pending = nil } label: {
-                            VStack(spacing: 4) {
-                                AthleteAvatarView(name: name, key: nil, size: 56)
-                                Text(AppText.string("avatars.initials", language: language))
-                                    .font(.caption)
-                                    .lineLimit(2)
-                            }
-                            .frame(minWidth: 72, minHeight: 72)
-                            .overlay(RoundedRectangle(cornerRadius: 8)
-                                .stroke(pending == nil ? Color.accentColor : .clear, lineWidth: 3))
-                        }
-                        .accessibilityIdentifier("avatar.initials")
-                        .accessibilityLabel(AppText.string("avatars.initials", language: language))
-                        .accessibilityAddTraits(pending == nil ? .isSelected : [])
-                        ForEach(AthleteAvatarCatalog.groups) { group in
-                            Section {
-                                ForEach(group.options) { option in
-                                    Button { pending = option.key } label: {
-                                        AthleteAvatarView(name: name, key: option.key, size: 64)
-                                            .padding(4)
-                                            .overlay(Circle().stroke(
-                                                highlightedKey == option.key ? Color.accentColor : .clear,
-                                                lineWidth: 3
-                                            ))
-                                    }
-                                    .frame(minWidth: 72, minHeight: 72)
-                                    .accessibilityIdentifier("avatar.option.\(option.key)")
-                                    .accessibilityLabel(optionLabel(option.key))
-                                    .accessibilityAddTraits(highlightedKey == option.key ? .isSelected : [])
-                                }
-                            } header: {
-                                Text(AppText.string("avatars.group.\(group.id)", language: language))
-                                    .font(.headline)
-                                    .accessibilityIdentifier("avatar.group.\(group.id)")
-                                    .accessibilityAddTraits(.isHeader)
+            ScrollViewReader { proxy in
+                VStack(spacing: 0) {
+                    previewHeader
+                    categoryChips(proxy: proxy)
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: OpenJumpSpacing.md) {
+                            initialsRow
+                            ForEach(AthleteAvatarCatalog.groups) { group in
+                                groupSection(group)
+                                    .id(group.id)
                             }
                         }
+                        .padding(OpenJumpSpacing.md)
                     }
                 }
-                .padding()
             }
             .navigationTitle(AppText.string("avatars.title", language: language))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(AppText.string("common.cancel", language: language)) { dismiss() }
-                        .frame(minHeight: 44)
+                        .frame(minHeight: 48)
                         .accessibilityIdentifier("avatar.cancel")
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     // Confirm only edits the draft; the editor's Save persists.
                     Button(AppText.string("common.confirm", language: language)) { apply(pending); dismiss() }
-                        .frame(minHeight: 44)
+                        .frame(minHeight: 48)
                         .accessibilityIdentifier("avatar.confirm")
                 }
             }
@@ -247,6 +221,107 @@ private struct AvatarPicker: View {
                 if !initialized {
                     pending = selectedKey
                     initialized = true
+                }
+            }
+        }
+    }
+
+    /// Pinned compact preview: stays visible while the grids scroll so the
+    /// selected face never scrolls off-screen.
+    private var previewHeader: some View {
+        HStack(spacing: OpenJumpSpacing.md) {
+            AthleteAvatarView(name: name, key: pending, size: 72)
+                .accessibilityHidden(true)
+            Text(previewLabel)
+                .font(.headline)
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(OpenJumpSpacing.md)
+        .background(Color.openJumpSurface, in: RoundedRectangle(cornerRadius: 16))
+        .padding([.horizontal, .top], OpenJumpSpacing.md)
+    }
+
+    /// Horizontal category shortcuts; each chip scrolls to its group header.
+    /// Labels reuse the existing group keys; no new option or asset mapping.
+    private func categoryChips(proxy: ScrollViewProxy) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: OpenJumpSpacing.sm) {
+                ForEach(AthleteAvatarCatalog.groups) { group in
+                    Button {
+                        withAnimation {
+                            proxy.scrollTo(group.id, anchor: .top)
+                        }
+                    } label: {
+                        Text(AppText.string("avatars.group.\(group.id)", language: language))
+                            .font(.subheadline.weight(.medium))
+                            .padding(.horizontal, OpenJumpSpacing.md)
+                            .padding(.vertical, OpenJumpSpacing.sm)
+                            .frame(minHeight: 48)
+                            .background(Color.openJumpSurface, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("avatar.jump.\(group.id)")
+                }
+            }
+            .padding(.horizontal, OpenJumpSpacing.md)
+            .padding(.vertical, OpenJumpSpacing.sm)
+        }
+    }
+
+    /// Full-width initials row: circle plus localized label, 48pt minimum.
+    private var initialsRow: some View {
+        Button { pending = nil } label: {
+            HStack(spacing: OpenJumpSpacing.md) {
+                AthleteAvatarView(name: name, key: nil, size: 56)
+                    .accessibilityHidden(true)
+                Text(AppText.string("avatars.initials", language: language))
+                    .font(.body)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .lineLimit(2)
+                if pending == nil {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(Color.openJumpGreen)
+                        .accessibilityHidden(true)
+                }
+            }
+            .padding(OpenJumpSpacing.sm)
+            .frame(maxWidth: .infinity, minHeight: 48)
+            .contentShape(Rectangle())
+            .background(Color.openJumpSurface, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12)
+                .stroke(pending == nil ? Color.openJumpGreen : .clear, lineWidth: 3))
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("avatar.initials")
+        .accessibilityLabel(AppText.string("avatars.initials", language: language))
+        .accessibilityAddTraits(pending == nil ? .isSelected : [])
+    }
+
+    /// One full-width header plus its own adaptive grid per group.
+    /// Same 84 options, same order, same stable keys as the catalog.
+    private func groupSection(_ group: AthleteAvatarGroup) -> some View {
+        VStack(alignment: .leading, spacing: OpenJumpSpacing.sm) {
+            Text(AppText.string("avatars.group.\(group.id)", language: language))
+                .font(.headline)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityIdentifier("avatar.group.\(group.id)")
+                .accessibilityAddTraits(.isHeader)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 72))], spacing: OpenJumpSpacing.sm) {
+                ForEach(group.options) { option in
+                    Button { pending = option.key } label: {
+                        AthleteAvatarView(name: name, key: option.key, size: 64)
+                            .padding(4)
+                            .overlay(Circle().stroke(
+                                highlightedKey == option.key ? Color.openJumpGreen : .clear,
+                                lineWidth: 3
+                            ))
+                    }
+                    .buttonStyle(.plain)
+                    .frame(minWidth: 72, minHeight: 72)
+                    .accessibilityIdentifier("avatar.option.\(option.key)")
+                    .accessibilityLabel(optionLabel(option.key))
+                    .accessibilityAddTraits(highlightedKey == option.key ? .isSelected : [])
                 }
             }
         }

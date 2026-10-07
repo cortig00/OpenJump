@@ -16,7 +16,10 @@ concurrency:
 
 jobs:
   prototype:
-    if: github.repository == 'cortig00/OpenJump' && github.ref == 'refs/heads/dev/apple'
+    # Standalone experimental device candidates (head commit carries
+    # '[apple-device-experimental]') opt out of this job; normal gates are
+    # unchanged for all other pushes.
+    if: github.repository == 'cortig00/OpenJump' && github.ref == 'refs/heads/dev/apple' && !contains(github.event.head_commit.message, '[apple-device-experimental]')
     runs-on: macos-15
     timeout-minutes: 25
     steps:

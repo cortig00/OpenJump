@@ -9,11 +9,13 @@ struct MediaFixtureFactory {
     enum Cadence {
         case constant
         case variable
+        case temporalReference
 
         var ticks: [Int64] {
             switch self {
             case .constant: return [0, 20, 40, 60, 80, 100]
             case .variable: return [0, 10, 30, 50, 90, 120]
+            case .temporalReference: return [0, 60, 120, 240, 420, 480]
             }
         }
 
@@ -21,6 +23,7 @@ struct MediaFixtureFactory {
             switch self {
             case .constant: return [0, 33_333, 66_667, 100_000, 133_333, 166_667]
             case .variable: return [0, 16_667, 50_000, 83_333, 150_000, 200_000]
+            case .temporalReference: return [0, 100_000, 200_000, 400_000, 700_000, 800_000]
             }
         }
     }
