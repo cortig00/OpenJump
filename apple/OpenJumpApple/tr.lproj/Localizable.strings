@@ -241,3 +241,21 @@
 "help.storage.body" = "Özgün videoları ayrı saklayın. Uygulamayı kaldırmak kayıtlı verileri silebilir. Kaldırmadan güncelleme verileri korumalıdır; güncellemeden sonra geçmişi kontrol edin.";
 "help.scope.title" = "Bu sürümde yer alanlar";
 "help.scope.body" = "İçe aktarılan SDR video ile beş zamansal sıçrama protokolü. Kamera kaydı, Body Tracking, yatay ölçüm ve gruplanmış deneme istatistikleri dahil değildir. Başka bir deneme bağımsız bir ölçüm oluşturur.";
+
+// Apple-specific creation/export; restoration is deliberately unavailable.
+"export.title" = "Verileri dışa aktar";
+"export.csv" = "Analitik CSV hazırla";
+"export.json" = "JSON veri kopyası oluştur";
+"export.scope" = "CSV, kaydedilen her metrik için bir satır içerir. JSON, tüm profilleri ve olay işaretleriyle kaydedilen ölçümleri içerir. İkisi de standart birimleri kullanır; videolar ve uygulama tercihleri dahil değildir.";
+"export.privacy" = "Bu dosyalar kişisel veri içerir ve şifrelenmez. Dosyalar’da seçtiğiniz hedef bunları bulutla eşitleyebilir.";
+"export.restoreUnavailable" = "Bu sürümde geri yükleme yoktur. Bu Apple biçimleri Android yedekleriyle uyumlu değildir.";
+"export.preparing" = "Anlık görüntü hazırlanıyor…";
+"export.preview" = "Anlık görüntü önizlemesi";
+"export.profiles" = "Profiller";
+"export.measurements" = "Ölçümler";
+"export.metrics" = "Metrikler";
+"export.save" = "Dosyalar’a kaydet";
+"export.saved" = "Dosya seçilen hedefe kaydedildi.";
+"export.tooLarge" = "Veriler dışa aktarma sınırlarını aşıyor: 8 MiB çıktı ve sınırlı satır/metin sayısı. Kısmi dosya oluşturulmadı.";
+"export.invalidSnapshot" = "Geçerli bir anlık görüntü hazırlanamadı. Mevcut veriler değiştirilmedi.";
+"export.writeFailed" = "Dosya kaydedilemedi. Başka bir hedef deneyin.";

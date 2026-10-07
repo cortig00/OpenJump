@@ -43,6 +43,13 @@ struct SettingsView: View {
                 }
                 Section {
                     NavigationLink {
+                        AppleDataExportView(state: state)
+                    } label: {
+                        Label(AppText.string("export.title", language: language), systemImage: "square.and.arrow.up")
+                            .frame(minHeight: 48)
+                    }
+                    .accessibilityIdentifier("settings.dataExport")
+                    NavigationLink {
                         HelpView(language: language)
                     } label: {
                         Label(AppText.string("settings.help", language: language), systemImage: "questionmark.circle")

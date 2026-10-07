@@ -241,3 +241,21 @@
 "help.storage.body" = "Originalvideos separat aufbewahren. Eine Deinstallation kann gespeicherte App-Daten löschen. Ein Update ohne Deinstallation sollte sie erhalten; danach den Verlauf prüfen.";
 "help.scope.title" = "In dieser Version enthalten";
 "help.scope.body" = "Fünf zeitbasierte Sprungprotokolle mit importierten SDR-Videos. Kameraaufnahme, Body Tracking, horizontale Messung und gruppierte Versuchsauswertung sind nicht enthalten. Ein weiterer Versuch erstellt eine eigene Messung.";
+
+// Apple-specific creation/export; restoration is deliberately unavailable.
+"export.title" = "Daten exportieren";
+"export.csv" = "Analyse-CSV vorbereiten";
+"export.json" = "JSON-Datenkopie erstellen";
+"export.scope" = "Die CSV enthält eine Zeile pro gespeicherter Messgröße. JSON enthält alle Profile und gespeicherten Messungen mit Ereignismarkierungen. Beide verwenden kanonische Einheiten; Videos und App-Einstellungen sind nicht enthalten.";
+"export.privacy" = "Diese Dateien enthalten persönliche Daten und sind nicht verschlüsselt. Das in Dateien gewählte Ziel kann sie mit der Cloud synchronisieren.";
+"export.restoreUnavailable" = "Eine Wiederherstellung ist in dieser Version nicht verfügbar. Diese Apple-Formate sind nicht mit Android-Sicherungen kompatibel.";
+"export.preparing" = "Momentaufnahme wird vorbereitet…";
+"export.preview" = "Vorschau der Momentaufnahme";
+"export.profiles" = "Profile";
+"export.measurements" = "Messungen";
+"export.metrics" = "Messgrößen";
+"export.save" = "In Dateien sichern";
+"export.saved" = "Datei am gewählten Ziel gesichert.";
+"export.tooLarge" = "Die Daten überschreiten die Exportgrenzen: 8 MiB Ausgabe sowie begrenzte Zeilen- und Textmengen. Es wurde keine unvollständige Datei erstellt.";
+"export.invalidSnapshot" = "Keine gültige Momentaufnahme möglich. Vorhandene Daten wurden nicht geändert.";
+"export.writeFailed" = "Die Datei konnte nicht gesichert werden. Versuche ein anderes Ziel.";

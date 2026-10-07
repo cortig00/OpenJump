@@ -243,3 +243,21 @@
 "help.storage.body" = "Keep original videos separately. Uninstalling the app can delete its saved data. Updating without uninstalling should preserve data; check your history after updating.";
 "help.scope.title" = "Included in this build";
 "help.scope.body" = "Five temporal jump protocols using imported SDR video. Camera capture, Body Tracking, horizontal measurement and grouped trial statistics are not included. Another trial creates a separate measurement.";
+
+// Apple-specific creation/export; restoration is deliberately unavailable.
+"export.title" = "Export data";
+"export.csv" = "Prepare analytical CSV";
+"export.json" = "Create JSON data copy";
+"export.scope" = "CSV has one row per saved metric. JSON includes all profiles and saved measurements with event marks. Both use canonical units; neither includes video files or app preferences.";
+"export.privacy" = "These files contain personal data and are not encrypted. The Files destination you choose may synchronize them to the cloud.";
+"export.restoreUnavailable" = "Restoration is not available in this version. These Apple formats are not compatible with Android backups.";
+"export.preparing" = "Preparing snapshot…";
+"export.preview" = "Snapshot preview";
+"export.profiles" = "Profiles";
+"export.measurements" = "Measurements";
+"export.metrics" = "Metrics";
+"export.save" = "Save to Files";
+"export.saved" = "File saved to the selected destination.";
+"export.tooLarge" = "The dataset exceeds export limits: 8 MiB output and bounded row/text counts. No partial file was created.";
+"export.invalidSnapshot" = "Could not prepare a valid snapshot. Existing data has not been changed.";
+"export.writeFailed" = "Could not save the file. Try another destination.";

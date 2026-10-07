@@ -241,3 +241,21 @@
 "help.storage.body" = "Guarde os vídeos originais separadamente. Desinstalar a aplicação pode apagar os dados guardados. Atualizar sem desinstalar deverá preservá-los; verifique o histórico após atualizar.";
 "help.scope.title" = "Incluído nesta versão";
 "help.scope.body" = "Cinco protocolos temporais de salto com vídeo SDR importado. Captura de câmara, Body Tracking, medição horizontal e estatísticas de tentativas agrupadas não estão incluídos. Outra tentativa cria uma medição independente.";
+
+// Apple-specific creation/export; restoration is deliberately unavailable.
+"export.title" = "Exportar dados";
+"export.csv" = "Preparar CSV analítico";
+"export.json" = "Criar cópia de dados JSON";
+"export.scope" = "O CSV tem uma linha por métrica guardada. O JSON inclui todos os perfis e medições guardadas com as suas marcações. Ambos usam unidades canónicas; não incluem vídeos nem preferências da app.";
+"export.privacy" = "Estes ficheiros contêm dados pessoais e não estão encriptados. O destino escolhido em Ficheiros pode sincronizá-los com a nuvem.";
+"export.restoreUnavailable" = "O restauro não está disponível nesta versão. Estes formatos Apple não são compatíveis com cópias de segurança Android.";
+"export.preparing" = "A preparar instantâneo…";
+"export.preview" = "Pré-visualização do instantâneo";
+"export.profiles" = "Perfis";
+"export.measurements" = "Medições";
+"export.metrics" = "Métricas";
+"export.save" = "Guardar em Ficheiros";
+"export.saved" = "Ficheiro guardado no destino escolhido.";
+"export.tooLarge" = "Os dados excedem os limites de exportação: saída de 8 MiB e quantidades limitadas de linhas e texto. Não foi criado um ficheiro parcial.";
+"export.invalidSnapshot" = "Não foi possível preparar um instantâneo válido. Os dados existentes não foram alterados.";
+"export.writeFailed" = "Não foi possível guardar o ficheiro. Experimenta outro destino.";

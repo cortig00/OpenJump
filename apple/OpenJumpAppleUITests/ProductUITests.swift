@@ -94,9 +94,12 @@ final class ProductUITests: XCTestCase {
         let id = UUID()
         var app = launch(id: id)
         openMeasurement(in: app)
-        let height = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "30.65")).firstMatch
+        // Independent fixture height is 30.64578125 cm. The existing history
+        // display contract uses up to three fractional digits: 30.646 cm.
+        let height = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "30.646")).firstMatch
         reveal(height, in: app)
         XCTAssertTrue(height.waitForExistence(timeout: 10))
+        XCTAssertTrue(height.label.contains("30.646 cm"), "Expected the independently rounded height with its canonical metric unit")
         XCTAssertFalse(element("measurement.analysis.error", in: app).exists)
         XCTAssertFalse(element("measurement.legacyNotice", in: app).exists)
         screenshot(app, named: "openjump-product-history-detail")
@@ -121,6 +124,31 @@ final class ProductUITests: XCTestCase {
         let retained = element("measurement.notes", in: app)
         reveal(retained, in: app)
         XCTAssertEqual(retained.value as? String, "UI saved note")
+    }
+
+    func testJSONDataPreviewUsesIsolatedFixtureCountsBeforeOpeningFiles() {
+        let app = launch(id: UUID())
+        app.tabBars.buttons["Settings"].tap()
+        let navigation = element("settings.dataExport", in: app)
+        reveal(navigation, in: app); navigation.tap()
+        let restoreWarning = app.staticTexts["export.restoreUnavailable"]
+        XCTAssertTrue(restoreWarning.waitForExistence(timeout: 10))
+        XCTAssertTrue(restoreWarning.label.contains("Restoration is not available"))
+        let privacy = app.staticTexts["export.privacy"]
+        XCTAssertTrue(privacy.label.contains("not encrypted"))
+        let create = element("export.json", in: app)
+        reveal(create, in: app); create.tap()
+        for (identifier, expected) in [("export.preview.profiles", "2"), ("export.preview.measurements", "1"), ("export.preview.metrics", "5")] {
+            let count = app.staticTexts[identifier]
+            XCTAssertTrue(count.waitForExistence(timeout: 10))
+            reveal(count, in: app)
+            XCTAssertEqual(count.label, expected)
+        }
+        let save = element("export.save", in: app)
+        reveal(save, in: app)
+        XCTAssertTrue(save.isEnabled)
+        // Deliberately do not open/save through an external Files provider.
+        screenshot(app, named: "openjump-product-json-preview")
     }
 
     func testSettingsDarkPreferencePersistsAndNativeHelpShowsFiveProtocols() {

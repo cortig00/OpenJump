@@ -4,6 +4,258 @@ import SQLite3
 private let sqliteTransient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
 public actor SQLiteStore {
+
+    /// A single, synchronous actor read transaction. No awaited page calls,
+    /// normalized roster/history models, DB copying, or restore/write seam.
+    func exportData(format: AppleExportFormat, createdAt: Date = Date(),
+                    limits: AppleExportLimits = .standard) throws -> AppleExportResult {
+        try limits.validate()
+        guard createdAt.timeIntervalSince1970.isFinite else { throw AppleDataExportError.invalidSnapshot }
+        try Task.checkCancellation()
+        try Self.execute(connection, "BEGIN DEFERRED")
+        do {
+            let counts = try exportAdmissionCounts(limits)
+            var remainingTextBytes = limits.maxBytes
+            var output = AppleBoundedExportBytes(limit: limits.maxBytes)
+            let encoder = AppleDataExport.encoder()
+            if format == .jsonBackup {
+                try output.append(AppleDataExport.jsonPrefix(createdAt: createdAt))
+            } else {
+                try output.append(AppleDataExport.csvColumns.joined(separator: ",") + "\r\n")
+            }
+            var names: [String: String] = [:]
+            var profileIDs = Set<UUID>()
+            let profiles = try prepare("SELECT id,name,weight_kg,height_cm,notes,created_at,updated_at,archived_at,avatar_key FROM athletes ORDER BY id")
+            defer { sqlite3_finalize(profiles) }
+            while try exportStep(profiles) {
+                let id = try exportRequiredText(profiles, 0, maximum: 36, budget: &remainingTextBytes)
+                guard let uuid = UUID(uuidString: id), profileIDs.insert(uuid).inserted else { throw AppleDataExportError.invalidSnapshot }
+                let profile = AppleExportProfile(id: id,
+                    name: try exportRequiredText(profiles, 1, maximum: 120, budget: &remainingTextBytes),
+                    weightKg: try exportOptionalNumber(profiles, 2), heightCm: try exportOptionalNumber(profiles, 3),
+                    notes: try exportOptionalText(profiles, 4, maximum: 500, budget: &remainingTextBytes),
+                    createdAt: try exportNumber(profiles, 5), updatedAt: try exportNumber(profiles, 6),
+                    archivedAt: try exportOptionalNumber(profiles, 7),
+                    avatarKey: try exportOptionalText(profiles, 8, maximum: 120, budget: &remainingTextBytes))
+                do {
+                    _ = try Athlete(id: uuid, name: profile.name, weightKg: profile.weightKg, heightCm: profile.heightCm,
+                        notes: profile.notes, createdAt: Date(timeIntervalSince1970: profile.createdAt),
+                        updatedAt: Date(timeIntervalSince1970: profile.updatedAt),
+                        archivedAt: profile.archivedAt.map { Date(timeIntervalSince1970: $0) }, avatarKey: profile.avatarKey)
+                } catch { throw AppleDataExportError.invalidSnapshot }
+                if format == .jsonBackup {
+                    if !names.isEmpty { try output.append(",") }
+                    try output.append(encoder.encode(profile))
+                }
+                names[id] = profile.name
+            }
+            guard names.count == counts[0] else { throw AppleDataExportError.invalidSnapshot }
+            if format == .jsonBackup { try output.append("],\"measurements\":[") }
+            // A streaming SQL cursor retains only one raw root and its children.
+            // Unlike history(limit:), no model normalization or UUID case change
+            // can invalidate a keyset cursor; ties use the stored raw id.
+            let roots = try prepare("SELECT id,session_key,owner_id,protocol_key,side,drop_height_cm,recorded_at,notes FROM assessments ORDER BY recorded_at DESC,id DESC")
+            defer { sqlite3_finalize(roots) }
+            var rootIDs = Set<UUID>()
+            var metricCount = 0, eventCount = 0, analysisCount = 0
+            while try exportStep(roots) {
+                let id = try exportRequiredText(roots, 0, maximum: 36, budget: &remainingTextBytes)
+                guard let uuid = UUID(uuidString: id), rootIDs.insert(uuid).inserted else { throw AppleDataExportError.invalidSnapshot }
+                let session = try exportRequiredText(roots, 1, maximum: 240, budget: &remainingTextBytes)
+                let owner = try exportOptionalText(roots, 2, maximum: 36, budget: &remainingTextBytes)
+                if let owner {
+                    guard UUID(uuidString: owner) != nil, names[owner] != nil else { throw AppleDataExportError.invalidSnapshot }
+                }
+                let protocolRaw = try exportRequiredText(roots, 3, maximum: 120, budget: &remainingTextBytes)
+                guard let protocolKey = SavedProtocol(rawValue: protocolRaw) else { throw AppleDataExportError.invalidSnapshot }
+                let side = try exportOptionalText(roots, 4, maximum: 80, budget: &remainingTextBytes)
+                let drop = try exportOptionalNumber(roots, 5)
+                let date = try exportNumber(roots, 6)
+                let notes = try exportOptionalText(roots, 7, maximum: 500, budget: &remainingTextBytes)
+                let metrics = try exportMetrics(id, budget: &remainingTextBytes)
+                let graph = try exportAnalysis(id, budget: &remainingTextBytes)
+                do {
+                    _ = try SavedMeasurement(id: uuid, sessionKey: session, ownerID: owner.flatMap(UUID.init(uuidString:)),
+                        protocolKey: protocolKey, side: side, dropHeightCm: drop,
+                        recordedAt: Date(timeIntervalSince1970: date), notes: notes, metrics: metrics)
+                    if let graph {
+                        guard let ownerID = owner.flatMap(UUID.init(uuidString:)) else { throw AppleDataExportError.invalidSnapshot }
+                        try Self.validateTemporalMetrics(metrics, protocolKey: protocolKey)
+                        let draft = TemporalJumpDraft(sessionKey: session, ownerID: ownerID, protocolKey: protocolKey,
+                            side: side, dropHeightCm: drop, recordedAt: Date(timeIntervalSince1970: date), notes: notes,
+                            source: graph.source, sourceFrameCount: graph.sourceFrameCount, sourceOriginUs: graph.sourceOriginUs,
+                            temporalState: graph.temporalState, events: graph.events.map(\.mark))
+                        try draft.validate()
+                        guard try TemporalJumpEngine.calculate(draft: draft) == metrics else { throw AppleDataExportError.invalidSnapshot }
+                    }
+                } catch { throw AppleDataExportError.invalidSnapshot }
+                let item = AppleExportMeasurement(id: id, sessionKey: session, ownerID: owner, protocolKey: protocolKey,
+                    side: side, dropHeightCm: drop, recordedAt: date, notes: notes, metrics: metrics, analysis: graph)
+                metricCount += metrics.count
+                eventCount += graph?.events.count ?? 0
+                analysisCount += graph == nil ? 0 : 1
+                if format == .jsonBackup {
+                    if rootIDs.count > 1 { try output.append(",") }
+                    try output.append(encoder.encode(item))
+                } else {
+                    for metric in metrics {
+                        try output.append(AppleDataExport.csvRow(item, metric: metric, ownerName: owner.flatMap { names[$0] }))
+                    }
+                }
+            }
+            // Also catches orphan children in older schemas without declared FKs.
+            guard rootIDs.count == counts[1], metricCount == counts[2],
+                  eventCount == counts[3], analysisCount == counts[4] else { throw AppleDataExportError.invalidSnapshot }
+            if format == .jsonBackup { try output.append("]}") }
+            try Task.checkCancellation()
+            try Self.execute(connection, "COMMIT")
+            return AppleExportResult(format: format, data: output.data, profileCount: names.count,
+                measurementCount: rootIDs.count, metricCount: metricCount, createdAt: createdAt)
+        } catch {
+            try? Self.execute(connection, "ROLLBACK")
+            throw error
+        }
+    }
+
+    private func exportAdmissionCounts(_ limits: AppleExportLimits) throws -> [Int] {
+        guard try Self.scalarInt(connection, "PRAGMA user_version") == 3 else { throw AppleDataExportError.invalidSnapshot }
+        let queries = [
+            ("SELECT COUNT(*) FROM athletes", limits.profiles),
+            ("SELECT COUNT(*) FROM assessments", limits.measurements),
+            ("SELECT COUNT(*) FROM attempt_metrics", limits.metrics),
+            ("SELECT COUNT(*) FROM assessment_events", limits.events),
+            ("SELECT COUNT(*) FROM assessment_analysis", limits.analyses)
+        ]
+        var counts: [Int] = []
+        for (sql, limit) in queries {
+            let stmt = try prepare(sql)
+            defer { sqlite3_finalize(stmt) }
+            guard try exportStep(stmt) else { throw AppleDataExportError.invalidSnapshot }
+            let count = try exportInteger(stmt, 0)
+            guard count >= 0, count <= Int64(limit), let exact = Int(exactly: count) else { throw AppleDataExportError.tooLarge }
+            counts.append(exact)
+        }
+        let foreignKeys = try prepare("PRAGMA foreign_key_check")
+        defer { sqlite3_finalize(foreignKeys) }
+        guard try !exportStep(foreignKeys) else { throw AppleDataExportError.invalidSnapshot }
+        return counts
+    }
+
+    private func exportStep(_ stmt: OpaquePointer) throws -> Bool {
+        try Task.checkCancellation()
+        let code = sqlite3_step(stmt)
+        try check(code)
+        return code == SQLITE_ROW
+    }
+
+    private func exportOptionalText(_ stmt: OpaquePointer, _ index: Int32, maximum: Int,
+                                    budget: inout Int) throws -> String? {
+        if sqlite3_column_type(stmt, index) == SQLITE_NULL { return nil }
+        guard sqlite3_column_type(stmt, index) == SQLITE_TEXT else { throw AppleDataExportError.invalidSnapshot }
+        let count = Int(sqlite3_column_bytes(stmt, index))
+        // Admission bounds total raw UTF-8 too, before allocating models. This
+        // and a 64KiB per-field safety cap prevent pathological grapheme strings
+        // from exhausting memory despite small String.count values.
+        guard count >= 0, count <= 65_536, count <= budget else { throw AppleDataExportError.tooLarge }
+        guard let bytes = sqlite3_column_text(stmt, index),
+              let value = String(data: Data(bytes: bytes, count: count), encoding: .utf8),
+              value.count <= maximum, !value.contains("\0") else { throw AppleDataExportError.invalidSnapshot }
+        budget -= count
+        return value
+    }
+
+    private func exportRequiredText(_ stmt: OpaquePointer, _ index: Int32, maximum: Int,
+                                    budget: inout Int) throws -> String {
+        guard let value = try exportOptionalText(stmt, index, maximum: maximum, budget: &budget) else {
+            throw AppleDataExportError.invalidSnapshot
+        }
+        return value
+    }
+
+    private func exportNumber(_ stmt: OpaquePointer, _ index: Int32) throws -> Double {
+        guard sqlite3_column_type(stmt, index) == SQLITE_FLOAT || sqlite3_column_type(stmt, index) == SQLITE_INTEGER else {
+            throw AppleDataExportError.invalidSnapshot
+        }
+        let number = sqlite3_column_double(stmt, index)
+        guard number.isFinite else { throw AppleDataExportError.invalidSnapshot }
+        return number
+    }
+
+    private func exportOptionalNumber(_ stmt: OpaquePointer, _ index: Int32) throws -> Double? {
+        if sqlite3_column_type(stmt, index) == SQLITE_NULL { return nil }
+        return try exportNumber(stmt, index)
+    }
+
+    private func exportInteger(_ stmt: OpaquePointer, _ index: Int32) throws -> Int64 {
+        guard sqlite3_column_type(stmt, index) == SQLITE_INTEGER else { throw AppleDataExportError.invalidSnapshot }
+        return sqlite3_column_int64(stmt, index)
+    }
+
+    private func exportOptionalInteger(_ stmt: OpaquePointer, _ index: Int32) throws -> Int64? {
+        if sqlite3_column_type(stmt, index) == SQLITE_NULL { return nil }
+        return try exportInteger(stmt, index)
+    }
+
+    private func exportMetrics(_ id: String, budget: inout Int) throws -> [SavedMetric] {
+        let stmt = try prepare("SELECT metric_key,unit,value,ordinal FROM attempt_metrics WHERE assessment_id=? ORDER BY ordinal")
+        defer { sqlite3_finalize(stmt) }
+        text(stmt, 1, id)
+        var metrics: [SavedMetric] = []
+        var keys = Set<String>(), ordinals = Set<Int>()
+        while try exportStep(stmt) {
+            let key = try exportRequiredText(stmt, 0, maximum: 120, budget: &budget)
+            let unit = try exportRequiredText(stmt, 1, maximum: 80, budget: &budget)
+            let value = try exportNumber(stmt, 2)
+            guard let ordinal = Int(exactly: try exportInteger(stmt, 3)),
+                  keys.insert(key).inserted, ordinals.insert(ordinal).inserted else { throw AppleDataExportError.invalidSnapshot }
+            do { metrics.append(try SavedMetric(key: key, unit: unit, value: value, ordinal: ordinal)) }
+            catch { throw AppleDataExportError.invalidSnapshot }
+        }
+        return metrics
+    }
+
+    private func exportAnalysis(_ id: String, budget: inout Int) throws -> AppleExportAnalysis? {
+        let stmt = try prepare("SELECT source_kind,source_frame_count,source_origin_us,temporal_state,analysis_version FROM assessment_analysis WHERE assessment_id=?")
+        defer { sqlite3_finalize(stmt) }
+        text(stmt, 1, id)
+        let present = try exportStep(stmt)
+        var source: JumpVideoSource?, state: JumpTemporalState?
+        var frameCount = 0, origin: Int64 = 0, version: Int64 = 0
+        if present {
+            let sourceRaw = try exportRequiredText(stmt, 0, maximum: 120, budget: &budget)
+            let stateRaw = try exportRequiredText(stmt, 3, maximum: 120, budget: &budget)
+            source = JumpVideoSource(rawValue: sourceRaw)
+            state = JumpTemporalState(rawValue: stateRaw)
+            guard source != nil, state != nil, let exactFrames = Int(exactly: try exportInteger(stmt, 1)) else {
+                throw AppleDataExportError.invalidSnapshot
+            }
+            frameCount = exactFrames
+            origin = try exportInteger(stmt, 2)
+            version = try exportInteger(stmt, 4)
+            guard version == 1, try !exportStep(stmt) else { throw AppleDataExportError.invalidSnapshot }
+        }
+        let eventStmt = try prepare("SELECT event_key,ordinal,frame_index,pts_us,previous_pts_us,next_pts_us FROM assessment_events WHERE assessment_id=? ORDER BY ordinal")
+        defer { sqlite3_finalize(eventStmt) }
+        text(eventStmt, 1, id)
+        var events: [AppleExportEvent] = []
+        while try exportStep(eventStmt) {
+            let kindRaw = try exportRequiredText(eventStmt, 0, maximum: 120, budget: &budget)
+            guard let kind = JumpEventKind(rawValue: kindRaw),
+                  let ordinal = Int(exactly: try exportInteger(eventStmt, 1)), ordinal == events.count,
+                  let frame = Int(exactly: try exportInteger(eventStmt, 2)) else { throw AppleDataExportError.invalidSnapshot }
+            events.append(AppleExportEvent(kind: kind, ordinal: ordinal, frameIndex: frame,
+                ptsUs: try exportInteger(eventStmt, 3), previousPtsUs: try exportOptionalInteger(eventStmt, 4),
+                nextPtsUs: try exportOptionalInteger(eventStmt, 5)))
+        }
+        if !present {
+            guard events.isEmpty else { throw AppleDataExportError.invalidSnapshot }
+            return nil
+        }
+        guard let source, let state else { throw AppleDataExportError.invalidSnapshot }
+        return AppleExportAnalysis(source: source, sourceFrameCount: frameCount, sourceOriginUs: origin,
+            temporalState: state, analysisVersion: Int(version), events: events)
+    }
+
     private var db: OpaquePointer?
     public let databaseURL: URL
     private static let schemaVersion = 3

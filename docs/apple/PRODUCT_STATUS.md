@@ -1,5 +1,29 @@
 # Apple development snapshot — 2026-10-06
 
+## Source preparation: I1–I5 consolidation (not release-qualified)
+
+Published source `e12036db3981aed45f2d97b2a96760fd67ee5b9b` compiled and
+[run 37600154945](https://github.com/cortig00/OpenJump/actions/runs/37600154945)
+actually executed 96 Swift tests: **92 unit passes and 3 UI passes, 1 history UI
+failure**. Device packaging was skipped and no artifact was produced. Profile
+avatar/cancel/save/relaunch and dark-settings/help UI tests passed; this does not
+establish full Photos/Files import, physical XR, VoiceOver, iPad, or clinical
+validation. The history test's new two-decimal expectation was inconsistent with
+the existing three-decimal display contract; the independently reviewed
+correction preserves value-and-unit checks and awaits another native run.
+
+The working source adds native help/privacy guidance, isolated Debug-simulator
+product test fixtures, and creation-only data export. [DATA_EXPORT.md](DATA_EXPORT.md)
+defines the Apple-specific JSON data copy and analytical CSV. Settings prepares a
+consistent read-only snapshot, previews counts and privacy/compatibility limits,
+and offers a user-initiated Files destination. **Restoration is unavailable**;
+these are not Android-compatible formats or a supported post-uninstall recovery
+route. New export/document/preview source and the history-test correction have
+not yet been compiled or run natively, and independent review is pending. Do not
+present authored counts, helper checks, or the earlier `7abf288` device IPA as
+qualification of this source. Bundle identity, SQLite schema/paths, scientific
+calculations, saved identities and Android releases remain unchanged.
+
 This `dev/apple` source snapshot extends the earlier synthetic prototype. The
 historical prototype runs and screenshots in [PROTOTYPE.md](PROTOTYPE.md) do not
 validate this newer product UI or measurement workflow.
