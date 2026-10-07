@@ -213,3 +213,14 @@
 "history.invalidRange" = "La fecha inicial debe ser anterior o igual a la fecha final.";
 "history.analysisInvalid" = "No se pudo verificar el análisis guardado, por lo que el resultado está oculto.";
 "history.legacyNotice" = "Guardado antes del análisis fotograma a fotograma. No hay ningún gráfico de vídeo almacenado para esta evaluación.";
+// S4 measurement finish
+"jumps.event.markSelected" = "Marcar %@ como fotograma mostrado";
+"jumps.video.retry" = "Reintentar cargar el fotograma exacto";
+"jumps.video.exactUs" = "Tiempo exacto: %@ µs";
+"jumps.video.waiting" = "Esperando el fotograma exacto.";
+"jumps.video.requested" = "Fotograma solicitado";
+"jumps.video.displayed" = "Fotograma mostrado";
+"jumps.setup.show" = "Mostrar opciones de configuración";
+"jumps.import.show" = "Mostrar opciones de importación";
+"jumps.results.anotherTrial" = "Medir otro intento en este vídeo";
+"jumps.results.newVideo" = "Empezar de nuevo con otro vídeo";

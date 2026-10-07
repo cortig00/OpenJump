@@ -22,8 +22,14 @@ final class ProfileEditingTests: XCTestCase {
         mass: MassUnit = .kilograms,
         length: ShortLengthUnit = .cm
     ) throws -> AthleteEditorDraft {
-        AthleteEditorDraft(
-            initial: initial ?? (try athlete()),
+        let resolvedInitial: Athlete
+        if let initial {
+            resolvedInitial = initial
+        } else {
+            resolvedInitial = try athlete()
+        }
+        return AthleteEditorDraft(
+            initial: resolvedInitial,
             locale: locale,
             massUnit: mass,
             lengthUnit: length
@@ -50,9 +56,9 @@ final class ProfileEditingTests: XCTestCase {
     }
 
     func testOnePoundUsesExistingCanonicalFactor() throws {
-        var draft = try draft(locale: Locale(identifier: "en_US"), mass: .pounds)
-        draft.weightText = "1"
-        XCTAssertEqual(try draft.canonicalWeightKg(), 0.45359237)
+        var poundDraft = try draft(locale: Locale(identifier: "en_US"), mass: .pounds)
+        poundDraft.weightText = "1"
+        XCTAssertEqual(try poundDraft.canonicalWeightKg(), 0.45359237)
         var inchDraft = try draft(locale: Locale(identifier: "en_US"), length: .inches)
         inchDraft.heightText = "1"
         XCTAssertEqual(try inchDraft.canonicalHeightCm(), 2.54)
@@ -182,10 +188,10 @@ final class ProfileEditingTests: XCTestCase {
     }
 
     func testInvalidNameAndAnthropometricsThrow() throws {
-        var draft = try draft()
-        draft.name = "   "
-        XCTAssertFalse(draft.isNameValid)
-        XCTAssertThrowsError(try draft.validatedAthlete())
+        var invalidNameDraft = try draft()
+        invalidNameDraft.name = "   "
+        XCTAssertFalse(invalidNameDraft.isNameValid)
+        XCTAssertThrowsError(try invalidNameDraft.validatedAthlete())
         var badNumber = try draft()
         badNumber.name = "Ada"
         badNumber.weightText = "abc"

@@ -212,3 +212,14 @@
 "history.invalidRange" = "A data inicial deve ser anterior ou igual à data final.";
 "history.analysisInvalid" = "Não foi possível verificar a análise salva, por isso o resultado está oculto.";
 "history.legacyNotice" = "Salvo antes da análise quadro a quadro. Nenhum gráfico de vídeo está armazenado para esta avaliação.";
+// S4 measurement finish
+"jumps.event.markSelected" = "Marcar %@ como quadro exibido";
+"jumps.video.retry" = "Tentar carregar o quadro exato novamente";
+"jumps.video.exactUs" = "Tempo exato: %@ µs";
+"jumps.video.waiting" = "Aguardando o quadro exato.";
+"jumps.video.requested" = "Quadro solicitado";
+"jumps.video.displayed" = "Quadro exibido";
+"jumps.setup.show" = "Mostrar opções de configuração";
+"jumps.import.show" = "Mostrar opções de importação";
+"jumps.results.anotherTrial" = "Medir outra tentativa neste vídeo";
+"jumps.results.newVideo" = "Começar de novo com outro vídeo";

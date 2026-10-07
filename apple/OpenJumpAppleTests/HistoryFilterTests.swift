@@ -55,7 +55,9 @@ final class HistoryFilterTests: XCTestCase {
         let single = try HistoryFilters.bounds(for: .custom, customFrom: fromDay, customThrough: fromDay, calendar: calendar)
         XCTAssertNotNil(single.from)
         XCTAssertNotNil(single.before)
-        XCTAssertTrue(try XCTUnwrap(single.from) < try XCTUnwrap(single.before))
+        let singleFrom = try XCTUnwrap(single.from)
+        let singleBefore = try XCTUnwrap(single.before)
+        XCTAssertTrue(singleFrom < singleBefore)
     }
 
     func testCustomSingleDayUsesCalendarNot24HourArithmeticAcrossDST() throws {
@@ -150,8 +152,10 @@ final class HistoryFilterTests: XCTestCase {
         XCTAssertEqual(byName.items.count, 1)
         XCTAssertEqual(byName.items.first?.sessionKey, "runner-session")
         // Existing session/notes semantics are unchanged.
-        XCTAssertEqual(try await store.history(search: "plain-session").items.count, 1)
-        XCTAssertEqual(try await store.history(search: "keep this").items.count, 1)
+        let plainSessionPage = try await store.history(search: "plain-session")
+        let matchingNotesPage = try await store.history(search: "keep this")
+        XCTAssertEqual(plainSessionPage.items.count, 1)
+        XCTAssertEqual(matchingNotesPage.items.count, 1)
     }
 
     func testNullOwnerSearchPreservedAndArchivedOwnersStillListed() async throws {
@@ -163,8 +167,10 @@ final class HistoryFilterTests: XCTestCase {
         try await save(store, owner: nil, session: "unowned-row", date: Date(timeIntervalSince1970: 1_700_000_200))
         try await store.setArchived(first.id, archived: true)
         // Owner-scoped and unfiltered history keep archived roots.
-        XCTAssertEqual(try await store.history(ownerID: first.id).items.count, 1)
-        XCTAssertEqual(try await store.history().items.count, 2)
+        let archivedOwnerPage = try await store.history(ownerID: first.id)
+        let allOwnersPage = try await store.history()
+        XCTAssertEqual(archivedOwnerPage.items.count, 1)
+        XCTAssertEqual(allOwnersPage.items.count, 2)
         // NULL-owner rows still match on session text without an owner.
         let unowned = try await store.history(search: "unowned-row")
         XCTAssertEqual(unowned.items.count, 1)

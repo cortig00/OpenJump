@@ -214,3 +214,14 @@
 "history.invalidRange" = "The start day must be on or before the end day.";
 "history.analysisInvalid" = "The saved analysis could not be verified, so the result is hidden.";
 "history.legacyNotice" = "Saved before frame-by-frame analysis. No video graph is stored for this assessment.";
+// S4 measurement finish
+"jumps.event.markSelected" = "Mark %@ as displayed frame";
+"jumps.video.retry" = "Retry loading the exact frame";
+"jumps.video.exactUs" = "Exact time: %@ µs";
+"jumps.video.waiting" = "Waiting for the exact frame.";
+"jumps.video.requested" = "Requested frame";
+"jumps.video.displayed" = "Displayed frame";
+"jumps.setup.show" = "Show setup options";
+"jumps.import.show" = "Show import options";
+"jumps.results.anotherTrial" = "Measure another trial in this video";
+"jumps.results.newVideo" = "Start over with a new video";

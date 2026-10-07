@@ -285,6 +285,46 @@ final class JumpWorkflowState: ObservableObject {
         sessionKey = UUID().uuidString
     }
 
+    /// Starts one new independent trial reusing the confirmed video lease.
+    ///
+    /// Guarded to confirmed saves only: requires `savedMeasurement != nil` and
+    /// no import/index/save in flight, plus a valid source-bound manifest.
+    /// Never discards unsaved marks (no-op without a confirmed save), never
+    /// disposes or reimports the owned video, never touches stored rows.
+    /// Draft state clears through the existing `restartDraft` path with a
+    /// fresh session key; the owner resolves explicitly from current
+    /// prefs/roster (nil when no single active owner, so calculate stays
+    /// blocked until the user creates one). Units/locale follow the existing
+    /// conversion semantics only when the context actually changed, so the
+    /// drop-height input keeps its verbatim precision otherwise. The frame
+    /// position is kept to analyse the next jump in the same video, then the
+    /// exact frame at the kept index is re-requested under the normal
+    /// source-identity guards; events stay empty until the user marks again.
+    func startAnotherTrial(using app: AppState) {
+        guard savedMeasurement != nil, !isSaving, !isImporting, !isIndexing,
+              let video, let manifest, manifest.sourceID == video.id,
+              (2...250_000).contains(manifest.frames.count) else { return }
+        restartDraft()
+        let units = app.preferences.units
+        let locale = app.preferences.effectiveLocale
+        let contextChanged = units != capturedUnits || locale.identifier != capturedLocale.identifier
+        var next = setup
+        next.ownerID = app.preferences.resolveActiveAthlete(in: app.athletes)
+        if contextChanged {
+            if let centimeters = parsedDropHeight() {
+                let displayed = MeasurementPresentation.shortLength(centimeters, as: units.shortLength)
+                next.dropHeightInput = displayed.formatted(.number.precision(.fractionLength(0...3)).locale(locale))
+            }
+            setup = next
+            capturedUnits = units
+            capturedLocale = locale
+        } else {
+            setup = next
+        }
+        let kept = min(max(frameIndex, 0), manifest.frames.count - 1)
+        requestFrame(kept)
+    }
+
     func requestFrame(_ index: Int) {
         guard !isSaving, let video, let manifest, manifest.sourceID == video.id,
               manifest.frames.indices.contains(index), savedMeasurement == nil else { return }

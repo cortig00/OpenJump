@@ -212,3 +212,14 @@
 "history.invalidRange" = "La date de début doit être antérieure ou égale à la date de fin.";
 "history.analysisInvalid" = "L'analyse enregistrée n'a pas pu être vérifiée, le résultat est donc masqué.";
 "history.legacyNotice" = "Enregistré avant l'analyse image par image. Aucun graphique vidéo n'est stocké pour cette évaluation.";
+// S4 measurement finish
+"jumps.event.markSelected" = "Marquer %@ comme image affichée";
+"jumps.video.retry" = "Réessayer de charger l’image exacte";
+"jumps.video.exactUs" = "Heure exacte : %@ µs";
+"jumps.video.waiting" = "En attente de l’image exacte.";
+"jumps.video.requested" = "Image demandée";
+"jumps.video.displayed" = "Image affichée";
+"jumps.setup.show" = "Afficher les réglages";
+"jumps.import.show" = "Afficher les options d’import";
+"jumps.results.anotherTrial" = "Mesurer un autre essai dans cette vidéo";
+"jumps.results.newVideo" = "Recommencer avec une nouvelle vidéo";

@@ -212,3 +212,14 @@
 "history.invalidRange" = "Başlangıç günü bitiş gününden sonra olamaz.";
 "history.analysisInvalid" = "Kaydedilen analiz doğrulanamadı, bu yüzden sonuç gizlendi.";
 "history.legacyNotice" = "Kare kare analizden önce kaydedildi. Bu değerlendirme için saklanan video grafiği yok.";
+// S4 measurement finish
+"jumps.event.markSelected" = "Görüntülenen kare olarak %@ işaretle";
+"jumps.video.retry" = "Tam kareyi yüklemeyi yeniden dene";
+"jumps.video.exactUs" = "Tam süre: %@ µs";
+"jumps.video.waiting" = "Tam kare bekleniyor.";
+"jumps.video.requested" = "İstenen kare";
+"jumps.video.displayed" = "Görüntülenen kare";
+"jumps.setup.show" = "Kurulum seçeneklerini göster";
+"jumps.import.show" = "İçe aktarma seçeneklerini göster";
+"jumps.results.anotherTrial" = "Bu videoda başka bir deneme ölç";
+"jumps.results.newVideo" = "Yeni bir videoyla baştan başla";

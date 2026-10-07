@@ -212,3 +212,14 @@
 "history.invalidRange" = "Das Startdatum muss vor oder auf dem Enddatum liegen.";
 "history.analysisInvalid" = "Die gespeicherte Analyse konnte nicht überprüft werden, daher ist das Ergebnis ausgeblendet.";
 "history.legacyNotice" = "Vor der Einzelbildanalyse gespeichert. Für diese Messung ist kein Videograph gespeichert.";
+// S4 measurement finish
+"jumps.event.markSelected" = "%@ als angezeigten Frame markieren";
+"jumps.video.retry" = "Exakten Frame erneut laden";
+"jumps.video.exactUs" = "Exakte Zeit: %@ µs";
+"jumps.video.waiting" = "Warte auf den exakten Frame.";
+"jumps.video.requested" = "Angeforderter Frame";
+"jumps.video.displayed" = "Angezeigter Frame";
+"jumps.setup.show" = "Setup-Optionen anzeigen";
+"jumps.import.show" = "Importoptionen anzeigen";
+"jumps.results.anotherTrial" = "Weiteren Versuch in diesem Video messen";
+"jumps.results.newVideo" = "Mit einem neuen Video von vorn beginnen";
