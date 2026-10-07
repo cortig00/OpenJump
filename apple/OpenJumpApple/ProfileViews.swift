@@ -21,6 +21,12 @@ struct ProfilesView: View {
         // database migration or ownership rewrite.
         return athlete.name.range(of: trimmed, options: [.caseInsensitive, .diacriticInsensitive]) != nil
     }
+    private func profileRowAccessibilityLabel(for athlete: Athlete) -> String {
+        let status = athlete.archivedAt == nil
+            ? AppText.string("profiles.active", language: language)
+            : AppText.string("profiles.archived", language: language)
+        return athlete.name + ", " + status
+    }
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -82,9 +88,7 @@ struct ProfilesView: View {
                                 }
                                 .buttonStyle(.plain)
                                 .accessibilityIdentifier("profile.row.\(athlete.id.uuidString)")
-                                .accessibilityLabel("\(athlete.name), \(athlete.archivedAt == nil
-                                    ? AppText.string("profiles.active", language: language)
-                                    : AppText.string("profiles.archived", language: language))")
+                                .accessibilityLabel(profileRowAccessibilityLabel(for: athlete))
                                 .swipeActions {
                                     Button(AppText.string("profiles.edit", language: language)) { editor = athlete }
                                         .tint(.openJumpGreen)
@@ -435,6 +439,16 @@ private struct AthleteDetail: View {
     @State private var showHistory = false
     private var language: AppLanguage { state.preferences.language }
     private var isArchived: Bool { athlete.archivedAt != nil }
+    private func formattedMassValue(kilograms: Double) -> String {
+        let number = MeasurementPresentation.mass(kilograms, as: state.preferences.units.mass)
+            .formatted(.number.precision(.fractionLength(0...2)).locale(state.preferences.effectiveLocale))
+        return number + " " + state.preferences.units.mass.rawValue
+    }
+    private func formattedShortLengthValue(centimeters: Double) -> String {
+        let number = MeasurementPresentation.shortLength(centimeters, as: state.preferences.units.shortLength)
+            .formatted(.number.precision(.fractionLength(0...2)).locale(state.preferences.effectiveLocale))
+        return number + " " + state.preferences.units.shortLength.rawValue
+    }
     var body: some View {
         NavigationStack {
             Form {
@@ -458,17 +472,13 @@ private struct AthleteDetail: View {
                         if let kg = athlete.weightKg {
                             LabeledContent(
                                 AppText.string("profiles.weight", language: language),
-                                value: "\(MeasurementPresentation.mass(kg, as: state.preferences.units.mass)
-                                    .formatted(.number.precision(.fractionLength(0...2))
-                                        .locale(state.preferences.effectiveLocale))) \(state.preferences.units.mass.rawValue)"
+                                value: formattedMassValue(kilograms: kg)
                             )
                         }
                         if let cm = athlete.heightCm {
                             LabeledContent(
                                 AppText.string("profiles.height", language: language),
-                                value: "\(MeasurementPresentation.shortLength(cm, as: state.preferences.units.shortLength)
-                                    .formatted(.number.precision(.fractionLength(0...2))
-                                        .locale(state.preferences.effectiveLocale))) \(state.preferences.units.shortLength.rawValue)"
+                                value: formattedShortLengthValue(centimeters: cm)
                             )
                         }
                     }
