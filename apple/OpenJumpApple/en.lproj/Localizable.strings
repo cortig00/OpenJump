@@ -202,3 +202,15 @@
 "profiles.archiveTitle" = "Archive this profile?";
 "profiles.restoreTitle" = "Restore this profile?";
 "profiles.noResults" = "No matching profiles";
+// S3 history filters
+"history.period" = "Period";
+"history.allTime" = "All time";
+"history.last7Days" = "Last 7 days";
+"history.last30Days" = "Last 30 days";
+"history.custom" = "Custom";
+"history.from" = "From";
+"history.through" = "Through";
+"history.resetFilters" = "Clear filters";
+"history.invalidRange" = "The start day must be on or before the end day.";
+"history.analysisInvalid" = "The saved analysis could not be verified, so the result is hidden.";
+"history.legacyNotice" = "Saved before frame-by-frame analysis. No video graph is stored for this assessment.";

@@ -200,3 +200,15 @@
 "profiles.archiveTitle" = "Archiver ce profil ?";
 "profiles.restoreTitle" = "Restaurer ce profil ?";
 "profiles.noResults" = "Aucun profil correspondant";
+// S3 history filters
+"history.period" = "Période";
+"history.allTime" = "Toute la période";
+"history.last7Days" = "7 derniers jours";
+"history.last30Days" = "30 derniers jours";
+"history.custom" = "Personnalisée";
+"history.from" = "Du";
+"history.through" = "Au";
+"history.resetFilters" = "Effacer les filtres";
+"history.invalidRange" = "La date de début doit être antérieure ou égale à la date de fin.";
+"history.analysisInvalid" = "L'analyse enregistrée n'a pas pu être vérifiée, le résultat est donc masqué.";
+"history.legacyNotice" = "Enregistré avant l'analyse image par image. Aucun graphique vidéo n'est stocké pour cette évaluation.";

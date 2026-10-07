@@ -455,18 +455,34 @@ public actor SQLiteStore {
     }
 
     public func history(ownerID: UUID? = nil, protocolKey: SavedProtocol? = nil, search: String? = nil,
-                        limit: Int = 50, before: (date: Date, id: UUID)? = nil) throws -> MeasurementPage {
+                        limit: Int = 50, before: (date: Date, id: UUID)? = nil,
+                        recordedFrom: Date? = nil, recordedBefore: Date? = nil) throws -> MeasurementPage {
         guard (1...200).contains(limit), before.map({ $0.date.timeIntervalSince1970.isFinite }) ?? true else { throw StoreError.invalidPageToken }
+        // Half-open recorded-at interval [recordedFrom, recordedBefore): each
+        // set bound must be finite, and a fully bounded interval must ascend.
+        // Invalid intervals fail closed; they never fall back to all history.
+        if let recordedFrom { guard recordedFrom.timeIntervalSince1970.isFinite else { throw StoreError.invalidPageToken } }
+        if let recordedBefore { guard recordedBefore.timeIntervalSince1970.isFinite else { throw StoreError.invalidPageToken } }
+        if let recordedFrom, let recordedBefore { guard recordedFrom < recordedBefore else { throw StoreError.invalidPageToken } }
         var sql = "SELECT id,session_key,owner_id,protocol_key,side,drop_height_cm,recorded_at,notes FROM assessments WHERE 1=1"
         var args: [String?] = []
         if let ownerID { sql += " AND owner_id=?"; args.append(ownerID.uuidString) }
         if let protocolKey { sql += " AND protocol_key=?"; args.append(protocolKey.rawValue) }
-        if let search, !search.isEmpty { sql += " AND (session_key LIKE ? OR COALESCE(notes,'') LIKE ?)"; args += ["%\(search)%","%\(search)%"] }
+        // Name search stays a correlated EXISTS over the current roster (no
+        // JOIN, so no ambiguous root id and no duplicate rows). LIKE keeps
+        // the existing ASCII case-folding/wildcard semantics; historical-name
+        // snapshots are not fabricated, and NULL owners keep matching on
+        // session/notes. Archived owners are never excluded here.
+        if let search, !search.isEmpty { sql += " AND (session_key LIKE ? OR COALESCE(notes,'') LIKE ? OR EXISTS (SELECT 1 FROM athletes WHERE athletes.id = assessments.owner_id AND athletes.name LIKE ?))"; args += ["%\(search)%","%\(search)%","%\(search)%"] }
+        if recordedFrom != nil { sql += " AND recorded_at >= ?" }
+        if recordedBefore != nil { sql += " AND recorded_at < ?" }
         if let before { sql += " AND (recorded_at < ? OR (recorded_at = ? AND id < ?))" }
         sql += " ORDER BY recorded_at DESC,id DESC LIMIT ?"
         let stmt = try prepare(sql); defer { sqlite3_finalize(stmt) }
         var ix: Int32 = 1
         for arg in args { text(stmt,ix,arg); ix += 1 }
+        if let recordedFrom { sqlite3_bind_double(stmt,ix,recordedFrom.timeIntervalSince1970); ix += 1 }
+        if let recordedBefore { sqlite3_bind_double(stmt,ix,recordedBefore.timeIntervalSince1970); ix += 1 }
         if let before { sqlite3_bind_double(stmt,ix,before.date.timeIntervalSince1970); sqlite3_bind_double(stmt,ix+1,before.date.timeIntervalSince1970); text(stmt,ix+2,before.id.uuidString); ix += 3 }
         sqlite3_bind_int(stmt,ix,Int32(limit + 1))
         var rows: [(UUID,String,UUID?,SavedProtocol,String?,Double?,Date,String?)] = []

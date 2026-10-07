@@ -200,3 +200,15 @@
 "profiles.archiveTitle" = "Bu profil arşivlensin mi?";
 "profiles.restoreTitle" = "Bu profil geri yüklensin mi?";
 "profiles.noResults" = "Eşleşen profil yok";
+// S3 history filters
+"history.period" = "Dönem";
+"history.allTime" = "Tüm zamanlar";
+"history.last7Days" = "Son 7 gün";
+"history.last30Days" = "Son 30 gün";
+"history.custom" = "Özel";
+"history.from" = "Başlangıç";
+"history.through" = "Bitiş";
+"history.resetFilters" = "Filtreleri temizle";
+"history.invalidRange" = "Başlangıç günü bitiş gününden sonra olamaz.";
+"history.analysisInvalid" = "Kaydedilen analiz doğrulanamadı, bu yüzden sonuç gizlendi.";
+"history.legacyNotice" = "Kare kare analizden önce kaydedildi. Bu değerlendirme için saklanan video grafiği yok.";

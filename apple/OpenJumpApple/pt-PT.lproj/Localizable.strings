@@ -200,3 +200,15 @@
 "profiles.archiveTitle" = "Arquivar este perfil?";
 "profiles.restoreTitle" = "Restaurar este perfil?";
 "profiles.noResults" = "Nenhum perfil correspondente";
+// S3 history filters
+"history.period" = "Período";
+"history.allTime" = "Todo o período";
+"history.last7Days" = "Últimos 7 dias";
+"history.last30Days" = "Últimos 30 dias";
+"history.custom" = "Personalizado";
+"history.from" = "De";
+"history.through" = "Até";
+"history.resetFilters" = "Limpar filtros";
+"history.invalidRange" = "A data inicial tem de ser anterior ou igual à data final.";
+"history.analysisInvalid" = "Não foi possível verificar a análise guardada, por isso o resultado está oculto.";
+"history.legacyNotice" = "Guardado antes da análise fotograma a fotograma. Não existe nenhum gráfico de vídeo guardado para esta avaliação.";

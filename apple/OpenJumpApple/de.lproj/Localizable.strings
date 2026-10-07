@@ -200,3 +200,15 @@
 "profiles.archiveTitle" = "Dieses Profil archivieren?";
 "profiles.restoreTitle" = "Dieses Profil wiederherstellen?";
 "profiles.noResults" = "Keine passenden Profile";
+// S3 history filters
+"history.period" = "Zeitraum";
+"history.allTime" = "Gesamter Zeitraum";
+"history.last7Days" = "Letzte 7 Tage";
+"history.last30Days" = "Letzte 30 Tage";
+"history.custom" = "Benutzerdefiniert";
+"history.from" = "Von";
+"history.through" = "Bis";
+"history.resetFilters" = "Filter zurücksetzen";
+"history.invalidRange" = "Das Startdatum muss vor oder auf dem Enddatum liegen.";
+"history.analysisInvalid" = "Die gespeicherte Analyse konnte nicht überprüft werden, daher ist das Ergebnis ausgeblendet.";
+"history.legacyNotice" = "Vor der Einzelbildanalyse gespeichert. Für diese Messung ist kein Videograph gespeichert.";
