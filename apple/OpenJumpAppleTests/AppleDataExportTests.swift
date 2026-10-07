@@ -31,7 +31,7 @@ final class AppleDataExportTests: XCTestCase {
         let decoded = try JSONSerialization.jsonObject(with: result.data)
         return try XCTUnwrap(decoded as? [String: Any])
     }
-    private func legacy(owner: UUID? = nil, session: String = UUID().uuidString(), value: Double = 27,
+    private func legacy(owner: UUID? = nil, session: String = UUID().uuidString, value: Double = 27,
                         date: Date = Date(timeIntervalSince1970: 1_700_000_000.125), ordinal: Int = 0) throws -> SavedMeasurement {
         let metric = try SavedMetric(key: "HEIGHT_CM", unit: "CENTIMETER", value: value, ordinal: ordinal)
         return try SavedMeasurement(sessionKey: session, ownerID: owner, protocolKey: .sj,
