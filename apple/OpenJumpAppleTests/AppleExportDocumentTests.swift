@@ -10,7 +10,8 @@ final class AppleExportDocumentTests: XCTestCase {
         let wrapper = document.fileRepresentation()
         XCTAssertTrue(wrapper.isRegularFile)
         XCTAssertEqual(wrapper.regularFileContents, Data("{\"creationOnly\":true}".utf8))
-        XCTAssertNil(wrapper.fileWrappers)
+        XCTAssertFalse(wrapper.isDirectory)
+        XCTAssertFalse(wrapper.isSymbolicLink)
         XCTAssertNil(wrapper.preferredFilename)
     }
 

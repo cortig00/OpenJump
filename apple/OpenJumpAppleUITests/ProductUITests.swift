@@ -30,10 +30,22 @@ final class ProductUITests: XCTestCase {
         }
         XCTAssertTrue(target.exists && target.isHittable, "Target not visible within six scrolls: \(target)")
     }
-    private func replace(_ field: XCUIElement, with text: String) {
+    /// Replaces the known isolated notes-fixture content. The app always launches
+    /// with `-AppleLanguages (en)`, so the edit menu exposes the exact English
+    /// "Select All" action; this label is intentionally not generalized to other
+    /// locales. Uses only public touch and menu selection, then asserts the exact
+    /// replacement before the caller discards or saves.
+    private func replace(_ field: XCUIElement, with text: String, in app: XCUIApplication) {
+        XCTAssertTrue(field.waitForExistence(timeout: 10), "Missing notes field for replacement")
         field.tap()
-        let value = field.value as? String ?? ""
-        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: value.count) + text)
+        let focusedValue = field.value as? String
+        XCTAssertNotNil(focusedValue, "Notes field had no readable value after focus")
+        field.press(forDuration: 1.0)
+        let selectAll = app.menuItems["Select All"]
+        XCTAssertTrue(selectAll.waitForExistence(timeout: 10), "Select All menu action unavailable for the forced-English fixture")
+        selectAll.tap()
+        field.typeText(text)
+        XCTAssertEqual(field.value as? String, text, "Replacement text was not fully applied before discard/save")
     }
     private func waitUntilGone(_ target: XCUIElement) {
         let expectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: target)
@@ -106,7 +118,7 @@ final class ProductUITests: XCTestCase {
         let notes = element("measurement.notes", in: app)
         reveal(notes, in: app)
         XCTAssertEqual(notes.value as? String, "UI Test original note")
-        replace(notes, with: "UI discarded note")
+        replace(notes, with: "UI discarded note", in: app)
         tap("measurement.close", in: app)
         let discard = app.buttons["Discard changes"]
         XCTAssertTrue(discard.waitForExistence(timeout: 10)); discard.tap()
@@ -114,7 +126,7 @@ final class ProductUITests: XCTestCase {
         openMeasurement(in: app)
         reveal(notes, in: app)
         XCTAssertEqual(notes.value as? String, "UI Test original note")
-        replace(notes, with: "UI saved note")
+        replace(notes, with: "UI saved note", in: app)
         tap("measurement.save", in: app)
         waitUntilGone(element("measurement.close", in: app))
         XCTAssertTrue(app.tabBars.buttons["History"].waitForExistence(timeout: 10))
@@ -138,11 +150,16 @@ final class ProductUITests: XCTestCase {
         XCTAssertTrue(privacy.label.contains("not encrypted"))
         let create = element("export.json", in: app)
         reveal(create, in: app); create.tap()
+        // Preparation triage for the synthetic 2/1/5 fixture only, using the exact
+        // source identifiers: the async snapshot must finish (busy gone) with no
+        // error message before the preview labels are meaningful.
+        waitUntilGone(element("export.preparing", in: app))
+        XCTAssertFalse(element("export.message", in: app).exists, "Export preparation reported an error for the synthetic fixture")
         for (identifier, expected) in [("export.preview.profiles", "2"), ("export.preview.measurements", "1"), ("export.preview.metrics", "5")] {
-            let count = app.staticTexts[identifier]
-            XCTAssertTrue(count.waitForExistence(timeout: 10))
+            let count = element(identifier, in: app)
             reveal(count, in: app)
-            XCTAssertEqual(count.label, expected)
+            XCTAssertTrue(count.waitForExistence(timeout: 10), "Missing preview count: \(identifier)")
+            XCTAssertEqual(count.label, expected, "Preview count label mismatch for \(identifier)")
         }
         let save = element("export.save", in: app)
         reveal(save, in: app)
