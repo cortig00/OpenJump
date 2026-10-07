@@ -186,3 +186,17 @@
 "jumps.discard.confirm" = "Abandonner l’analyse";
 "jumps.help.marking" = "Placez-vous sur chaque événement, attendez l’affichage de l’image exacte, puis marquez-la. Le temps repose sur les horodatages des images de la vidéo, et non sur sa fréquence d’images nominale.";
 "jumps.import.title" = "Importer la vidéo";
+// S2 profile editing
+"common.confirm" = "Confirmer";
+"common.done" = "OK";
+"common.discard" = "Ignorer les modifications";
+"profiles.search" = "Rechercher des athlètes";
+"profiles.identity" = "Identité";
+"profiles.physical" = "Mensurations";
+"profiles.physicalHint" = "Facultatif. Utilise les unités actives au début de la modification.";
+"profiles.notesHint" = "Notes facultatives (500 caractères maximum)";
+"profiles.discardTitle" = "Ignorer les modifications ?";
+"profiles.discardBody" = "Les modifications non enregistrées seront perdues.";
+"profiles.archiveTitle" = "Archiver ce profil ?";
+"profiles.restoreTitle" = "Restaurer ce profil ?";
+"profiles.noResults" = "Aucun profil correspondant";

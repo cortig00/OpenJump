@@ -186,3 +186,17 @@
 "jumps.discard.confirm" = "Analyse verwerfen";
 "jumps.help.marking" = "Gehe zu jedem Ereignis, warte auf das exakte Einzelbild und markiere es. Die Zeit basiert auf den Video-Zeitstempeln der Einzelbilder, nicht auf der nominalen Bildrate.";
 "jumps.import.title" = "Video importieren";
+// S2 profile editing
+"common.confirm" = "Bestätigen";
+"common.done" = "Fertig";
+"common.discard" = "Änderungen verwerfen";
+"profiles.search" = "Sportler suchen";
+"profiles.identity" = "Identität";
+"profiles.physical" = "Körpermaße";
+"profiles.physicalHint" = "Optional. Verwendet die beim Bearbeitungsbeginn aktiven Einheiten.";
+"profiles.notesHint" = "Optionale Notizen (max. 500 Zeichen)";
+"profiles.discardTitle" = "Änderungen verwerfen?";
+"profiles.discardBody" = "Ungespeicherte Änderungen gehen verloren.";
+"profiles.archiveTitle" = "Dieses Profil archivieren?";
+"profiles.restoreTitle" = "Dieses Profil wiederherstellen?";
+"profiles.noResults" = "Keine passenden Profile";

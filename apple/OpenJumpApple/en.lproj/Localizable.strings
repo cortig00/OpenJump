@@ -188,3 +188,17 @@
 "jumps.help.marking" = "Move to each event, wait for the exact frame to appear, then mark it. Timing uses the video's frame timestamps, not its nominal FPS.";
 // Athlete avatars
 "jumps.import.title" = "Import video";
+// S2 profile editing
+"common.confirm" = "Confirm";
+"common.done" = "Done";
+"common.discard" = "Discard changes";
+"profiles.search" = "Search athletes";
+"profiles.identity" = "Identity";
+"profiles.physical" = "Body measurements";
+"profiles.physicalHint" = "Optional. Uses the units active when editing began.";
+"profiles.notesHint" = "Optional notes (500 characters max)";
+"profiles.discardTitle" = "Discard changes?";
+"profiles.discardBody" = "Unsaved edits will be lost.";
+"profiles.archiveTitle" = "Archive this profile?";
+"profiles.restoreTitle" = "Restore this profile?";
+"profiles.noResults" = "No matching profiles";

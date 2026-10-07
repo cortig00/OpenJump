@@ -187,3 +187,17 @@
 "jumps.discard.confirm" = "Descartar análisis";
 "jumps.help.marking" = "Ve a cada evento, espera a que aparezca el fotograma exacto y márcalo. El tiempo se basa en las marcas de tiempo de los fotogramas del vídeo, no en su FPS nominal.";
 "jumps.import.title" = "Importar vídeo";
+// S2 profile editing
+"common.confirm" = "Confirmar";
+"common.done" = "Listo";
+"common.discard" = "Descartar cambios";
+"profiles.search" = "Buscar deportistas";
+"profiles.identity" = "Identidad";
+"profiles.physical" = "Medidas corporales";
+"profiles.physicalHint" = "Opcional. Usa las unidades activas al empezar a editar.";
+"profiles.notesHint" = "Notas opcionales (máximo 500 caracteres)";
+"profiles.discardTitle" = "¿Descartar los cambios?";
+"profiles.discardBody" = "Los cambios sin guardar se perderán.";
+"profiles.archiveTitle" = "¿Archivar este perfil?";
+"profiles.restoreTitle" = "¿Restaurar este perfil?";
+"profiles.noResults" = "Sin perfiles coincidentes";

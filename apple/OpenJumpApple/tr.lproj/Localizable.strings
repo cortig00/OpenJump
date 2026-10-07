@@ -186,3 +186,17 @@
 "jumps.discard.confirm" = "Analizi sil";
 "jumps.help.marking" = "Her olaya ilerleyin, tam karenin görüntülenmesini bekleyin ve ardından işaretleyin. Zamanlama, nominal FPS'ye değil videonun kare zaman damgalarına dayanır.";
 "jumps.import.title" = "Videoyu içe aktar";
+// S2 profile editing
+"common.confirm" = "Onayla";
+"common.done" = "Bitti";
+"common.discard" = "Değişiklikleri at";
+"profiles.search" = "Sporcu ara";
+"profiles.identity" = "Kimlik";
+"profiles.physical" = "Vücut ölçüleri";
+"profiles.physicalHint" = "İsteğe bağlı. Düzenlemeye başlarken etkin olan birimleri kullanır.";
+"profiles.notesHint" = "İsteğe bağlı notlar (en fazla 500 karakter)";
+"profiles.discardTitle" = "Değişiklikler atılsın mı?";
+"profiles.discardBody" = "Kaydedilmemiş düzenlemeler kaybolacak.";
+"profiles.archiveTitle" = "Bu profil arşivlensin mi?";
+"profiles.restoreTitle" = "Bu profil geri yüklensin mi?";
+"profiles.noResults" = "Eşleşen profil yok";
