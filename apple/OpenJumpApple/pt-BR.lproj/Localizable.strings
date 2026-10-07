@@ -185,3 +185,4 @@
 "jumps.discard.body" = "As marcações não salvas serão perdidas. O vídeo original não será alterado.";
 "jumps.discard.confirm" = "Descartar análise";
 "jumps.help.marking" = "Vá até cada evento, espere o quadro exato aparecer e então marque-o. O tempo usa os timestamps dos quadros do vídeo, não a taxa nominal de quadros.";
+"jumps.import.title" = "Importar vídeo";

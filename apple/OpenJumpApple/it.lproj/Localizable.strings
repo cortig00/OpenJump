@@ -185,3 +185,4 @@
 "jumps.discard.body" = "I contrassegni non salvati andranno persi. Il video originale non verrà modificato.";
 "jumps.discard.confirm" = "Elimina analisi";
 "jumps.help.marking" = "Vai a ogni evento, attendi che compaia il fotogramma esatto e poi contrassegnalo. Il tempo si basa sui timestamp dei fotogrammi del video, non sulla frequenza nominale.";
+"jumps.import.title" = "Importa video";

@@ -185,3 +185,4 @@
 "jumps.discard.body" = "Nicht gespeicherte Markierungen gehen verloren. Das Originalvideo wird nicht verändert.";
 "jumps.discard.confirm" = "Analyse verwerfen";
 "jumps.help.marking" = "Gehe zu jedem Ereignis, warte auf das exakte Einzelbild und markiere es. Die Zeit basiert auf den Video-Zeitstempeln der Einzelbilder, nicht auf der nominalen Bildrate.";
+"jumps.import.title" = "Video importieren";

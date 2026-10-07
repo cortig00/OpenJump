@@ -185,3 +185,4 @@
 "jumps.discard.body" = "As marcações não guardadas serão perdidas. O vídeo original não será alterado.";
 "jumps.discard.confirm" = "Descartar análise";
 "jumps.help.marking" = "Avance até cada evento, aguarde que o fotograma exato apareça e marque-o. O tempo usa os carimbos temporais dos fotogramas do vídeo, não a frequência nominal de fotogramas.";
+"jumps.import.title" = "Importar vídeo";

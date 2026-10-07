@@ -1,0 +1,239 @@
+{
+  "illustrations": {
+    "jump_cmj": {
+      "source": "app/src/main/res/drawable-nodpi/cmj_male.png",
+      "source_sha256": "bacf31f3e75d3e6be9a95ea6f421bd2dd8f4994db57d3f46601f75428ed4aa1d",
+      "source_size": [
+        1536,
+        1024
+      ],
+      "source_mode": "RGBA",
+      "output": "apple/OpenJumpApple/Assets.xcassets/jump_cmj.imageset/jump_cmj.png",
+      "output_sha256": "8168b537a1bb42abaf5c282f877655ef7341aa203233f1b95a7881184ba0c35d",
+      "output_size": [
+        720,
+        480
+      ],
+      "output_mode": "RGBA",
+      "max_edge": 720,
+      "resample": "LANCZOS",
+      "cropped": false
+    },
+    "jump_sj": {
+      "source": "app/src/main/res/drawable-nodpi/squat_jump_male.png",
+      "source_sha256": "a7e398945af1d9483612a2c2edee721dd8ca61db3db9082f5a976b2cc5cf63f6",
+      "source_size": [
+        1672,
+        941
+      ],
+      "source_mode": "RGBA",
+      "output": "apple/OpenJumpApple/Assets.xcassets/jump_sj.imageset/jump_sj.png",
+      "output_sha256": "4030c39fce6f612c74ca9abfd8e3c2dd4705e4e26b4b2012292066a2d0d16a25",
+      "output_size": [
+        720,
+        405
+      ],
+      "output_mode": "RGBA",
+      "max_edge": 720,
+      "resample": "LANCZOS",
+      "cropped": false
+    },
+    "jump_abalakov": {
+      "source": "app/src/main/res/drawable-nodpi/abakalov_jump_male.png",
+      "source_sha256": "30938fb878901fa5f244e0e9e12f088e6f196f817cdeb353bf4224accaca569e",
+      "source_size": [
+        1448,
+        1086
+      ],
+      "source_mode": "RGBA",
+      "output": "apple/OpenJumpApple/Assets.xcassets/jump_abalakov.imageset/jump_abalakov.png",
+      "output_sha256": "28590e5233ef455d955e4a4e8be909fe97f9777c820a42e451c0d414c925017b",
+      "output_size": [
+        720,
+        540
+      ],
+      "output_mode": "RGBA",
+      "max_edge": 720,
+      "resample": "LANCZOS",
+      "cropped": false
+    },
+    "jump_drop_jump": {
+      "source": "app/src/main/res/drawable-nodpi/drop_jump_male.png",
+      "source_sha256": "999bd37604d12a8ed2b41afaa37c54bb272e9883810f202d7f4ebdca785a2706",
+      "source_size": [
+        1536,
+        1024
+      ],
+      "source_mode": "RGBA",
+      "output": "apple/OpenJumpApple/Assets.xcassets/jump_drop_jump.imageset/jump_drop_jump.png",
+      "output_sha256": "a28448c64f61086eb120f9b5ffe959c663f8160850e50fcf83118d3d47ddb902",
+      "output_size": [
+        720,
+        480
+      ],
+      "output_mode": "RGBA",
+      "max_edge": 720,
+      "resample": "LANCZOS",
+      "cropped": false
+    },
+    "jump_unilateral_left": {
+      "source": "app/src/main/res/drawable-nodpi/unilateral_left_male.png",
+      "source_sha256": "caa5506783171f473a25e0364af3c8840bfe657da2c00050fc555ad6b05f3a11",
+      "source_size": [
+        1536,
+        1024
+      ],
+      "source_mode": "RGBA",
+      "output": "apple/OpenJumpApple/Assets.xcassets/jump_unilateral_left.imageset/jump_unilateral_left.png",
+      "output_sha256": "56ec28f2b1a228933e5bf5f0ee00b79e08683a8b7af549dfb20d1c141691e7ed",
+      "output_size": [
+        720,
+        480
+      ],
+      "output_mode": "RGBA",
+      "max_edge": 720,
+      "resample": "LANCZOS",
+      "cropped": false
+    },
+    "jump_unilateral_right": {
+      "source": "app/src/main/res/drawable-nodpi/unilateral_right_male.png",
+      "source_sha256": "2cadf47d4302894d4eff2ae5bd91d6b091745ee8e244f76ef5433b059800f3a0",
+      "source_size": [
+        1536,
+        1024
+      ],
+      "source_mode": "RGBA",
+      "output": "apple/OpenJumpApple/Assets.xcassets/jump_unilateral_right.imageset/jump_unilateral_right.png",
+      "output_sha256": "6b9b701b2d049239f9fcf209f4989ca210f1e913d9c2032545d0999ddcc2e828",
+      "output_size": [
+        720,
+        480
+      ],
+      "output_mode": "RGBA",
+      "max_edge": 720,
+      "resample": "LANCZOS",
+      "cropped": false
+    }
+  },
+  "appicon": {
+    "20": {
+      "sha256": "89cd149909394afb75c2b21b29629192e9f605628ccf2e9d02d2e72d45ed0f2a",
+      "size": [
+        20,
+        20
+      ],
+      "mode": "RGB"
+    },
+    "29": {
+      "sha256": "d33135f7a81c1060cb4e7a2e6929feb5b633c2d69376c82ba458cd816186d9e1",
+      "size": [
+        29,
+        29
+      ],
+      "mode": "RGB"
+    },
+    "40": {
+      "sha256": "e00736e06c0160b4516c93c70c9ca4cd45edb4f9cbe47039ae5301a6a5fddb97",
+      "size": [
+        40,
+        40
+      ],
+      "mode": "RGB"
+    },
+    "58": {
+      "sha256": "9b80809fbb957e532f673bfaa56b8b039360bbd49f2abd9270b01d49fa5fbb49",
+      "size": [
+        58,
+        58
+      ],
+      "mode": "RGB"
+    },
+    "60": {
+      "sha256": "a2fe80a466f9facf5cc4f2206b4956c2c2855934d02be9ee82aed018db230f5c",
+      "size": [
+        60,
+        60
+      ],
+      "mode": "RGB"
+    },
+    "76": {
+      "sha256": "bbefed3baf3f96eb4dc4ac59176568685cef09af6f82d2ce2aaf6398c7ecda94",
+      "size": [
+        76,
+        76
+      ],
+      "mode": "RGB"
+    },
+    "80": {
+      "sha256": "4e5aa958040832637f2b25b63ed642af292c307c95aff4cc1953cb85da26f3e6",
+      "size": [
+        80,
+        80
+      ],
+      "mode": "RGB"
+    },
+    "87": {
+      "sha256": "133a72b4f7a8be39a39bd7e02a9f25242dd33267561b90e2ef0bdb6ac0daf2e4",
+      "size": [
+        87,
+        87
+      ],
+      "mode": "RGB"
+    },
+    "120": {
+      "sha256": "5b079553e7321819f53710b5413b49dc11f8250a93dd0f08782a64901b8f0064",
+      "size": [
+        120,
+        120
+      ],
+      "mode": "RGB"
+    },
+    "152": {
+      "sha256": "0311719437a4a5f4098cfa826b9e0e0db822026fdb4b8c50d23a727d002db935",
+      "size": [
+        152,
+        152
+      ],
+      "mode": "RGB"
+    },
+    "167": {
+      "sha256": "88b53e4f5005581d78a53e519752970ac6602e2987d8b9a378169ee11c119c30",
+      "size": [
+        167,
+        167
+      ],
+      "mode": "RGB"
+    },
+    "180": {
+      "sha256": "bf94a8f6a760127c1133f244834f46241657f20b9bb64be9f37d8b1f380d4900",
+      "size": [
+        180,
+        180
+      ],
+      "mode": "RGB"
+    },
+    "1024": {
+      "sha256": "5b5cad004ce04ca99c1f5d6be9016f06ac1102293a9ac29747b8b2654a875bea",
+      "size": [
+        1024,
+        1024
+      ],
+      "mode": "RGB"
+    }
+  },
+  "appicon_source": {
+    "source": "app/src/main/res/drawable-nodpi/ic_openjump_logo.png",
+    "source_sha256": "aa0bb42b510cee443a331beb0e3c865d55fa15a8ad04b2226e67295d4ba3241b",
+    "source_size": [
+      256,
+      256
+    ],
+    "background_rgb": [
+      5,
+      110,
+      89
+    ],
+    "logo_box_1024": 640,
+    "note": "upscaled composition, not a higher-resolution original"
+  }
+}

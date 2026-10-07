@@ -186,3 +186,4 @@
 "jumps.discard.body" = "Se perderán las marcas sin guardar. El vídeo original no se modificará.";
 "jumps.discard.confirm" = "Descartar análisis";
 "jumps.help.marking" = "Ve a cada evento, espera a que aparezca el fotograma exacto y márcalo. El tiempo se basa en las marcas de tiempo de los fotogramas del vídeo, no en su FPS nominal.";
+"jumps.import.title" = "Importar vídeo";

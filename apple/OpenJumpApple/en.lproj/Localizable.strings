@@ -187,3 +187,4 @@
 "jumps.discard.confirm" = "Discard analysis";
 "jumps.help.marking" = "Move to each event, wait for the exact frame to appear, then mark it. Timing uses the video's frame timestamps, not its nominal FPS.";
 // Athlete avatars
+"jumps.import.title" = "Import video";

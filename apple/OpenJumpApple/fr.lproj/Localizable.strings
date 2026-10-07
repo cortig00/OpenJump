@@ -185,3 +185,4 @@
 "jumps.discard.body" = "Les marques non enregistrées seront perdues. La vidéo originale ne sera pas modifiée.";
 "jumps.discard.confirm" = "Abandonner l’analyse";
 "jumps.help.marking" = "Placez-vous sur chaque événement, attendez l’affichage de l’image exacte, puis marquez-la. Le temps repose sur les horodatages des images de la vidéo, et non sur sa fréquence d’images nominale.";
+"jumps.import.title" = "Importer la vidéo";

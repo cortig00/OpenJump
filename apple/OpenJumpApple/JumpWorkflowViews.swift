@@ -92,7 +92,7 @@ struct JumpHomeView: View {
     }
 
     private var setupSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        OpenJumpSection(title: AppText.string("jumps.setup.protocol", language: language)) {
             Picker(AppText.string("jumps.setup.protocol", language: language), selection: Binding(
                 get: { workflow.setup.protocolKey },
                 set: { workflow.requestProtocol($0, app: state) }
@@ -102,6 +102,10 @@ struct JumpHomeView: View {
                 }
             }
             .pickerStyle(.menu).frame(minHeight: 48)
+
+            if workflow.manifest == nil {
+                protocolArt
+            }
 
             if activeAthletes.isEmpty {
                 Text(AppText.string("jumps.setup.noProfile", language: language)).font(.callout)
@@ -141,13 +145,54 @@ struct JumpHomeView: View {
                 .accessibilityLabel(AppText.string("jumps.setup.dropHeight", language: language))
             }
         }
-        .padding(16)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16))
         .disabled(workflow.savedMeasurement != nil || workflow.isSaving)
     }
 
+    /// Selected-protocol illustration. Shown only before a video is indexed so
+    /// imagery never clutters the time-critical frame flow. Informative: the
+    /// panel carries the protocol/side caption as its VoiceOver label while the
+    /// bitmaps themselves stay hidden from accessibility.
+    @ViewBuilder
+    private var protocolArt: some View {
+        let assets = ProtocolPresentation.illustrationAssets(for: workflow.setup.protocolKey, side: workflow.setup.side)
+        if !assets.isEmpty {
+            VStack(alignment: .leading, spacing: OpenJumpSpacing.sm) {
+                HStack(spacing: OpenJumpSpacing.sm) {
+                    ForEach(assets, id: \.self) { name in
+                        Image(name)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(maxWidth: .infinity, maxHeight: 200)
+                            .accessibilityHidden(true)
+                    }
+                }
+                Text(protocolArtCaption)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(protocolArtCaption)
+            .accessibilityAddTraits(.isImage)
+        }
+    }
+
+    private var protocolArtCaption: String {
+        var caption = AppText.string(workflow.setup.protocolKey.titleKey, language: language)
+        if workflow.setup.protocolKey == .unilateral {
+            if workflow.setup.side == "LEFT" {
+                caption += " · \(AppText.string("jumps.setup.left", language: language))"
+            } else if workflow.setup.side == "RIGHT" {
+                caption += " · \(AppText.string("jumps.setup.right", language: language))"
+            }
+        } else if workflow.setup.protocolKey == .dropJump {
+            caption += " · \(dropHeightSummary)"
+        }
+        return caption
+    }
+
     private var importSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        OpenJumpSection(title: AppText.string("jumps.import.title", language: language)) {
+            VStack(alignment: .leading, spacing: 10) {
             PhotosPicker(selection: $selectedPhoto, matching: .videos, preferredItemEncoding: .current) {
                 Label(AppText.string("jumps.import.photos", language: language), systemImage: "photo.on.rectangle")
                     .frame(maxWidth: .infinity, minHeight: 48)
@@ -170,6 +215,7 @@ struct JumpHomeView: View {
                         .frame(maxWidth: .infinity, minHeight: 48)
                 }
                 .buttonStyle(.bordered).disabled(workflow.isBusy || workflow.isSaving)
+            }
             }
         }
     }

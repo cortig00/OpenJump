@@ -185,3 +185,4 @@
 "jumps.discard.body" = "Kaydedilmemiş işaretler kaybolacak. Özgün video değiştirilmeyecek.";
 "jumps.discard.confirm" = "Analizi sil";
 "jumps.help.marking" = "Her olaya ilerleyin, tam karenin görüntülenmesini bekleyin ve ardından işaretleyin. Zamanlama, nominal FPS'ye değil videonun kare zaman damgalarına dayanır.";
+"jumps.import.title" = "Videoyu içe aktar";

@@ -75,10 +75,6 @@ struct AppShell: View {
     }
 }
 
-extension Color {
-    static let openJumpGreen = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.40, green: 0.82, blue: 0.70, alpha: 1) : UIColor(red: 0.02, green: 0.43, blue: 0.35, alpha: 1) })
-}
-
 /// iOS 16-compatible centered empty/error state replacing the iOS 17-only
 /// `ContentUnavailableView`. Title, icon, description and actions mirror the
 /// previous call sites; all user strings remain `AppText`-localized at the call
