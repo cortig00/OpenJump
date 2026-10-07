@@ -223,3 +223,21 @@
 "jumps.import.show" = "Afficher les options d’import";
 "jumps.results.anotherTrial" = "Mesurer un autre essai dans cette vidéo";
 "jumps.results.newVideo" = "Recommencer avec une nouvelle vidéo";
+
+// S5 native help and privacy
+"settings.help" = "Aide et confidentialité";
+"settings.about" = "À propos d’OpenJump";
+"settings.about.body" = "Analyse native des sauts, hors ligne et image par image, à partir de vidéos importées.";
+"help.workflow.title" = "Parcours de mesure";
+"help.workflow.body" = "Sélectionnez un athlète actif et un protocole. Importez une vidéo en temps réel depuis Photos ou Fichiers. Marquez les événements, déclarez les temps, calculez, vérifiez et confirmez l’enregistrement. Les mesures enregistrées apparaissent dans l’historique.";
+"help.protocols.title" = "Protocoles pris en charge";
+"help.protocols.body" = "Les événements sont indiqués dans l’ordre de marquage.";
+"help.marking.title" = "Images exactes et temps";
+"help.accuracy.title" = "Limites du résultat";
+"help.accuracy.body" = "Les résultats sont des estimations fondées sur les horodatages vidéo marqués. Le choix des événements et les temps modifiés peuvent les biaiser. OpenJump n’est pas validé cliniquement.";
+"help.privacy.title" = "Confidentialité sur l’appareil";
+"help.privacy.body" = "L’analyse reste sur cet appareil. Aucun compte ni backend n’est utilisé. Seuls les mesures confirmées et les temps des événements sont enregistrés ; la vidéo et son URI ne sont pas enregistrés dans l’historique.";
+"help.storage.title" = "Conserver vos données";
+"help.storage.body" = "Conservez les vidéos originales séparément. Désinstaller l’app peut supprimer ses données. Une mise à jour sans désinstallation devrait les conserver ; vérifiez l’historique après la mise à jour.";
+"help.scope.title" = "Inclus dans cette version";
+"help.scope.body" = "Cinq protocoles de saut temporel avec vidéo SDR importée. Capture caméra, Body Tracking, mesure horizontale et statistiques d’essais groupés non inclus. Un autre essai crée une mesure indépendante.";

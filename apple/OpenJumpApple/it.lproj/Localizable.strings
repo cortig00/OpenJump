@@ -223,3 +223,21 @@
 "jumps.import.show" = "Mostra opzioni di importazione";
 "jumps.results.anotherTrial" = "Misura un’altra prova in questo video";
 "jumps.results.newVideo" = "Ricomincia con un nuovo video";
+
+// S5 native help and privacy
+"settings.help" = "Aiuto e privacy";
+"settings.about" = "Informazioni su OpenJump";
+"settings.about.body" = "Analisi nativa dei salti, offline e fotogramma per fotogramma, da video importati.";
+"help.workflow.title" = "Flusso di misurazione";
+"help.workflow.body" = "Seleziona un atleta attivo e un protocollo. Importa un video in tempo reale da Foto o File. Segna gli eventi, dichiara i tempi, calcola, verifica e conferma il salvataggio. Le misurazioni salvate appaiono nella cronologia.";
+"help.protocols.title" = "Protocolli supportati";
+"help.protocols.body" = "Gli eventi sono mostrati nell’ordine in cui vanno segnati.";
+"help.marking.title" = "Fotogrammi esatti e tempi";
+"help.accuracy.title" = "Limiti del risultato";
+"help.accuracy.body" = "I risultati sono stime basate sui tempi segnati nel video. La scelta degli eventi e i tempi alterati possono distorcerli. OpenJump non è clinicamente validato.";
+"help.privacy.title" = "Privacy sul dispositivo";
+"help.privacy.body" = "L’analisi rimane su questo dispositivo. Non ci sono account né backend. Si salvano solo misurazioni confermate e tempi degli eventi; video e URI non sono salvati nella cronologia.";
+"help.storage.title" = "Conservare i dati";
+"help.storage.body" = "Conserva separatamente i video originali. Disinstallare l’app può eliminare i dati salvati. Un aggiornamento senza disinstallazione dovrebbe preservarli; verifica la cronologia dopo l’aggiornamento.";
+"help.scope.title" = "Incluso in questa versione";
+"help.scope.body" = "Cinque protocolli di salto temporali con video SDR importati. Ripresa con fotocamera, Body Tracking, misurazione orizzontale e statistiche di prove raggruppate non sono inclusi. Un’altra prova crea una misurazione indipendente.";

@@ -2,22 +2,29 @@ import SwiftUI
 import Combine
 
 @MainActor final class AppState: ObservableObject {
-    @Published var preferences = AppPreferences()
+    @Published var preferences: AppPreferences
     @Published var store: SQLiteStore?
     @Published var athletes: [Athlete] = []
     @Published private(set) var historyRevision = 0
     @Published var loadError: String?
     @Published var loading = true
     private var preferencesObservation: AnyCancellable?
-    init() {
-        preferencesObservation = preferences.objectWillChange.sink { [weak self] _ in
+    private let databaseURL: URL?
+    init(preferences: AppPreferences? = nil, databaseURL: URL? = nil) {
+        // Construct production defaults only when no preferences were injected.
+        // The observation must subscribe to the injected object, not a temporary
+        // object using UserDefaults.standard.
+        self.preferences = preferences ?? AppPreferences()
+        self.databaseURL = databaseURL
+        preferencesObservation = self.preferences.objectWillChange.sink { [weak self] _ in
             Task { @MainActor in self?.objectWillChange.send() }
         }
     }
     func load() async {
         loading = true; loadError = nil
         do {
-            let database = try await Task.detached { try SQLiteStore() }.value
+            let capturedURL = databaseURL
+            let database = try await Task.detached { try SQLiteStore(databaseURL: capturedURL) }.value
             let roster = try await database.athletes(includeArchived: true)
             store = database
             athletes = roster
@@ -38,11 +45,14 @@ import Combine
     func historyDidCommit() { historyRevision += 1 }
 }
 
-struct AppShell: View {
+@MainActor struct AppShell: View {
     private enum Tab: Hashable { case jumps, history, profiles, settings }
-    @StateObject private var state = AppState()
+    @StateObject private var state: AppState
     @State private var selectedTab: Tab = .jumps
     @Environment(\.colorScheme) private var scheme
+    init(preferences: AppPreferences? = nil, databaseURL: URL? = nil) {
+        _state = StateObject(wrappedValue: AppState(preferences: preferences, databaseURL: databaseURL))
+    }
     var body: some View {
         Group {
             if state.loading {

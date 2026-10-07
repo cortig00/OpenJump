@@ -76,7 +76,10 @@ final class JumpWorkflowStateTests: XCTestCase {
 
         let tall = JumpWorkflowPresentation.fittedFrameSize(imageWidth: 480, imageHeight: 960, availableWidth: 390)
         XCTAssertEqual(tall.height, JumpWorkflowPresentation.maxFrameHeight, accuracy: 1e-6)
-        XCTAssertEqual(tall.width, 195, accuracy: 1e-6)
+        // Independent geometry: a 480:960 source capped at 380pt fits to
+        // 190pt wide, not 195pt (which would imply a 390pt height).
+        XCTAssertEqual(tall.width, 190, accuracy: 1e-6)
+        XCTAssertEqual(tall.width / tall.height, 0.5, accuracy: 1e-6)
 
         let fallback = JumpWorkflowPresentation.fittedFrameSize(imageWidth: 0, imageHeight: 0, availableWidth: 390)
         XCTAssertEqual(fallback.height, JumpWorkflowPresentation.placeholderHeight)

@@ -223,3 +223,21 @@
 "jumps.import.show" = "İçe aktarma seçeneklerini göster";
 "jumps.results.anotherTrial" = "Bu videoda başka bir deneme ölç";
 "jumps.results.newVideo" = "Yeni bir videoyla baştan başla";
+
+// S5 native help and privacy
+"settings.help" = "Yardım ve gizlilik";
+"settings.about" = "OpenJump hakkında";
+"settings.about.body" = "İçe aktarılan videolardan yerel, çevrimdışı ve kare kare sıçrama analizi.";
+"help.workflow.title" = "Ölçüm akışı";
+"help.workflow.body" = "Etkin sporcu ve protokol seçin. Fotoğraflar veya Dosyalar’dan gerçek zamanlı video aktarın. Olayları işaretleyin, zamanlamayı beyan edin, hesaplayın, inceleyin ve kaydı onaylayın. Kaydedilen ölçümler Geçmiş’te görünür.";
+"help.protocols.title" = "Desteklenen protokoller";
+"help.protocols.body" = "Olaylar işaretlenmesi gereken sırada gösterilir.";
+"help.marking.title" = "Tam kareler ve zamanlama";
+"help.accuracy.title" = "Sonucun sınırları";
+"help.accuracy.body" = "Sonuçlar işaretlenen video zaman damgalarından tahmin edilir. Olay seçimi ve değiştirilmiş zamanlama sonuçları saptırabilir. OpenJump klinik olarak doğrulanmamıştır.";
+"help.privacy.title" = "Cihazda gizlilik";
+"help.privacy.body" = "Analiz bu cihazda kalır. Hesap veya arka uç kullanılmaz. Yalnızca onaylı ölçümler ve olay zamanları kaydedilir; video ve URI’si Geçmiş’e kaydedilmez.";
+"help.storage.title" = "Verilerinizi koruma";
+"help.storage.body" = "Özgün videoları ayrı saklayın. Uygulamayı kaldırmak kayıtlı verileri silebilir. Kaldırmadan güncelleme verileri korumalıdır; güncellemeden sonra geçmişi kontrol edin.";
+"help.scope.title" = "Bu sürümde yer alanlar";
+"help.scope.body" = "İçe aktarılan SDR video ile beş zamansal sıçrama protokolü. Kamera kaydı, Body Tracking, yatay ölçüm ve gruplanmış deneme istatistikleri dahil değildir. Başka bir deneme bağımsız bir ölçüm oluşturur.";

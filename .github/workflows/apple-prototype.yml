@@ -144,7 +144,7 @@ jobs:
           while IFS= read -r png; do
             cp "$png" "$RUNNER_TEMP/apple-artifacts/"
             count=$((count + 1))
-            [ "$count" -lt 3 ] || break
+            [ "$count" -lt 8 ] || break
           done < <(find "$RUNNER_TEMP/exported-attachments" -type f -name '*.png')
           test "$count" -gt 0
           printf 'Verified XCTest screenshot attachment PNG(s): %s (no app binary/full xcresult uploaded).\n' "$count" >> "$RUNNER_TEMP/apple-artifacts/summary.txt"

@@ -225,3 +225,21 @@
 "jumps.import.show" = "Show import options";
 "jumps.results.anotherTrial" = "Measure another trial in this video";
 "jumps.results.newVideo" = "Start over with a new video";
+
+// S5 native help and privacy
+"settings.help" = "Help & privacy";
+"settings.about" = "About OpenJump";
+"settings.about.body" = "Native, offline, frame-by-frame jump analysis from imported video.";
+"help.workflow.title" = "Measurement workflow";
+"help.workflow.body" = "Select an active athlete and a protocol. Import a real-time video from Photos or Files. Mark the required events, declare timing, calculate, review and confirm saving. Saved measurements appear in History.";
+"help.protocols.title" = "Supported protocols";
+"help.protocols.body" = "Events are shown in the order they must be marked.";
+"help.marking.title" = "Exact frames & timing";
+"help.accuracy.title" = "Limits of the result";
+"help.accuracy.body" = "Results are estimates from marked video timestamps. Event selection and altered timing can bias them. OpenJump is not clinically validated.";
+"help.privacy.title" = "On-device privacy";
+"help.privacy.body" = "Analysis stays on this device. No account or backend is used. Only confirmed measurements and their event timestamps are saved; the video and its URI are not saved in History.";
+"help.storage.title" = "Keeping your data";
+"help.storage.body" = "Keep original videos separately. Uninstalling the app can delete its saved data. Updating without uninstalling should preserve data; check your history after updating.";
+"help.scope.title" = "Included in this build";
+"help.scope.body" = "Five temporal jump protocols using imported SDR video. Camera capture, Body Tracking, horizontal measurement and grouped trial statistics are not included. Another trial creates a separate measurement.";
