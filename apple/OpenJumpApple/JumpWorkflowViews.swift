@@ -788,7 +788,6 @@ struct JumpHomeView: View {
         return workflow.frameIndex < manifest.frames.count - 1 || workflow.isTransportPlaying
     }
 
-    @ViewBuilder
     private func TransportStatusLine(manifest: JumpVideoManifest, isDisplayed: Bool) -> some View {
         let key: String
         if !workflow.isViewerActive { key = "jumps.playback.suspended" }
@@ -799,7 +798,7 @@ struct JumpHomeView: View {
         else if isDisplayed { key = "jumps.playback.exact" }
         else if workflow.playbackReadiness == .unknown { key = "jumps.playback.preparing" }
         else { key = "jumps.playback.settling" }
-        Text(AppText.string(key, language: language))
+        return Text(AppText.string(key, language: language))
             .font(.caption).foregroundStyle(.secondary)
             .accessibilityAddTraits(.updatesFrequently)
             .accessibilityIdentifier("jumps.playback.status")

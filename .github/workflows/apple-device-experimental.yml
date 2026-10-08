@@ -2,9 +2,10 @@ name: Apple experimental device build
 
 # Experimental manual device candidate only. Standalone device-only route;
 # does NOT trigger normal CI and does NOT qualify native tests/physical runs.
-# Trigger revision (current iteration, build 2): runs only for pushes to
-# dev/apple touching this file with '[apple-device-experimental]' in the head
-# commit message; the normal prototype/simulator gates opt out of such pushes.
+# Trigger revision (phase 0, build 2): minimal SwiftUI compilation unblock;
+# runs only for pushes to dev/apple touching this file with
+# '[apple-device-experimental]' in the head commit message; the normal
+# prototype/simulator gates opt out of such pushes.
 'on':
   push:
     branches: [dev/apple]
