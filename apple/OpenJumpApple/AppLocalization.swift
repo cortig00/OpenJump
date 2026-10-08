@@ -56,7 +56,17 @@ func metricName(_ key: String, language: AppLanguage) -> String {
     return AppText.string(keys.contains(normalized) ? "metric.\(normalized)" : "metric.generic", language: language)
 }
 
-func formattedMetric(_ metric: SavedMetric, units: UnitProfile, locale: Locale) -> String {
+/// Typed value/unit parts for one saved metric. Pure extraction of the
+/// existing `formattedMetric` pipeline: same key uppercasing, same expected
+/// unit set/mismatch rule, same `MeasurementPresentation` conversions and
+/// same 0...3 locale precision. `combined` is the exact legacy text.
+struct FormattedMetricParts: Equatable, Sendable {
+    let valueString: String
+    let unitString: String
+    var combined: String { "\(valueString) \(unitString)" }
+}
+
+func formattedMetricParts(_ metric: SavedMetric, units: UnitProfile, locale: Locale) -> FormattedMetricParts {
     let key = metric.key.uppercased()
     var value = metric.value
     var unit = metric.unit
@@ -72,7 +82,10 @@ func formattedMetric(_ metric: SavedMetric, units: UnitProfile, locale: Locale) 
     ]
     // Unknown or mismatched source units are displayed unchanged, never reinterpreted.
     if let accepted = expected[key], !accepted.contains(metric.unit) {
-        return "\(value.formatted(.number.precision(.fractionLength(0...3)).locale(locale))) \(unit)"
+        return FormattedMetricParts(
+            valueString: value.formatted(.number.precision(.fractionLength(0...3)).locale(locale)),
+            unitString: unit
+        )
     }
     switch key {
     case "HEIGHT_CM", "JUMP_HEIGHT":
@@ -88,5 +101,12 @@ func formattedMetric(_ metric: SavedMetric, units: UnitProfile, locale: Locale) 
     case "ASYMMETRY_PERCENT", "RELATIVE_JUMP_HEIGHT_PERCENT", "RELATIVE_HORIZONTAL_DISTANCE_PERCENT": unit = "%"
     default: break
     }
-    return "\(value.formatted(.number.precision(.fractionLength(0...3)).locale(locale))) \(unit)"
+    return FormattedMetricParts(
+        valueString: value.formatted(.number.precision(.fractionLength(0...3)).locale(locale)),
+        unitString: unit
+    )
+}
+
+func formattedMetric(_ metric: SavedMetric, units: UnitProfile, locale: Locale) -> String {
+    formattedMetricParts(metric, units: units, locale: locale).combined
 }

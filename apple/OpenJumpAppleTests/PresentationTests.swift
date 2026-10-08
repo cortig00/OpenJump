@@ -258,4 +258,82 @@ final class PresentationTests: XCTestCase {
         XCTAssertNil(missingBuild.sourceRevision)
         XCTAssertNotEqual(missingBuild.version, "0.0.1")
     }
+
+    func testFormattedPartsCanonicalHeightMetric() throws {
+        let metric = try SavedMetric(key: "HEIGHT_CM", unit: "CENTIMETER", value: 30.64578125, ordinal: 0)
+        let snapshot = metric
+        let locale = Locale(identifier: "en_US")
+        let parts = formattedMetricParts(metric, units: .metric, locale: locale)
+        XCTAssertEqual(parts.valueString, "30.646")
+        XCTAssertEqual(parts.unitString, "cm")
+        XCTAssertEqual(parts.combined, "30.646 cm")
+        XCTAssertEqual(formattedMetric(metric, units: .metric, locale: locale), "30.646 cm")
+        XCTAssertEqual(metric, snapshot)
+    }
+
+    func testFormattedPartsImperialHeightInches() throws {
+        let metric = try SavedMetric(key: "HEIGHT_CM", unit: "CENTIMETER", value: 25.4, ordinal: 0)
+        let snapshot = metric
+        let locale = Locale(identifier: "en_US")
+        let parts = formattedMetricParts(metric, units: .unitedStates, locale: locale)
+        XCTAssertEqual(parts.valueString, "10")
+        XCTAssertEqual(parts.unitString, "in")
+        XCTAssertEqual(parts.combined, "10 in")
+        XCTAssertEqual(formattedMetric(metric, units: .unitedStates, locale: locale), "10 in")
+        XCTAssertEqual(metric, snapshot)
+    }
+
+    func testFormattedPartsTimingSecondsAndMillisDefault() throws {
+        let metric = try SavedMetric(key: "FLIGHT_TIME_MS", unit: "MILLISECOND", value: 1500, ordinal: 0)
+        let snapshot = metric
+        let locale = Locale(identifier: "en_US")
+        let secondsUnits = UnitProfile(shortLength: .cm, horizontalDistance: .meters, mass: .kilograms, speed: .metersPerSecond, timing: .seconds)
+        let seconds = formattedMetricParts(metric, units: secondsUnits, locale: locale)
+        XCTAssertEqual(seconds.valueString, "1.5")
+        XCTAssertEqual(seconds.unitString, "s")
+        XCTAssertEqual(seconds.combined, "1.5 s")
+        XCTAssertEqual(formattedMetric(metric, units: secondsUnits, locale: locale), "1.5 s")
+        let millis = formattedMetricParts(metric, units: .metric, locale: locale)
+        XCTAssertEqual(millis.valueString, "1,500")
+        XCTAssertEqual(millis.unitString, "ms")
+        XCTAssertEqual(millis.combined, "1,500 ms")
+        XCTAssertEqual(formattedMetric(metric, units: .metric, locale: locale), "1,500 ms")
+        XCTAssertEqual(metric, snapshot)
+    }
+
+    func testFormattedPartsSpeedFeetPerSecond() throws {
+        let metric = try SavedMetric(key: "TAKEOFF_VELOCITY_MPS", unit: "METER_PER_SECOND", value: 3.048, ordinal: 0)
+        let snapshot = metric
+        let locale = Locale(identifier: "en_US")
+        let parts = formattedMetricParts(metric, units: .unitedStates, locale: locale)
+        XCTAssertEqual(parts.valueString, "10")
+        XCTAssertEqual(parts.unitString, "ft/s")
+        XCTAssertEqual(parts.combined, "10 ft/s")
+        XCTAssertEqual(formattedMetric(metric, units: .unitedStates, locale: locale), "10 ft/s")
+        XCTAssertEqual(metric, snapshot)
+    }
+
+    func testFormattedPartsMismatchKeepsRawUnit() throws {
+        let metric = try SavedMetric(key: "HEIGHT_CM", unit: "METER", value: 12.5, ordinal: 0)
+        let snapshot = metric
+        let locale = Locale(identifier: "en_US")
+        let parts = formattedMetricParts(metric, units: .metric, locale: locale)
+        XCTAssertEqual(parts.valueString, "12.5")
+        XCTAssertEqual(parts.unitString, "METER")
+        XCTAssertEqual(parts.combined, "12.5 METER")
+        XCTAssertEqual(formattedMetric(metric, units: .metric, locale: locale), "12.5 METER")
+        XCTAssertEqual(metric, snapshot)
+    }
+
+    func testFormattedPartsUnknownKeyDecimalCommaPassthrough() throws {
+        let metric = try SavedMetric(key: "CUSTOM_X", unit: "CUSTOM_U", value: 30.646, ordinal: 0)
+        let snapshot = metric
+        let locale = Locale(identifier: "de_DE")
+        let parts = formattedMetricParts(metric, units: .metric, locale: locale)
+        XCTAssertEqual(parts.valueString, "30,646")
+        XCTAssertEqual(parts.unitString, "CUSTOM_U")
+        XCTAssertEqual(parts.combined, "30,646 CUSTOM_U")
+        XCTAssertEqual(formattedMetric(metric, units: .metric, locale: locale), "30,646 CUSTOM_U")
+        XCTAssertEqual(metric, snapshot)
+    }
 }

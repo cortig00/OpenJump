@@ -49,27 +49,101 @@ struct OpenJumpSection<Content: View>: View {
     }
 }
 
-/// Hero display for one saved metric. Uses the existing `metricName(_:)` and
-/// `formattedMetric(_:units:locale:)` only; no canonical conversion rewrite.
-/// Wraps with Dynamic Type; the unit is exposed as an accessible label.
+/// Hero display for one saved metric. Uses the typed
+/// `formattedMetricParts(_:units:locale:)` only; no canonical conversion
+/// rewrite. Value is dominant native SF largeTitle, unit is secondary
+/// title3, localized name is secondary below (value → unit → label).
+/// ViewThatFits keeps value+unit horizontal when it fits and stacks them
+/// when narrow or Dynamic Type needs room; no fixed height, truncation or
+/// shrink factor. The combined VoiceOver label is name + combined value/unit.
 struct OpenJumpMetricHero: View {
     let metric: SavedMetric
     let language: AppLanguage
     let units: UnitProfile
     let locale: Locale
     var body: some View {
+        let parts = formattedMetricParts(metric, units: units, locale: locale)
+        let name = metricName(metric.key, language: language)
         VStack(alignment: .leading, spacing: OpenJumpSpacing.xs) {
-            Text(metricName(metric.key, language: language))
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline, spacing: OpenJumpSpacing.sm) {
+                    Text(verbatim: parts.valueString)
+                        .font(.largeTitle.bold())
+                        .monospacedDigit()
+                    Text(verbatim: parts.unitString)
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(verbatim: parts.valueString)
+                        .font(.largeTitle.bold())
+                        .monospacedDigit()
+                    Text(verbatim: parts.unitString)
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+            }
+            Text(name)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .accessibilityAddTraits(.isHeader)
-            Text(formattedMetric(metric, units: units, locale: locale))
-                .font(.largeTitle.bold())
-                .monospacedDigit()
-                .minimumScaleFactor(0.6)
-                .lineLimit(2)
-                .accessibilityLabel("\(metricName(metric.key, language: language)), \(formattedMetric(metric, units: units, locale: locale))")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(name), \(parts.combined)")
+    }
+}
+
+/// Shared primary + secondary summary used by the Jumps result preview and
+/// the History detail. Primary comes only from the frozen
+/// `ProtocolPresentation.primaryMetric`; secondaries are the remaining stored
+/// metrics in input order (keyed by ordinal), rendered as native
+/// LabeledContent rows. No zero fallback, no discarded metric, no duplicated
+/// primary, no cards. Accessibility-large text stacks label/value so nothing
+/// clips.
+struct OpenJumpMetricSummary: View {
+    let metrics: [SavedMetric]
+    let protocolKey: SavedProtocol
+    let language: AppLanguage
+    let units: UnitProfile
+    let locale: Locale
+    let primaryAccessibilityID: String
+    var body: some View {
+        VStack(alignment: .leading, spacing: OpenJumpSpacing.sm) {
+            if let primary = ProtocolPresentation.primaryMetric(in: metrics, protocolKey: protocolKey) {
+                OpenJumpMetricHero(metric: primary, language: language, units: units, locale: locale)
+                    .accessibilityIdentifier(primaryAccessibilityID)
+                ForEach(metrics.filter { $0.ordinal != primary.ordinal }, id: \.ordinal) { metric in
+                    secondaryRow(for: metric)
+                }
+            }
+        }
+    }
+    @ViewBuilder
+    private func secondaryRow(for metric: SavedMetric) -> some View {
+        ViewThatFits(in: .horizontal) {
+            LabeledContent {
+                Text(formattedMetric(metric, units: units, locale: locale))
+                    .font(.body.weight(.semibold))
+                    .monospacedDigit()
+            } label: {
+                Text(metricName(metric.key, language: language))
+                    .foregroundStyle(.secondary)
+            }
+            .frame(minHeight: 44)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(metricName(metric.key, language: language))
+                    .foregroundStyle(.secondary)
+                Text(formattedMetric(metric, units: units, locale: locale))
+                    .font(.body.weight(.semibold))
+                    .monospacedDigit()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 4)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("\(metricName(metric.key, language: language)), \(formattedMetric(metric, units: units, locale: locale))")
+        }
     }
 }

@@ -3,6 +3,9 @@ import SwiftUI
 struct SettingsView: View {
     @ObservedObject var state: AppState
     private var language: AppLanguage { state.preferences.language }
+    private var buildIdentity: AppBuildIdentity {
+        AppBuildIdentity(infoDictionary: Bundle.main.infoDictionary)
+    }
     var body: some View {
         NavigationStack {
             Form {
@@ -61,6 +64,20 @@ struct SettingsView: View {
                     Text(verbatim: "OpenJump")
                         .font(.headline)
                         .accessibilityAddTraits(.isHeader)
+                    if let version = buildIdentity.version, let build = buildIdentity.build {
+                        LabeledContent(AppText.string("help.build.version", language: language)) {
+                            Text(verbatim: "\(version) (\(build))")
+                                .monospacedDigit()
+                                .textSelection(.enabled)
+                        }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityIdentifier("settings.build")
+                    } else {
+                        Text(AppText.string("help.build.unknown", language: language))
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .accessibilityIdentifier("settings.build")
+                    }
                     Text(AppText.string("settings.about.body", language: language))
                         .font(.footnote)
                         .foregroundStyle(.secondary)

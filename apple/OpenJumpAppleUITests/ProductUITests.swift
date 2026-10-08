@@ -108,7 +108,7 @@ final class ProductUITests: XCTestCase {
         openMeasurement(in: app)
         // Independent fixture height is 30.64578125 cm. The existing history
         // display contract uses up to three fractional digits: 30.646 cm.
-        let height = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "30.646")).firstMatch
+        let height = element("measurement.primaryMetric", in: app)
         reveal(height, in: app)
         XCTAssertTrue(height.waitForExistence(timeout: 10))
         XCTAssertTrue(height.label.contains("30.646 cm"), "Expected the independently rounded height with its canonical metric unit")

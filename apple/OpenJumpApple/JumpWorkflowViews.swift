@@ -685,7 +685,6 @@ struct JumpHomeView: View {
                     .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
             }
             TransportStatusLine(manifest: manifest, isDisplayed: isDisplayed)
-            eventReviewRail(manifest: manifest)
             Slider(value: Binding(
                 get: { Double(workflow.nativePreviewIndex ?? workflow.scrubRequestedIndex) },
                 // Discrete/accessibility changes outside the drag gesture take
@@ -718,6 +717,10 @@ struct JumpHomeView: View {
                     transportButtons(manifest: manifest)
                 }
             }
+            // Review events after the transport group: navigation together,
+            // then the read-only review rail. Single definition, same
+            // callbacks/guards/actions/IDs.
+            eventReviewRail(manifest: manifest)
             if workflow.isPlaybackFailed {
                 VStack(alignment: .leading, spacing: OpenJumpSpacing.xs) {
                     Text(AppText.string("jumps.playback.unavailable", language: language))
@@ -1005,24 +1008,20 @@ struct JumpHomeView: View {
     }
 
     private func resultPreview(_ metrics: [SavedMetric]) -> some View {
-        let primary = ProtocolPresentation.primaryMetric(in: metrics, protocolKey: workflow.setup.protocolKey)
-        let secondary = primary.map { hero in metrics.filter { $0.ordinal != hero.ordinal } } ?? metrics
+        // Directly on the parent analysis surface: no nested card-within-card.
+        // The duplicate timing warning is omitted here because the analysis
+        // tools panel already shows it; realtime/slow-motion disclosures stay
+        // in that panel and the Calculate gate is untouched.
         return VStack(alignment: .leading, spacing: OpenJumpSpacing.sm) {
             Text(AppText.string("jumps.results.title", language: language)).font(.title2.bold())
-            // Primary HERO first; supporting metrics stay clearly secondary.
-            if let primary {
-                OpenJumpMetricHero(metric: primary, language: language, units: state.preferences.units, locale: locale)
-                    .accessibilityIdentifier("jumps.result.primary")
-            }
-            ForEach(secondary, id: \.ordinal) { metric in
-                HStack(alignment: .firstTextBaseline) {
-                    Text(metricName(metric.key, language: language)).foregroundStyle(.secondary)
-                    Spacer(minLength: 8)
-                    Text(formattedMetric(metric, units: state.preferences.units, locale: locale))
-                        .font(.body.weight(.semibold)).monospacedDigit()
-                }
-                .frame(minHeight: 44)
-            }
+            OpenJumpMetricSummary(
+                metrics: metrics,
+                protocolKey: workflow.setup.protocolKey,
+                language: language,
+                units: state.preferences.units,
+                locale: locale,
+                primaryAccessibilityID: "jumps.result.primary"
+            )
             DisclosureGroup {
                 reviewContextCard
             } label: {
@@ -1030,9 +1029,7 @@ struct JumpHomeView: View {
                     .font(.footnote).foregroundStyle(.secondary)
                     .frame(minHeight: 44)
             }
-            Text(AppText.string("jumps.timing.warning", language: language)).font(.footnote).foregroundStyle(.secondary)
         }
-        .padding(14).background(.background, in: RoundedRectangle(cornerRadius: 12))
     }
 
     private var reviewContextCard: some View {

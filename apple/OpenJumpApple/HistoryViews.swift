@@ -233,10 +233,6 @@ private struct HistoryRow: View {
     /// height for CMJ/SJ/Abalakov/unilateral. Never an invented zero: nil when
     /// there is nothing stored.
     private var primary: SavedMetric? { ProtocolPresentation.primaryMetric(in: item.metrics, protocolKey: item.protocolKey) }
-    private var secondary: [SavedMetric] {
-        guard let primary else { return item.metrics }
-        return item.metrics.filter { $0.ordinal != primary.ordinal }
-    }
     private var ownerLine: Text {
         if let athlete {
             if athlete.archivedAt == nil { return Text(verbatim: athlete.name) }
@@ -269,12 +265,8 @@ private struct HistoryRow: View {
                     Text(verbatim: "\(metricName(primary.key, language: language)): \(formattedMetric(primary, units: units, locale: locale))")
                         .font(.subheadline.weight(.semibold))
                 }
-                // Restrained secondary metrics: one Text per metric so long
-                // values wrap with Dynamic Type instead of one clipped line.
-                ForEach(secondary, id: \.ordinal) { metric in
-                    Text(verbatim: "\(metricName(metric.key, language: language)): \(formattedMetric(metric, units: units, locale: locale))")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
+                // Compact row shows only the primary; every secondary stays
+                // reachable in the detail with the same formatter.
                 ownerLine.font(.caption).foregroundStyle(.secondary)
                 if let contextLine {
                     Text(verbatim: contextLine).font(.caption).foregroundStyle(.secondary)
@@ -302,22 +294,12 @@ private struct MeasurementDetailView: View {
     init(state: AppState, initial: SavedMeasurement) { self.state = state; self.initial = initial; _notes = State(initialValue: initial.notes ?? "") }
     private var language: AppLanguage { state.preferences.language }
     private var notesDirty: Bool { notes != (initial.notes ?? "") }
-    private var primary: SavedMetric? { ProtocolPresentation.primaryMetric(in: initial.metrics, protocolKey: initial.protocolKey) }
-    private var secondary: [SavedMetric] {
-        guard let primary else { return initial.metrics }
-        return initial.metrics.filter { $0.ordinal != primary.ordinal }
-    }
     var body: some View {
         NavigationStack {
             Form {
-                Section(AppText.string("history.details", language: language)) {
-                    LabeledContent(AppText.string("history.protocol", language: language), value: AppText.string(initial.protocolKey.titleKey, language: language))
-                    LabeledContent(AppText.string("history.session", language: language), value: initial.sessionKey)
-                    LabeledContent(AppText.string("history.date", language: language), value: initial.recordedAt.formatted(Date.FormatStyle(date: .long, time: .shortened).locale(state.preferences.effectiveLocale)))
-                    LabeledContent(AppText.string("history.athlete", language: language), value: initial.ownerID.flatMap { id in state.athletes.first { $0.id == id }?.name } ?? AppText.string("history.unassigned", language: language))
-                    if let side = initial.side { LabeledContent(AppText.string("history.side", language: language), value: side == "LEFT" ? AppText.string("history.left", language: language) : (side == "RIGHT" ? AppText.string("history.right", language: language) : side)) }
-                    if let drop = initial.dropHeightCm { LabeledContent(AppText.string("history.drop", language: language), value: "\(MeasurementPresentation.shortLength(drop, as: state.preferences.units.shortLength).formatted(.number.precision(.fractionLength(0...2)).locale(state.preferences.effectiveLocale))) \(state.preferences.units.shortLength.rawValue)") }
-                }
+                // Numeric result first, but still gated: the hero/summary only
+                // renders after the stored-graph read succeeds. Loading and
+                // corrupt-graph branches are unchanged and fail closed.
                 if loadingTemporalAnalysis {
                     // The principal result stays hidden until the stored graph
                     // read succeeds, so no unverified hero flashes before .task.
@@ -334,13 +316,14 @@ private struct MeasurementDetailView: View {
                     }
                 } else {
                     Section(AppText.string("history.metrics", language: language)) {
-                        if let primary {
-                            OpenJumpMetricHero(metric: primary, language: language, units: state.preferences.units, locale: state.preferences.effectiveLocale)
-                                .accessibilityIdentifier("measurement.primaryMetric")
-                        }
-                        ForEach(secondary, id: \.ordinal) { metric in
-                            LabeledContent(metricName(metric.key, language: language), value: formattedMetric(metric, units: state.preferences.units, locale: state.preferences.effectiveLocale))
-                        }
+                        OpenJumpMetricSummary(
+                            metrics: initial.metrics,
+                            protocolKey: initial.protocolKey,
+                            language: language,
+                            units: state.preferences.units,
+                            locale: state.preferences.effectiveLocale,
+                            primaryAccessibilityID: "measurement.primaryMetric"
+                        )
                         if temporalAnalysis == nil {
                             // Legacy success: no stored graph, honest absence.
                             Text(AppText.string("history.legacyNotice", language: language))
@@ -352,6 +335,14 @@ private struct MeasurementDetailView: View {
                     if let temporalAnalysis {
                         temporalAnalysisSection(temporalAnalysis)
                     }
+                }
+                Section(AppText.string("history.details", language: language)) {
+                    LabeledContent(AppText.string("history.protocol", language: language), value: AppText.string(initial.protocolKey.titleKey, language: language))
+                    LabeledContent(AppText.string("history.session", language: language), value: initial.sessionKey)
+                    LabeledContent(AppText.string("history.date", language: language), value: initial.recordedAt.formatted(Date.FormatStyle(date: .long, time: .shortened).locale(state.preferences.effectiveLocale)))
+                    LabeledContent(AppText.string("history.athlete", language: language), value: initial.ownerID.flatMap { id in state.athletes.first { $0.id == id }?.name } ?? AppText.string("history.unassigned", language: language))
+                    if let side = initial.side { LabeledContent(AppText.string("history.side", language: language), value: side == "LEFT" ? AppText.string("history.left", language: language) : (side == "RIGHT" ? AppText.string("history.right", language: language) : side)) }
+                    if let drop = initial.dropHeightCm { LabeledContent(AppText.string("history.drop", language: language), value: "\(MeasurementPresentation.shortLength(drop, as: state.preferences.units.shortLength).formatted(.number.precision(.fractionLength(0...2)).locale(state.preferences.effectiveLocale))) \(state.preferences.units.shortLength.rawValue)") }
                 }
                 Section(AppText.string("history.notes", language: language)) {
                     TextField(AppText.string("history.notesHint", language: language), text: $notes, axis: .vertical)
