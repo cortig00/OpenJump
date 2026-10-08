@@ -1,0 +1,8 @@
+Simulator readiness diagnostics: evidence only; original gate failure remains.
+UTC: 2026-10-08T13:17:06.167+00:00 -> 2026-10-08T13:17:12.524+00:00
+Selected: {"udid": "2F42DDC6-4DA1-47A3-873F-1AFC0ADA3245", "name": "OpenJump-ephemeral-7876a34f", "runtime": "com.apple.CoreSimulator.SimRuntime.iOS-26-0"}
+simctl_list_help: observed; exit=0; timeout=False; stdout_truncated=False; stderr_captured=750
+device: observed; exit=0; timeout=False; stdout_truncated=False; stderr_bytes_discarded=0
+runtime: observed; exit=0; timeout=False; stdout_truncated=False; stderr_bytes_discarded=0
+consumer_xcode: observed; exit=0; timeout=False; stdout_truncated=False; stderr_bytes_discarded=0
+service: unknown; exit=113; timeout=False; stdout_truncated=False; stderr_bytes_discarded=111

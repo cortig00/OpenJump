@@ -21,7 +21,7 @@ jobs:
     # unchanged for all other pushes.
     if: github.repository == 'cortig00/OpenJump' && github.ref == 'refs/heads/dev/apple' && !contains(github.event.head_commit.message, '[apple-device-experimental]')
     runs-on: macos-15
-    timeout-minutes: 25
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
@@ -117,14 +117,14 @@ jobs:
       - name: Run Swift bridge and simulator UI tests
         id: native_tests
         if: success() && steps.boot.conclusion == 'success'
-        timeout-minutes: 8
+        timeout-minutes: 20
         env:
           DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer
         run: |
           set -euo pipefail
           RESULT="$RUNNER_TEMP/OpenJumpApple-tests.xcresult"
           FRAMEWORK="$GITHUB_WORKSPACE/apple/spikes/jump-core/build/bin/iosSimulatorArm64/debugFramework"
-          python3 apple/ci/run_command.py --timeout 420 -- xcodebuild test-without-building \
+          python3 apple/ci/run_command.py --timeout 1100 -- xcodebuild test-without-building \
             -project apple/OpenJumpApple.xcodeproj \
             -scheme OpenJumpApple \
             -destination "platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}" \

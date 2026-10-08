@@ -1,0 +1,636 @@
+Refreshing run status every 20 seconds. Press Ctrl+C to quit.
+
+* dev/apple Apple prototype screenshot · 37782059728
+Triggered via push less than a minute ago
+
+JOBS
+* prototype (ID 113327351232)
+  ✓ Set up job
+  ✓ Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+  ✓ Validate local CI helper contracts
+  ✓ Initialize concise artifact summary
+  ✓ Verify supported host tools
+  * Run shared Kotlin math JVM tests
+  * Build Kotlin static framework with Kotlin/Xcode 16 pair
+  * Build Swift consumer and test bundles (compile only)
+  * Create owned ephemeral iPhone 17 Pro simulator (iOS 26.0)
+  * Boot owned ephemeral iPhone simulator
+  * Collect bounded read-only simulator readiness evidence
+  * Run Swift bridge and simulator UI tests
+  * Export verified XCTest screenshot attachments
+  * Delete owned ephemeral simulator (only job-created UUID)
+  * Record gate conclusions in job summary
+  * Upload bounded simulator readiness evidence only
+  * Upload prototype screenshot artifact
+  * Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+Refreshing run status every 20 seconds. Press Ctrl+C to quit.
+
+* dev/apple Apple prototype screenshot · 37782059728
+Triggered via push less than a minute ago
+
+JOBS
+* prototype (ID 113327351232)
+  ✓ Set up job
+  ✓ Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+  ✓ Validate local CI helper contracts
+  ✓ Initialize concise artifact summary
+  ✓ Verify supported host tools
+  * Run shared Kotlin math JVM tests
+  * Build Kotlin static framework with Kotlin/Xcode 16 pair
+  * Build Swift consumer and test bundles (compile only)
+  * Create owned ephemeral iPhone 17 Pro simulator (iOS 26.0)
+  * Boot owned ephemeral iPhone simulator
+  * Collect bounded read-only simulator readiness evidence
+  * Run Swift bridge and simulator UI tests
+  * Export verified XCTest screenshot attachments
+  * Delete owned ephemeral simulator (only job-created UUID)
+  * Record gate conclusions in job summary
+  * Upload bounded simulator readiness evidence only
+  * Upload prototype screenshot artifact
+  * Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+Refreshing run status every 20 seconds. Press Ctrl+C to quit.
+
+* dev/apple Apple prototype screenshot · 37782059728
+Triggered via push about 1 minute ago
+
+JOBS
+* prototype (ID 113327351232)
+  ✓ Set up job
+  ✓ Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+  ✓ Validate local CI helper contracts
+  ✓ Initialize concise artifact summary
+  ✓ Verify supported host tools
+  ✓ Run shared Kotlin math JVM tests
+  * Build Kotlin static framework with Kotlin/Xcode 16 pair
+  * Build Swift consumer and test bundles (compile only)
+  * Create owned ephemeral iPhone 17 Pro simulator (iOS 26.0)
+  * Boot owned ephemeral iPhone simulator
+  * Collect bounded read-only simulator readiness evidence
+  * Run Swift bridge and simulator UI tests
+  * Export verified XCTest screenshot attachments
+  * Delete owned ephemeral simulator (only job-created UUID)
+  * Record gate conclusions in job summary
+  * Upload bounded simulator readiness evidence only
+  * Upload prototype screenshot artifact
+  * Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+Refreshing run status every 20 seconds. Press Ctrl+C to quit.
+
+* dev/apple Apple prototype screenshot · 37782059728
+Triggered via push about 1 minute ago
+
+JOBS
+* prototype (ID 113327351232)
+  ✓ Set up job
+  ✓ Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+  ✓ Validate local CI helper contracts
+  ✓ Initialize concise artifact summary
+  ✓ Verify supported host tools
+  ✓ Run shared Kotlin math JVM tests
+  * Build Kotlin static framework with Kotlin/Xcode 16 pair
+  * Build Swift consumer and test bundles (compile only)
+  * Create owned ephemeral iPhone 17 Pro simulator (iOS 26.0)
+  * Boot owned ephemeral iPhone simulator
+  * Collect bounded read-only simulator readiness evidence
+  * Run Swift bridge and simulator UI tests
+  * Export verified XCTest screenshot attachments
+  * Delete owned ephemeral simulator (only job-created UUID)
+  * Record gate conclusions in job summary
+  * Upload bounded simulator readiness evidence only
+  * Upload prototype screenshot artifact
+  * Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+Refreshing run status every 20 seconds. Press Ctrl+C to quit.
+
+* dev/apple Apple prototype screenshot · 37782059728
+Triggered via push about 1 minute ago
+
+JOBS
+* prototype (ID 113327351232)
+  ✓ Set up job
+  ✓ Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+  ✓ Validate local CI helper contracts
+  ✓ Initialize concise artifact summary
+  ✓ Verify supported host tools
+  ✓ Run shared Kotlin math JVM tests
+  * Build Kotlin static framework with Kotlin/Xcode 16 pair
+  * Build Swift consumer and test bundles (compile only)
+  * Create owned ephemeral iPhone 17 Pro simulator (iOS 26.0)
+  * Boot owned ephemeral iPhone simulator
+  * Collect bounded read-only simulator readiness evidence
+  * Run Swift bridge and simulator UI tests
+  * Export verified XCTest screenshot attachments
+  * Delete owned ephemeral simulator (only job-created UUID)
+  * Record gate conclusions in job summary
+  * Upload bounded simulator readiness evidence only
+  * Upload prototype screenshot artifact
+  * Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+Refreshing run status every 20 seconds. Press Ctrl+C to quit.
+
+* dev/apple Apple prototype screenshot · 37782059728
+Triggered via push about 2 minutes ago
+
+JOBS
+* prototype (ID 113327351232)
+  ✓ Set up job
+  ✓ Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+  ✓ Validate local CI helper contracts
+  ✓ Initialize concise artifact summary
+  ✓ Verify supported host tools
+  ✓ Run shared Kotlin math JVM tests
+  * Build Kotlin static framework with Kotlin/Xcode 16 pair
+  * Build Swift consumer and test bundles (compile only)
+  * Create owned ephemeral iPhone 17 Pro simulator (iOS 26.0)
+  * Boot owned ephemeral iPhone simulator
+  * Collect bounded read-only simulator readiness evidence
+  * Run Swift bridge and simulator UI tests
+  * Export verified XCTest screenshot attachments
+  * Delete owned ephemeral simulator (only job-created UUID)
+  * Record gate conclusions in job summary
+  * Upload bounded simulator readiness evidence only
+  * Upload prototype screenshot artifact
+  * Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+Refreshing run status every 20 seconds. Press Ctrl+C to quit.
+
+* dev/apple Apple prototype screenshot · 37782059728
+Triggered via push about 2 minutes ago
+
+JOBS
+* prototype (ID 113327351232)
+  ✓ Set up job
+  ✓ Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+  ✓ Validate local CI helper contracts
+  ✓ Initialize concise artifact summary
+  ✓ Verify supported host tools
+  ✓ Run shared Kotlin math JVM tests
+  * Build Kotlin static framework with Kotlin/Xcode 16 pair
+  * Build Swift consumer and test bundles (compile only)
+  * Create owned ephemeral iPhone 17 Pro simulator (iOS 26.0)
+  * Boot owned ephemeral iPhone simulator
+  * Collect bounded read-only simulator readiness evidence
+  * Run Swift bridge and simulator UI tests
+  * Export verified XCTest screenshot attachments
+  * Delete owned ephemeral simulator (only job-created UUID)
+  * Record gate conclusions in job summary
+  * Upload bounded simulator readiness evidence only
+  * Upload prototype screenshot artifact
+  * Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+Refreshing run status every 20 seconds. Press Ctrl+C to quit.
+
+* dev/apple Apple prototype screenshot · 37782059728
+Triggered via push about 2 minutes ago
+
+JOBS
+* prototype (ID 113327351232)
+  ✓ Set up job
+  ✓ Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+  ✓ Validate local CI helper contracts
+  ✓ Initialize concise artifact summary
+  ✓ Verify supported host tools
+  ✓ Run shared Kotlin math JVM tests
+  ✓ Build Kotlin static framework with Kotlin/Xcode 16 pair
+  * Build Swift consumer and test bundles (compile only)
+  * Create owned ephemeral iPhone 17 Pro simulator (iOS 26.0)
+  * Boot owned ephemeral iPhone simulator
+  * Collect bounded read-only simulator readiness evidence
+  * Run Swift bridge and simulator UI tests
+  * Export verified XCTest screenshot attachments
+  * Delete owned ephemeral simulator (only job-created UUID)
+  * Record gate conclusions in job summary
+  * Upload bounded simulator readiness evidence only
+  * Upload prototype screenshot artifact
+  * Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+Refreshing run status every 20 seconds. Press Ctrl+C to quit.
+
+* dev/apple Apple prototype screenshot · 37782059728
+Triggered via push about 3 minutes ago
+
+JOBS
+* prototype (ID 113327351232)
+  ✓ Set up job
+  ✓ Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+  ✓ Validate local CI helper contracts
+  ✓ Initialize concise artifact summary
+  ✓ Verify supported host tools
+  ✓ Run shared Kotlin math JVM tests
+  ✓ Build Kotlin static framework with Kotlin/Xcode 16 pair
+  * Build Swift consumer and test bundles (compile only)
+  * Create owned ephemeral iPhone 17 Pro simulator (iOS 26.0)
+  * Boot owned ephemeral iPhone simulator
+  * Collect bounded read-only simulator readiness evidence
+  * Run Swift bridge and simulator UI tests
+  * Export verified XCTest screenshot attachments
+  * Delete owned ephemeral simulator (only job-created UUID)
+  * Record gate conclusions in job summary
+  * Upload bounded simulator readiness evidence only
+  * Upload prototype screenshot artifact
+  * Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+Refreshing run status every 20 seconds. Press Ctrl+C to quit.
+
+* dev/apple Apple prototype screenshot · 37782059728
+Triggered via push about 3 minutes ago
+
+JOBS
+* prototype (ID 113327351232)
+  ✓ Set up job
+  ✓ Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+  ✓ Validate local CI helper contracts
+  ✓ Initialize concise artifact summary
+  ✓ Verify supported host tools
+  ✓ Run shared Kotlin math JVM tests
+  ✓ Build Kotlin static framework with Kotlin/Xcode 16 pair
+  * Build Swift consumer and test bundles (compile only)
+  * Create owned ephemeral iPhone 17 Pro simulator (iOS 26.0)
+  * Boot owned ephemeral iPhone simulator
+  * Collect bounded read-only simulator readiness evidence
+  * Run Swift bridge and simulator UI tests
+  * Export verified XCTest screenshot attachments
+  * Delete owned ephemeral simulator (only job-created UUID)
+  * Record gate conclusions in job summary
+  * Upload bounded simulator readiness evidence only
+  * Upload prototype screenshot artifact
+  * Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+Refreshing run status every 20 seconds. Press Ctrl+C to quit.
+
+* dev/apple Apple prototype screenshot · 37782059728
+Triggered via push about 4 minutes ago
+
+JOBS
+* prototype (ID 113327351232)
+  ✓ Set up job
+  ✓ Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+  ✓ Validate local CI helper contracts
+  ✓ Initialize concise artifact summary
+  ✓ Verify supported host tools
+  ✓ Run shared Kotlin math JVM tests
+  ✓ Build Kotlin static framework with Kotlin/Xcode 16 pair
+  * Build Swift consumer and test bundles (compile only)
+  * Create owned ephemeral iPhone 17 Pro simulator (iOS 26.0)
+  * Boot owned ephemeral iPhone simulator
+  * Collect bounded read-only simulator readiness evidence
+  * Run Swift bridge and simulator UI tests
+  * Export verified XCTest screenshot attachments
+  * Delete owned ephemeral simulator (only job-created UUID)
+  * Record gate conclusions in job summary
+  * Upload bounded simulator readiness evidence only
+  * Upload prototype screenshot artifact
+  * Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+Refreshing run status every 20 seconds. Press Ctrl+C to quit.
+
+* dev/apple Apple prototype screenshot · 37782059728
+Triggered via push about 4 minutes ago
+
+JOBS
+* prototype (ID 113327351232)
+  ✓ Set up job
+  ✓ Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+  ✓ Validate local CI helper contracts
+  ✓ Initialize concise artifact summary
+  ✓ Verify supported host tools
+  ✓ Run shared Kotlin math JVM tests
+  ✓ Build Kotlin static framework with Kotlin/Xcode 16 pair
+  ✓ Build Swift consumer and test bundles (compile only)
+  ✓ Create owned ephemeral iPhone 17 Pro simulator (iOS 26.0)
+  * Boot owned ephemeral iPhone simulator
+  * Collect bounded read-only simulator readiness evidence
+  * Run Swift bridge and simulator UI tests
+  * Export verified XCTest screenshot attachments
+  * Delete owned ephemeral simulator (only job-created UUID)
+  * Record gate conclusions in job summary
+  * Upload bounded simulator readiness evidence only
+  * Upload prototype screenshot artifact
+  * Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+Refreshing run status every 20 seconds. Press Ctrl+C to quit.
+
+* dev/apple Apple prototype screenshot · 37782059728
+Triggered via push about 4 minutes ago
+
+JOBS
+* prototype (ID 113327351232)
+  ✓ Set up job
+  ✓ Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+  ✓ Validate local CI helper contracts
+  ✓ Initialize concise artifact summary
+  ✓ Verify supported host tools
+  ✓ Run shared Kotlin math JVM tests
+  ✓ Build Kotlin static framework with Kotlin/Xcode 16 pair
+  ✓ Build Swift consumer and test bundles (compile only)
+  ✓ Create owned ephemeral iPhone 17 Pro simulator (iOS 26.0)
+  * Boot owned ephemeral iPhone simulator
+  * Collect bounded read-only simulator readiness evidence
+  * Run Swift bridge and simulator UI tests
+  * Export verified XCTest screenshot attachments
+  * Delete owned ephemeral simulator (only job-created UUID)
+  * Record gate conclusions in job summary
+  * Upload bounded simulator readiness evidence only
+  * Upload prototype screenshot artifact
+  * Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+Refreshing run status every 20 seconds. Press Ctrl+C to quit.
+
+* dev/apple Apple prototype screenshot · 37782059728
+Triggered via push about 5 minutes ago
+
+JOBS
+* prototype (ID 113327351232)
+  ✓ Set up job
+  ✓ Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+  ✓ Validate local CI helper contracts
+  ✓ Initialize concise artifact summary
+  ✓ Verify supported host tools
+  ✓ Run shared Kotlin math JVM tests
+  ✓ Build Kotlin static framework with Kotlin/Xcode 16 pair
+  ✓ Build Swift consumer and test bundles (compile only)
+  ✓ Create owned ephemeral iPhone 17 Pro simulator (iOS 26.0)
+  * Boot owned ephemeral iPhone simulator
+  * Collect bounded read-only simulator readiness evidence
+  * Run Swift bridge and simulator UI tests
+  * Export verified XCTest screenshot attachments
+  * Delete owned ephemeral simulator (only job-created UUID)
+  * Record gate conclusions in job summary
+  * Upload bounded simulator readiness evidence only
+  * Upload prototype screenshot artifact
+  * Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+Refreshing run status every 20 seconds. Press Ctrl+C to quit.
+
+* dev/apple Apple prototype screenshot · 37782059728
+Triggered via push about 5 minutes ago
+
+JOBS
+* prototype (ID 113327351232)
+  ✓ Set up job
+  ✓ Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+  ✓ Validate local CI helper contracts
+  ✓ Initialize concise artifact summary
+  ✓ Verify supported host tools
+  ✓ Run shared Kotlin math JVM tests
+  ✓ Build Kotlin static framework with Kotlin/Xcode 16 pair
+  ✓ Build Swift consumer and test bundles (compile only)
+  ✓ Create owned ephemeral iPhone 17 Pro simulator (iOS 26.0)
+  * Boot owned ephemeral iPhone simulator
+  * Collect bounded read-only simulator readiness evidence
+  * Run Swift bridge and simulator UI tests
+  * Export verified XCTest screenshot attachments
+  * Delete owned ephemeral simulator (only job-created UUID)
+  * Record gate conclusions in job summary
+  * Upload bounded simulator readiness evidence only
+  * Upload prototype screenshot artifact
+  * Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+Refreshing run status every 20 seconds. Press Ctrl+C to quit.
+
+* dev/apple Apple prototype screenshot · 37782059728
+Triggered via push about 5 minutes ago
+
+JOBS
+* prototype (ID 113327351232)
+  ✓ Set up job
+  ✓ Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+  ✓ Validate local CI helper contracts
+  ✓ Initialize concise artifact summary
+  ✓ Verify supported host tools
+  ✓ Run shared Kotlin math JVM tests
+  ✓ Build Kotlin static framework with Kotlin/Xcode 16 pair
+  ✓ Build Swift consumer and test bundles (compile only)
+  ✓ Create owned ephemeral iPhone 17 Pro simulator (iOS 26.0)
+  * Boot owned ephemeral iPhone simulator
+  * Collect bounded read-only simulator readiness evidence
+  * Run Swift bridge and simulator UI tests
+  * Export verified XCTest screenshot attachments
+  * Delete owned ephemeral simulator (only job-created UUID)
+  * Record gate conclusions in job summary
+  * Upload bounded simulator readiness evidence only
+  * Upload prototype screenshot artifact
+  * Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+Refreshing run status every 20 seconds. Press Ctrl+C to quit.
+
+* dev/apple Apple prototype screenshot · 37782059728
+Triggered via push about 6 minutes ago
+
+JOBS
+* prototype (ID 113327351232)
+  ✓ Set up job
+  ✓ Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+  ✓ Validate local CI helper contracts
+  ✓ Initialize concise artifact summary
+  ✓ Verify supported host tools
+  ✓ Run shared Kotlin math JVM tests
+  ✓ Build Kotlin static framework with Kotlin/Xcode 16 pair
+  ✓ Build Swift consumer and test bundles (compile only)
+  ✓ Create owned ephemeral iPhone 17 Pro simulator (iOS 26.0)
+  * Boot owned ephemeral iPhone simulator
+  * Collect bounded read-only simulator readiness evidence
+  * Run Swift bridge and simulator UI tests
+  * Export verified XCTest screenshot attachments
+  * Delete owned ephemeral simulator (only job-created UUID)
+  * Record gate conclusions in job summary
+  * Upload bounded simulator readiness evidence only
+  * Upload prototype screenshot artifact
+  * Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+Refreshing run status every 20 seconds. Press Ctrl+C to quit.
+
+* dev/apple Apple prototype screenshot · 37782059728
+Triggered via push about 6 minutes ago
+
+JOBS
+* prototype (ID 113327351232)
+  ✓ Set up job
+  ✓ Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+  ✓ Validate local CI helper contracts
+  ✓ Initialize concise artifact summary
+  ✓ Verify supported host tools
+  ✓ Run shared Kotlin math JVM tests
+  ✓ Build Kotlin static framework with Kotlin/Xcode 16 pair
+  ✓ Build Swift consumer and test bundles (compile only)
+  ✓ Create owned ephemeral iPhone 17 Pro simulator (iOS 26.0)
+  * Boot owned ephemeral iPhone simulator
+  * Collect bounded read-only simulator readiness evidence
+  * Run Swift bridge and simulator UI tests
+  * Export verified XCTest screenshot attachments
+  * Delete owned ephemeral simulator (only job-created UUID)
+  * Record gate conclusions in job summary
+  * Upload bounded simulator readiness evidence only
+  * Upload prototype screenshot artifact
+  * Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+Refreshing run status every 20 seconds. Press Ctrl+C to quit.
+
+* dev/apple Apple prototype screenshot · 37782059728
+Triggered via push about 6 minutes ago
+
+JOBS
+* prototype (ID 113327351232)
+  ✓ Set up job
+  ✓ Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+  ✓ Validate local CI helper contracts
+  ✓ Initialize concise artifact summary
+  ✓ Verify supported host tools
+  ✓ Run shared Kotlin math JVM tests
+  ✓ Build Kotlin static framework with Kotlin/Xcode 16 pair
+  ✓ Build Swift consumer and test bundles (compile only)
+  ✓ Create owned ephemeral iPhone 17 Pro simulator (iOS 26.0)
+  * Boot owned ephemeral iPhone simulator
+  * Collect bounded read-only simulator readiness evidence
+  * Run Swift bridge and simulator UI tests
+  * Export verified XCTest screenshot attachments
+  * Delete owned ephemeral simulator (only job-created UUID)
+  * Record gate conclusions in job summary
+  * Upload bounded simulator readiness evidence only
+  * Upload prototype screenshot artifact
+  * Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+Refreshing run status every 20 seconds. Press Ctrl+C to quit.
+
+* dev/apple Apple prototype screenshot · 37782059728
+Triggered via push about 7 minutes ago
+
+JOBS
+* prototype (ID 113327351232)
+  ✓ Set up job
+  ✓ Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+  ✓ Validate local CI helper contracts
+  ✓ Initialize concise artifact summary
+  ✓ Verify supported host tools
+  ✓ Run shared Kotlin math JVM tests
+  ✓ Build Kotlin static framework with Kotlin/Xcode 16 pair
+  ✓ Build Swift consumer and test bundles (compile only)
+  ✓ Create owned ephemeral iPhone 17 Pro simulator (iOS 26.0)
+  * Boot owned ephemeral iPhone simulator
+  * Collect bounded read-only simulator readiness evidence
+  * Run Swift bridge and simulator UI tests
+  * Export verified XCTest screenshot attachments
+  * Delete owned ephemeral simulator (only job-created UUID)
+  * Record gate conclusions in job summary
+  * Upload bounded simulator readiness evidence only
+  * Upload prototype screenshot artifact
+  * Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+Refreshing run status every 20 seconds. Press Ctrl+C to quit.
+
+* dev/apple Apple prototype screenshot · 37782059728
+Triggered via push about 7 minutes ago
+
+JOBS
+* prototype (ID 113327351232)
+  ✓ Set up job
+  ✓ Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+  ✓ Validate local CI helper contracts
+  ✓ Initialize concise artifact summary
+  ✓ Verify supported host tools
+  ✓ Run shared Kotlin math JVM tests
+  ✓ Build Kotlin static framework with Kotlin/Xcode 16 pair
+  ✓ Build Swift consumer and test bundles (compile only)
+  ✓ Create owned ephemeral iPhone 17 Pro simulator (iOS 26.0)
+  * Boot owned ephemeral iPhone simulator
+  * Collect bounded read-only simulator readiness evidence
+  * Run Swift bridge and simulator UI tests
+  * Export verified XCTest screenshot attachments
+  * Delete owned ephemeral simulator (only job-created UUID)
+  * Record gate conclusions in job summary
+  * Upload bounded simulator readiness evidence only
+  * Upload prototype screenshot artifact
+  * Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+Refreshing run status every 20 seconds. Press Ctrl+C to quit.
+
+* dev/apple Apple prototype screenshot · 37782059728
+Triggered via push about 7 minutes ago
+
+JOBS
+* prototype (ID 113327351232)
+  ✓ Set up job
+  ✓ Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+  ✓ Validate local CI helper contracts
+  ✓ Initialize concise artifact summary
+  ✓ Verify supported host tools
+  ✓ Run shared Kotlin math JVM tests
+  ✓ Build Kotlin static framework with Kotlin/Xcode 16 pair
+  ✓ Build Swift consumer and test bundles (compile only)
+  ✓ Create owned ephemeral iPhone 17 Pro simulator (iOS 26.0)
+  * Boot owned ephemeral iPhone simulator
+  * Collect bounded read-only simulator readiness evidence
+  * Run Swift bridge and simulator UI tests
+  * Export verified XCTest screenshot attachments
+  * Delete owned ephemeral simulator (only job-created UUID)
+  * Record gate conclusions in job summary
+  * Upload bounded simulator readiness evidence only
+  * Upload prototype screenshot artifact
+  * Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+Refreshing run status every 20 seconds. Press Ctrl+C to quit.
+
+* dev/apple Apple prototype screenshot · 37782059728
+Triggered via push about 8 minutes ago
+
+JOBS
+* prototype (ID 113327351232)
+  ✓ Set up job
+  ✓ Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+  ✓ Validate local CI helper contracts
+  ✓ Initialize concise artifact summary
+  ✓ Verify supported host tools
+  ✓ Run shared Kotlin math JVM tests
+  ✓ Build Kotlin static framework with Kotlin/Xcode 16 pair
+  ✓ Build Swift consumer and test bundles (compile only)
+  ✓ Create owned ephemeral iPhone 17 Pro simulator (iOS 26.0)
+  * Boot owned ephemeral iPhone simulator
+  * Collect bounded read-only simulator readiness evidence
+  * Run Swift bridge and simulator UI tests
+  * Export verified XCTest screenshot attachments
+  * Delete owned ephemeral simulator (only job-created UUID)
+  * Record gate conclusions in job summary
+  * Upload bounded simulator readiness evidence only
+  * Upload prototype screenshot artifact
+  * Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+Refreshing run status every 20 seconds. Press Ctrl+C to quit.
+
+* dev/apple Apple prototype screenshot · 37782059728
+Triggered via push about 8 minutes ago
+
+JOBS
+* prototype (ID 113327351232)
+  ✓ Set up job
+  ✓ Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+  ✓ Validate local CI helper contracts
+  ✓ Initialize concise artifact summary
+  ✓ Verify supported host tools
+  ✓ Run shared Kotlin math JVM tests
+  ✓ Build Kotlin static framework with Kotlin/Xcode 16 pair
+  ✓ Build Swift consumer and test bundles (compile only)
+  ✓ Create owned ephemeral iPhone 17 Pro simulator (iOS 26.0)
+  X Boot owned ephemeral iPhone simulator
+  ✓ Collect bounded read-only simulator readiness evidence
+  - Run Swift bridge and simulator UI tests
+  - Export verified XCTest screenshot attachments
+  ✓ Delete owned ephemeral simulator (only job-created UUID)
+  ✓ Record gate conclusions in job summary
+  * Upload bounded simulator readiness evidence only
+  * Upload prototype screenshot artifact
+  * Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+X dev/apple Apple prototype screenshot · 37782059728
+Triggered via push about 9 minutes ago
+
+JOBS
+X prototype in 8m36s (ID 113327351232)
+  ✓ Set up job
+  ✓ Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+  ✓ Validate local CI helper contracts
+  ✓ Initialize concise artifact summary
+  ✓ Verify supported host tools
+  ✓ Run shared Kotlin math JVM tests
+  ✓ Build Kotlin static framework with Kotlin/Xcode 16 pair
+  ✓ Build Swift consumer and test bundles (compile only)
+  ✓ Create owned ephemeral iPhone 17 Pro simulator (iOS 26.0)
+  X Boot owned ephemeral iPhone simulator
+  ✓ Collect bounded read-only simulator readiness evidence
+  - Run Swift bridge and simulator UI tests
+  - Export verified XCTest screenshot attachments
+  ✓ Delete owned ephemeral simulator (only job-created UUID)
+  ✓ Record gate conclusions in job summary
+  ✓ Upload bounded simulator readiness evidence only
+  - Upload prototype screenshot artifact
+  ✓ Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+  ✓ Complete job
+- device in 0s (ID 113331172080)
+
+ANNOTATIONS
+! Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+prototype: .github#2
+
+X Process completed with exit code 124.
+prototype: .github#16
+
+- Due to capacity constraints, jobs targeting macOS arm64 runners may experience longer queue times.
+prototype: .github#1
+
