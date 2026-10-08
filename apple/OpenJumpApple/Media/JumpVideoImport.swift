@@ -165,9 +165,35 @@ enum JumpVideoImporter {
         try await importFile(url, source: .photos)
     }
 
-    private static func importFile(_ url: URL, source: JumpVideoSource) async throws -> ImportedJumpVideo {
+    /// Transactional captured-file Use (C2a): exclusive fresh borrower handoff.
+    /// Truthful `.camera` source via the SAME coordinated copy machinery
+    /// (Caches OpenJumpImportedVideos/<uuid>/video.<safe-ext>, backup-excluded,
+    /// 1MiB chunks, 512MiB limit, 60s deadline, single-flight admission, test
+    /// hooks). The incoming borrower ownership transfers to the detached copy
+    /// worker: the worker retains it strongly until real worker-exit/ownership
+    /// transfer. Cancellation/deadline awaiter resume does NOT release the pin
+    /// and never deletes the capture raw under a blocked worker. The caller
+    /// must NOT explicitly release the same handle after handoff (preview
+    /// owns a DIFFERENT fresh borrower). An externally released handle fails
+    /// closed without adopting an unowned URL. No second copy pipeline.
+    static func importCapturedFile(_ borrower: JumpVideoCaptureBorrower) async throws -> ImportedJumpVideo {
+        guard let sourceURL = borrower.fileURL else { throw JumpVideoImportError.invalidFile }
+        guard sourceURL.isFileURL else { throw JumpVideoImportError.unsupportedURL }
+        try Task.checkCancellation()
+        return try await importFile(sourceURL, source: .camera, retainedBorrower: borrower)
+    }
+
+    private static func importFile(_ url: URL, source: JumpVideoSource, retainedBorrower: JumpVideoCaptureBorrower? = nil) async throws -> ImportedJumpVideo {
         guard url.isFileURL else { throw JumpVideoImportError.unsupportedURL }
         try Task.checkCancellation()
+        // No outer defer releasing retainedBorrower: the SAME instance is
+        // shared with the detached worker below. An explicit outer release
+        // would clear the pin while the worker still reads. The worker holds
+        // it until real exit; no-worker paths (pre-cancel/invalid/admission
+        // refused/deadline-before-launch) simply drop this param without leak.
+        if let retained = retainedBorrower, retained.fileURL == nil {
+            throw JumpVideoImportError.invalidFile
+        }
 
         let control = CoordinatedCopyControl()
         do {
@@ -176,12 +202,23 @@ enum JumpVideoImporter {
                     complete(.failure(JumpVideoImportError.unableToCopy))
                     return
                 }
-                Task.detached(priority: .userInitiated) {
+                Task.detached(priority: .userInitiated) { [retainedBorrower] in
                     defer {
                         control.releaseAdmission()
                         Self.workerExitForTesting?()
+                        // retainedBorrower (when non-nil) stays alive until HERE:
+                        // real native exit/ownership-transfer, not merely until
+                        // cancel-continuation/deadline resume.
+                        _ = retainedBorrower
                     }
                     do {
+                        // Fail closed if the transferred handle was externally released
+                        // before the worker read it; never adopt an unowned URL.
+                        if let retained = retainedBorrower {
+                            guard let liveURL = retained.fileURL, liveURL == url else {
+                                throw JumpVideoImportError.invalidFile
+                            }
+                        }
                         let imported = try Self.copyToOwnedContainer(from: url, source: source, control: control)
                         try control.checkCancellation()
                         control.publish(.success(imported)) { complete(.success(())) }

@@ -91,4 +91,24 @@ enum HistoryFilters {
         }
         return HistoryDateBounds(from: from, before: before)
     }
+
+    /// View-only recoverability predicate: whether the empty history list is
+    /// a filtered-zero (with a Clear-filters recovery) rather than no data.
+    ///
+    /// Pure, no store/query change. `query` is the RAW view query: whitespace
+    /// counts as removable because the store maps `query.isEmpty ? nil : query`
+    /// byte-for-byte, so `" "` still issues a search. Never trim or normalize
+    /// here. A fixed profile owner never counts as removable; any selected
+    /// owner is ignored while `fixedOwnerID` is present.
+    static func hasRemovableFilters(protocolKey: SavedProtocol?,
+                                    selectedOwnerID: UUID?,
+                                    fixedOwnerID: UUID?,
+                                    period: HistoryPeriodPreset,
+                                    query: String) -> Bool {
+        if protocolKey != nil { return true }
+        if fixedOwnerID == nil && selectedOwnerID != nil { return true }
+        if period != .allTime { return true }
+        if !query.isEmpty { return true }
+        return false
+    }
 }

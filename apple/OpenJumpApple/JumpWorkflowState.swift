@@ -419,6 +419,7 @@ final class JumpWorkflowState: ObservableObject {
         case setup(Setup, UnitProfile, Locale)
         case file(URL, UnitProfile, Locale)
         case photos(PhotosPickerItem, UnitProfile, Locale)
+        case captured(JumpVideoCaptureBorrower, UnitProfile, Locale)
         case discard
     }
 
@@ -427,6 +428,11 @@ final class JumpWorkflowState: ObservableObject {
     private var importTask: Task<Void, Never>?
     private var frameTask: Task<Void, Never>?
     private var calculationTask: Task<Void, Never>?
+    // C2a transactional captured-file Use: own request epoch/task separates old
+    // source/frame/calculation epochs DURING staging. Old epochs stay intact
+    // until SUCCESS commit; snapshot guards invalidate stale commits.
+    private var capturedRequestGeneration = 0
+    private var capturedImportTask: Task<Void, Never>?
     private var sourceGeneration = 0
     private var frameGeneration = 0
     private var calculationGeneration = 0
@@ -442,6 +448,7 @@ final class JumpWorkflowState: ObservableObject {
         switch video?.source {
         case .some(.photos): return "jumps.source.PHOTOS"
         case .some(.files): return "jumps.source.FILES"
+        case .some(.camera): return "jumps.source.CAMERA"
         case nil: return nil
         }
     }
@@ -474,6 +481,15 @@ final class JumpWorkflowState: ObservableObject {
     }
     func canCalculate(for app: AppState) -> Bool {
         guard canCalculate, let ownerID = setup.ownerID else { return false }
+        return app.athletes.contains { $0.id == ownerID && $0.archivedAt == nil }
+    }
+    /// Read-only Prepare → Obtain gate: active-owner setup parameters are
+    /// valid and no import/index/save/calculation is in flight. Reuses the
+    /// existing private `parsedSetupIsValid` plus the same active-roster
+    /// owner check as `canCalculate(for:)`; never mutates workflow state.
+    func canContinuePreparation(for app: AppState) -> Bool {
+        guard savedMeasurement == nil, !isBusy, !isCalculating, parsedSetupIsValid,
+              let ownerID = setup.ownerID else { return false }
         return app.athletes.contains { $0.id == ownerID && $0.archivedAt == nil }
     }
     var hasUnsavedMarks: Bool {
@@ -522,11 +538,37 @@ final class JumpWorkflowState: ObservableObject {
     }
 
     private func applySetup(_ next: Setup, app: AppState) {
+        // C2a: applied setup supersedes any pending camera staging. Cancel the
+        // camera worker without explicit borrower release (drains via last-deinit
+        // after real exit) and bump its epoch so a stale completion can never
+        // commit. Clear camera-owned busy only when no Files/Photos import owns it.
+        invalidateCapturedStagingForSupersedingChange(clearCameraOwnedBusy: true)
         pausePlaybackBackend()
         setup = next
         capturedUnits = app.preferences.units
         capturedLocale = app.preferences.effectiveLocale
         restartDraft()
+    }
+
+    /// C2a helper: superseding Files/Photos/discard/setup changes invalidate
+    /// pending camera staging separately. Cancels the camera worker, bumps its
+    /// epoch, drops only an unconsumed deferred captured handle (no worker yet).
+    /// Never explicitly releases a worker-owned borrower and never disposes a
+    /// staged candidate here; both drain via last-deinit after real worker exit.
+    /// Busy flags are cleared only when asked AND no Files/Photos import owns
+    /// them, so a stale camera exit can never clobber a newer operation.
+    private func invalidateCapturedStagingForSupersedingChange(clearCameraOwnedBusy: Bool) {
+        capturedRequestGeneration += 1
+        capturedImportTask?.cancel()
+        capturedImportTask = nil
+        if case .captured = deferredAction {
+            deferredAction = nil
+            showDiscardConfirmation = false
+        }
+        if clearCameraOwnedBusy, importTask == nil {
+            isImporting = false
+            isIndexing = false
+        }
     }
 
     func preferenceContextChanged(app: AppState) {
@@ -544,6 +586,7 @@ final class JumpWorkflowState: ObservableObject {
             deferredAction = .setup(next, units, locale)
             showDiscardConfirmation = true
         } else {
+            invalidateCapturedStagingForSupersedingChange(clearCameraOwnedBusy: true)
             setup = next
             capturedUnits = units; capturedLocale = locale
             restartDraft()
@@ -593,11 +636,14 @@ final class JumpWorkflowState: ObservableObject {
         switch action {
         case .setup(let next, let units, let locale):
             // Setup changes are accepted only after marks from the prior context are discarded.
+            // C2a: confirmed setup supersedes any pending camera staging.
+            invalidateCapturedStagingForSupersedingChange(clearCameraOwnedBusy: true)
             setup = next
             capturedUnits = units; capturedLocale = locale
             restartDraft()
         case .file(let url, let units, let locale): beginImport(.file(url, units, locale))
         case .photos(let item, let units, let locale): beginImport(.photos(item, units, locale))
+        case .captured(let borrower, let units, let locale): beginCapturedImport(borrower, units: units, locale: locale)
         case .discard, nil: discardAnalysis()
         }
     }
@@ -608,8 +654,174 @@ final class JumpWorkflowState: ObservableObject {
         showDiscardConfirmation = false
     }
 
+    func requestCapturedFile(borrower: JumpVideoCaptureBorrower, app: AppState) {
+        // C2a real entry for transactional captured-video Use (future C2b calls
+        // this with a fresh borrower from the recorded lease; preview owns a
+        // DIFFERENT borrower). Dirty replacement requires explicit confirmation
+        // BEFORE any copy/index starts; confirmation authorizes replacement only
+        // on SUCCESS, never early old-analysis erase. Block while saving, saved,
+        // or another import/index/calculation is in flight to avoid competing tasks.
+        guard !isSaving, savedMeasurement == nil else { return }
+        guard !isImporting, !isIndexing, !isCalculating else { return }
+        guard capturedImportTask == nil else { return }
+        guard borrower.fileURL != nil else {
+            errorKey = "jumps.error.video"
+            return
+        }
+        if hasUnsavedMarks {
+            deferredAction = .captured(borrower, app.preferences.units, app.preferences.effectiveLocale)
+            showDiscardConfirmation = true
+            return
+        }
+        beginCapturedImport(borrower, units: app.preferences.units, locale: app.preferences.effectiveLocale)
+    }
+
+    /// C2a explicit camera-staging cancel for future C2b. Preserves old analysis,
+    /// never discards unrelated Files/Photos/setup deferred, never touches an
+    /// unrelated Files/Photos import task. Drops only an unconsumed deferred
+    /// captured handle; never explicitly releases a worker-owned active handle
+    /// (it drains via last-deinit after real worker exit). Never disposes a
+    /// staged candidate here.
+    func cancelCapturedImport() {
+        guard !isSaving else { return }
+        if case .captured = deferredAction {
+            deferredAction = nil
+            showDiscardConfirmation = false
+        }
+        if capturedImportTask != nil {
+            capturedRequestGeneration += 1
+            capturedImportTask?.cancel()
+            capturedImportTask = nil
+            if importTask == nil {
+                isImporting = false
+                isIndexing = false
+            }
+        }
+    }
+
+    private func beginCapturedImport(_ borrower: JumpVideoCaptureBorrower, units: UnitProfile, locale: Locale) {
+        guard !isSaving, savedMeasurement == nil, !isImporting, !isIndexing, !isCalculating else { return }
+        guard capturedImportTask == nil else { return }
+        guard borrower.fileURL != nil else {
+            errorKey = "jumps.error.video"
+            return
+        }
+        capturedRequestGeneration += 1
+        let request = capturedRequestGeneration
+        let snapVideoID = video?.id
+        let snapSourceGen = sourceGeneration
+        let snapSetup = setup
+        let snapSession = sessionKey
+        let snapCalcGen = calculationGeneration
+        let snapEvents = events
+        let snapNotes = notes
+        let snapRealtime = realtimeDeclared
+        let requestedUnits = units
+        let requestedLocale = locale
+        // Busy reports copy/index; old source stays attached (no teardown,
+        // no dispose, no draft clear) until SUCCESS commit.
+        isImporting = true
+        isIndexing = false
+        capturedImportTask = Task { [weak self] in
+            guard let self else { return }
+            // Staged candidate owned by this task only. NEVER explicit dispose
+            // while the index worker may still read it: dispose deletes the
+            // directory despite strong readers. Abandon by dropping refs;
+            // last-deinit removes the own copy after worker/manifest drains.
+            do {
+                let candidate = try await JumpVideoImporter.importCapturedFile(borrower)
+                guard !Task.isCancelled, request == self.capturedRequestGeneration else { return }
+                guard snapVideoID == self.video?.id,
+                      snapSourceGen == self.sourceGeneration,
+                      snapSetup == self.setup,
+                      snapSession == self.sessionKey,
+                      snapCalcGen == self.calculationGeneration,
+                      snapEvents == self.events,
+                      snapNotes == self.notes,
+                      snapRealtime == self.realtimeDeclared,
+                      self.savedMeasurement == nil,
+                      !self.isSaving else { return }
+                self.isImporting = false
+                self.isIndexing = true
+                let indexed = try await self.videoService.inspect(candidate)
+                guard !Task.isCancelled, request == self.capturedRequestGeneration else { return }
+                guard snapVideoID == self.video?.id,
+                      snapSourceGen == self.sourceGeneration,
+                      snapSetup == self.setup,
+                      snapSession == self.sessionKey,
+                      snapCalcGen == self.calculationGeneration,
+                      snapEvents == self.events,
+                      snapNotes == self.notes,
+                      snapRealtime == self.realtimeDeclared,
+                      self.savedMeasurement == nil,
+                      !self.isSaving,
+                      self.importTask == nil else { return }
+                guard candidate.source == .camera,
+                      indexed.sourceID == candidate.id,
+                      (2...250_000).contains(indexed.frames.count) else {
+                    throw TemporalJumpError.invalidSetup
+                }
+                // SUCCESS-ONLY commit, no await between validation and commit.
+                // Detach old player/observers FIRST, then invalidate old epochs,
+                // retire old owned copy by dropping refs (no forced dispose under
+                // live readers), adopt requested prefs, assign new camera source.
+                self.teardownPlaybackForSourceChange()
+                self.frameTask?.cancel(); self.frameTask = nil
+                self.calculationTask?.cancel(); self.calculationTask = nil
+                self.sourceGeneration += 1
+                self.frameGeneration += 1
+                self.calculationGeneration += 1
+                self.adoptPreferences(units: requestedUnits, locale: requestedLocale)
+                self.video = candidate
+                self.manifest = indexed
+                self.events = []
+                self.metrics = nil
+                self.calculatedDraft = nil
+                self.notes = ""
+                self.realtimeDeclared = false
+                self.presentedFrame = nil
+                self.frameIndex = 0
+                self.scrubRequestedIndex = 0
+                self.selectedEvent = TemporalJumpDraft.requiredEvents(for: self.setup.protocolKey).first
+                self.sessionKey = UUID().uuidString
+                self.errorKey = nil
+                self.isImporting = false
+                self.isIndexing = false
+                self.isFrameLoading = false
+                self.isCalculating = false
+                self.capturedImportTask = nil
+                if self.isViewerActive {
+                    self.ensurePlaybackAttached()
+                    self.requestFrameInternal(0)
+                }
+            } catch is CancellationError {
+                guard request == self.capturedRequestGeneration, self.importTask == nil else { return }
+                self.isImporting = false
+                self.isIndexing = false
+                self.capturedImportTask = nil
+            } catch {
+                guard request == self.capturedRequestGeneration, self.importTask == nil else { return }
+                self.isImporting = false
+                self.isIndexing = false
+                self.capturedImportTask = nil
+                self.errorKey = "jumps.error.video"
+            }
+        }
+    }
+
     private func beginImport(_ action: DeferredAction) {
         guard !isSaving else { return }
+        // C2a: superseding Files/Photos import invalidates pending camera staging.
+        // Cancel camera worker (drains via last-deinit, no explicit release/dispose)
+        // and bump its epoch so stale camera can never commit. Leave busy flags
+        // for this new import to own; stale camera exit must not clear them.
+        capturedRequestGeneration += 1
+        capturedImportTask?.cancel()
+        capturedImportTask = nil
+        if case .captured = deferredAction {
+            deferredAction = nil
+            showDiscardConfirmation = false
+        }
         teardownPlaybackForSourceChange()
         switch action {
         case .file(_, let units, let locale), .photos(_, let units, let locale):
@@ -670,6 +882,15 @@ final class JumpWorkflowState: ObservableObject {
 
     private func discardAnalysis() {
         guard !isSaving else { return }
+        // C2a: direct discard supersedes pending camera staging (same epoch/cancel
+        // rules as beginImport; this discard owns busy clearing below).
+        capturedRequestGeneration += 1
+        capturedImportTask?.cancel()
+        capturedImportTask = nil
+        if case .captured = deferredAction {
+            deferredAction = nil
+            showDiscardConfirmation = false
+        }
         teardownPlaybackForSourceChange()
         sourceGeneration += 1; frameGeneration += 1; calculationGeneration += 1
         importTask?.cancel(); frameTask?.cancel(); calculationTask?.cancel()

@@ -118,7 +118,7 @@ public actor SQLiteStore {
     }
 
     private func exportAdmissionCounts(_ limits: AppleExportLimits) throws -> [Int] {
-        guard try Self.scalarInt(connection, "PRAGMA user_version") == 3 else { throw AppleDataExportError.invalidSnapshot }
+        guard try Self.scalarInt(connection, "PRAGMA user_version") == Self.schemaVersion else { throw AppleDataExportError.invalidSnapshot }
         let queries = [
             ("SELECT COUNT(*) FROM athletes", limits.profiles),
             ("SELECT COUNT(*) FROM assessments", limits.measurements),
@@ -258,7 +258,7 @@ public actor SQLiteStore {
 
     private var db: OpaquePointer?
     public let databaseURL: URL
-    private static let schemaVersion = 3
+    private static let schemaVersion = 4
 
     public init(databaseURL: URL? = nil) throws {
         let url: URL
@@ -291,11 +291,16 @@ public actor SQLiteStore {
             if version == 0 {
                 try Self.migrate(handle)
                 try Self.migrateTemporalSchema(handle)
+                try Self.migrateCameraSource(handle)
             } else if version == 1 {
                 try Self.migrateAvatarKey(handle)
                 try Self.migrateTemporalSchema(handle)
+                try Self.migrateCameraSource(handle)
             } else if version == 2 {
                 try Self.migrateTemporalSchema(handle)
+                try Self.migrateCameraSource(handle)
+            } else if version == 3 {
+                try Self.migrateCameraSource(handle)
             }
         } catch { sqlite3_close(handle); db = nil; throw error }
     }
@@ -365,6 +370,44 @@ public actor SQLiteStore {
                 );
                 PRAGMA user_version = 3;
                 """)
+            try execute(db, "COMMIT")
+        } catch { try? execute(db, "ROLLBACK"); throw error }
+    }
+
+    /// Narrow 3→4 preservation migration: admit truthful CAMERA provenance.
+    /// Rebuilds ONLY assessment_analysis to widen the source_kind CHECK to
+    /// PHOTOS,FILES,CAMERA. All six explicit columns, every existing
+    /// constraint, all rows/raw values/IDs, sibling tables, indexes, session
+    /// uniqueness, owners, notes and avatar/archive fields are preserved.
+    /// Foreign keys stay ON throughout; unknown or corrupt schemas fail
+    /// closed with a full ROLLBACK, never a repair, reset or rescue copy.
+    private static func migrateCameraSource(_ db: OpaquePointer) throws {
+        try execute(db, "BEGIN IMMEDIATE")
+        do {
+            try execute(db, """
+                CREATE TABLE assessment_analysis_new (
+                  assessment_id TEXT PRIMARY KEY NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,
+                  source_kind TEXT NOT NULL CHECK(source_kind IN ('PHOTOS','FILES','CAMERA')),
+                  source_frame_count INTEGER NOT NULL CHECK(source_frame_count BETWEEN 2 AND 250000),
+                  source_origin_us INTEGER NOT NULL CHECK(source_origin_us >= 0),
+                  temporal_state TEXT NOT NULL CHECK(temporal_state IN ('UNKNOWN','REALTIME_DECLARED')),
+                  analysis_version INTEGER NOT NULL CHECK(analysis_version = 1)
+                );
+                INSERT INTO assessment_analysis_new(assessment_id,source_kind,source_frame_count,source_origin_us,temporal_state,analysis_version) SELECT assessment_id,source_kind,source_frame_count,source_origin_us,temporal_state,analysis_version FROM assessment_analysis;
+                DROP TABLE assessment_analysis;
+                ALTER TABLE assessment_analysis_new RENAME TO assessment_analysis;
+                """)
+            var violations: OpaquePointer?
+            guard sqlite3_prepare_v2(db, "PRAGMA foreign_key_check", -1, &violations, nil) == SQLITE_OK, let violations else {
+                throw StoreError.sqlite(String(cString: sqlite3_errmsg(db)))
+            }
+            defer { sqlite3_finalize(violations) }
+            switch sqlite3_step(violations) {
+            case SQLITE_DONE: break
+            case SQLITE_ROW: throw StoreError.sqlite("foreign key violation during camera source migration")
+            default: throw StoreError.sqlite(String(cString: sqlite3_errmsg(db)))
+            }
+            try execute(db, "PRAGMA user_version = 4;")
             try execute(db, "COMMIT")
         } catch { try? execute(db, "ROLLBACK"); throw error }
     }

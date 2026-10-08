@@ -336,4 +336,268 @@ final class PresentationTests: XCTestCase {
         XCTAssertEqual(formattedMetric(metric, units: .metric, locale: locale), "30,646 CUSTOM_U")
         XCTAssertEqual(metric, snapshot)
     }
+
+    func testFlowRoutesCoverAllFourStagesWithoutDuplication() {
+        XCTAssertEqual(JumpFlowRoute.allCases.count, 4)
+        XCTAssertEqual(Set(JumpFlowRoute.allCases).count, 4)
+        XCTAssertEqual(JumpFlowRoute.allCases, [.prepare, .obtainVideo, .analyse, .result])
+    }
+
+    func testFlowBackPopsValuesInReversePushOrder() {
+        var path = JumpWorkflowPresentation.path(to: .result)
+        XCTAssertEqual(path, [.prepare, .obtainVideo, .analyse, .result])
+        path.removeLast()
+        XCTAssertEqual(path.last, .analyse)
+        path.removeLast()
+        XCTAssertEqual(path.last, .obtainVideo)
+        path.removeLast()
+        XCTAssertEqual(path.last, .prepare)
+        path.removeLast()
+        XCTAssertTrue(path.isEmpty)
+        XCTAssertEqual(JumpWorkflowPresentation.path(to: .prepare), [.prepare])
+        XCTAssertEqual(JumpWorkflowPresentation.path(to: .obtainVideo), [.prepare, .obtainVideo])
+        XCTAssertEqual(JumpWorkflowPresentation.path(to: .analyse), [.prepare, .obtainVideo, .analyse])
+    }
+
+    func testFlowResumeRoutingRespectsStateWithoutInventingResults() {
+        XCTAssertEqual(
+            JumpWorkflowPresentation.resumeRoute(hasResult: true, hasManifest: true, hasVideoOrImportActivity: true),
+            .result
+        )
+        XCTAssertEqual(
+            JumpWorkflowPresentation.resumeRoute(hasResult: false, hasManifest: true, hasVideoOrImportActivity: true),
+            .analyse
+        )
+        XCTAssertEqual(
+            JumpWorkflowPresentation.resumeRoute(hasResult: false, hasManifest: false, hasVideoOrImportActivity: true),
+            .obtainVideo
+        )
+        XCTAssertEqual(
+            JumpWorkflowPresentation.resumeRoute(hasResult: false, hasManifest: false, hasVideoOrImportActivity: false),
+            .prepare
+        )
+        // A failed calculation leaves no result behind: indexed work stays
+        // on Analyse and notes without a clip stay on Prepare.
+        XCTAssertNotEqual(
+            JumpWorkflowPresentation.resumeRoute(hasResult: false, hasManifest: true, hasVideoOrImportActivity: false),
+            .result
+        )
+        XCTAssertNotEqual(
+            JumpWorkflowPresentation.resumeRoute(hasResult: false, hasManifest: false, hasVideoOrImportActivity: false),
+            .result
+        )
+    }
+
+    func testFlowAutoAdvanceRequiresVisibleActiveExpectedStageAndContent() {
+        // Hidden, inactive, wrong-stage, and missing-content all fail closed
+        // for both Obtain → Analyse and Analyse → Result. Only the visible,
+        // active, expected-stage, content-available combination succeeds, so
+        // a hidden tab is never yanked forward and surfaces explicit
+        // Continue/Resume/Review instead.
+        XCTAssertFalse(JumpWorkflowPresentation.shouldAutoAdvanceToAnalyse(isVisible: false, isActiveScene: true, visibleRoute: .obtainVideo, manifestAvailable: true))
+        XCTAssertFalse(JumpWorkflowPresentation.shouldAutoAdvanceToAnalyse(isVisible: true, isActiveScene: false, visibleRoute: .obtainVideo, manifestAvailable: true))
+        XCTAssertFalse(JumpWorkflowPresentation.shouldAutoAdvanceToAnalyse(isVisible: true, isActiveScene: true, visibleRoute: .prepare, manifestAvailable: true))
+        XCTAssertFalse(JumpWorkflowPresentation.shouldAutoAdvanceToAnalyse(isVisible: true, isActiveScene: true, visibleRoute: .analyse, manifestAvailable: true))
+        XCTAssertFalse(JumpWorkflowPresentation.shouldAutoAdvanceToAnalyse(isVisible: true, isActiveScene: true, visibleRoute: nil, manifestAvailable: true))
+        XCTAssertFalse(JumpWorkflowPresentation.shouldAutoAdvanceToAnalyse(isVisible: true, isActiveScene: true, visibleRoute: .obtainVideo, manifestAvailable: false))
+        XCTAssertFalse(JumpWorkflowPresentation.shouldAutoAdvanceToAnalyse(isVisible: false, isActiveScene: false, visibleRoute: .obtainVideo, manifestAvailable: true))
+        XCTAssertTrue(JumpWorkflowPresentation.shouldAutoAdvanceToAnalyse(isVisible: true, isActiveScene: true, visibleRoute: .obtainVideo, manifestAvailable: true))
+        XCTAssertFalse(JumpWorkflowPresentation.shouldAutoAdvanceToResult(isVisible: false, isActiveScene: true, visibleRoute: .analyse, resultAvailable: true))
+        XCTAssertFalse(JumpWorkflowPresentation.shouldAutoAdvanceToResult(isVisible: true, isActiveScene: false, visibleRoute: .analyse, resultAvailable: true))
+        XCTAssertFalse(JumpWorkflowPresentation.shouldAutoAdvanceToResult(isVisible: true, isActiveScene: true, visibleRoute: .obtainVideo, resultAvailable: true))
+        XCTAssertFalse(JumpWorkflowPresentation.shouldAutoAdvanceToResult(isVisible: true, isActiveScene: true, visibleRoute: .result, resultAvailable: true))
+        XCTAssertFalse(JumpWorkflowPresentation.shouldAutoAdvanceToResult(isVisible: true, isActiveScene: true, visibleRoute: nil, resultAvailable: true))
+        XCTAssertFalse(JumpWorkflowPresentation.shouldAutoAdvanceToResult(isVisible: true, isActiveScene: true, visibleRoute: .analyse, resultAvailable: false))
+        XCTAssertFalse(JumpWorkflowPresentation.shouldAutoAdvanceToResult(isVisible: false, isActiveScene: false, visibleRoute: .analyse, resultAvailable: true))
+        XCTAssertTrue(JumpWorkflowPresentation.shouldAutoAdvanceToResult(isVisible: true, isActiveScene: true, visibleRoute: .analyse, resultAvailable: true))
+    }
+
+    func testFlowViewerActivatesOnlyWhenVisibleActiveAnalyse() {
+        // Truth table: only actually-appeared + scene-active + Analyse
+        // attaches playback. Every hidden, inactive, wrong-stage, or root
+        // combination pauses without discarding artifacts.
+        XCTAssertTrue(JumpWorkflowPresentation.shouldActivateViewer(isVisible: true, isActiveScene: true, visibleRoute: .analyse))
+        XCTAssertFalse(JumpWorkflowPresentation.shouldActivateViewer(isVisible: false, isActiveScene: true, visibleRoute: .analyse))
+        XCTAssertFalse(JumpWorkflowPresentation.shouldActivateViewer(isVisible: true, isActiveScene: false, visibleRoute: .analyse))
+        XCTAssertFalse(JumpWorkflowPresentation.shouldActivateViewer(isVisible: false, isActiveScene: false, visibleRoute: .analyse))
+        XCTAssertFalse(JumpWorkflowPresentation.shouldActivateViewer(isVisible: true, isActiveScene: true, visibleRoute: .obtainVideo))
+        XCTAssertFalse(JumpWorkflowPresentation.shouldActivateViewer(isVisible: true, isActiveScene: true, visibleRoute: .prepare))
+        XCTAssertFalse(JumpWorkflowPresentation.shouldActivateViewer(isVisible: true, isActiveScene: true, visibleRoute: .result))
+        XCTAssertFalse(JumpWorkflowPresentation.shouldActivateViewer(isVisible: true, isActiveScene: true, visibleRoute: nil))
+        XCTAssertFalse(JumpWorkflowPresentation.shouldActivateViewer(isVisible: false, isActiveScene: true, visibleRoute: .obtainVideo))
+        XCTAssertFalse(JumpWorkflowPresentation.shouldActivateViewer(isVisible: false, isActiveScene: false, visibleRoute: nil))
+    }
+
+    func testFlowConfirmedCatalogProtocolRoutesToPrepareRegardlessOfClip() {
+        // Unit seam for the View confirm decision: accepted matching routes
+        // to Prepare without consulting clip emptiness (retained video stays).
+        // Rejected or mismatched protocols yield nil so the caller trims.
+        XCTAssertEqual(JumpWorkflowPresentation.routeForConfirmedCatalogProtocol(pending: .cmj, confirmed: .cmj), .prepare)
+        XCTAssertEqual(JumpWorkflowPresentation.routeForConfirmedCatalogProtocol(pending: .sj, confirmed: .sj), .prepare)
+        XCTAssertNil(JumpWorkflowPresentation.routeForConfirmedCatalogProtocol(pending: .cmj, confirmed: .sj))
+        XCTAssertNil(JumpWorkflowPresentation.routeForConfirmedCatalogProtocol(pending: .sj, confirmed: .cmj))
+        XCTAssertNil(JumpWorkflowPresentation.routeForConfirmedCatalogProtocol(pending: nil, confirmed: .cmj))
+        XCTAssertNil(JumpWorkflowPresentation.routeForConfirmedCatalogProtocol(pending: .cmj, confirmed: nil))
+        XCTAssertNil(JumpWorkflowPresentation.routeForConfirmedCatalogProtocol(pending: nil, confirmed: nil))
+    }
+
+    // MARK: - C2b camera entry + controls (pure gates, authored-only 0 RUN)
+    //
+    // Host behavior (AVCaptureVideoPreviewLayer render, facade/State wiring,
+    // borrower lifetimes, XCUITest/device) is UNTESTED 0RUN here by contract:
+    // these four tests pin only the pure eligibility + control matrix the
+    // camera section renders from. Native compile/XCTest/device validation is
+    // a future separate permission.
+
+    func testCameraEligibilityRequiresVisibleActiveObtainRouteWithoutAutoStart() {
+        // Hidden, inactive, wrong-stage, and backgrounded combinations all
+        // fail closed: the preview host and the facade lifecycle never
+        // activate implicitly. Only actually-appeared + scene-active +
+        // Obtain video is eligible, mirroring the viewer gate shape.
+        XCTAssertTrue(JumpWorkflowPresentation.isCameraEligible(isVisible: true, isActiveScene: true, visibleRoute: .obtainVideo))
+        XCTAssertFalse(JumpWorkflowPresentation.isCameraEligible(isVisible: false, isActiveScene: true, visibleRoute: .obtainVideo))
+        XCTAssertFalse(JumpWorkflowPresentation.isCameraEligible(isVisible: true, isActiveScene: false, visibleRoute: .obtainVideo))
+        XCTAssertFalse(JumpWorkflowPresentation.isCameraEligible(isVisible: false, isActiveScene: false, visibleRoute: .obtainVideo))
+        XCTAssertFalse(JumpWorkflowPresentation.isCameraEligible(isVisible: true, isActiveScene: true, visibleRoute: .prepare))
+        XCTAssertFalse(JumpWorkflowPresentation.isCameraEligible(isVisible: true, isActiveScene: true, visibleRoute: .analyse))
+        XCTAssertFalse(JumpWorkflowPresentation.isCameraEligible(isVisible: true, isActiveScene: true, visibleRoute: .result))
+        XCTAssertFalse(JumpWorkflowPresentation.isCameraEligible(isVisible: true, isActiveScene: true, visibleRoute: nil))
+        XCTAssertFalse(JumpWorkflowPresentation.isCameraEligible(isVisible: false, isActiveScene: true, visibleRoute: .analyse))
+        XCTAssertFalse(JumpWorkflowPresentation.isCameraEligible(isVisible: false, isActiveScene: false, visibleRoute: nil))
+        // Eligibility never auto-starts: an eligible-but-idle camera offers
+        // only an explicit Record tap (prepare-then-start-if-ready), and a
+        // hidden reappear that lands back on idle offers the same manual
+        // Record — never a parked stop, never a Use, never recording state.
+        let idle = JumpWorkflowPresentation.cameraControls(for: .idle)
+        XCTAssertTrue(idle.showsRecord)
+        XCTAssertFalse(idle.showsStop)
+        XCTAssertFalse(idle.stopEnabled)
+        XCTAssertFalse(idle.canUse)
+        XCTAssertFalse(idle.canRepeat)
+    }
+
+    func testCameraPhaseControlMatrixMirrorsCapturePolicy() {
+        // Ready offers Record; starting/recording offer an enabled Stop and
+        // never Use; finalizing shows a DISABLED Stop with wait text and
+        // never Use/Repeat; recorded offers review + Use + Repeat + Cancel;
+        // denied/unavailable offer Retry + Cancel; failed adds Repeat.
+        // Every row must agree with the authoritative capture policy.
+        let phases: [JumpVideoCapturePhase] = [.idle, .requestingPermission, .preparing, .ready, .starting, .recording, .finalizing, .recorded, .denied, .unavailable, .failed]
+        for phase in phases {
+            let controls = JumpWorkflowPresentation.cameraControls(for: phase)
+            XCTAssertEqual(controls.showsRecord, phase == .idle || phase == .ready, "record row for \(phase)")
+            XCTAssertEqual(controls.showsStop, phase == .starting || phase == .recording || phase == .finalizing, "stop row for \(phase)")
+            XCTAssertEqual(controls.stopEnabled, JumpVideoCapturePolicy.canStopRecording(phase: phase), "stop gate for \(phase)")
+            XCTAssertEqual(controls.canUse, JumpVideoCapturePolicy.canUseRecorded(phase: phase), "use gate for \(phase)")
+            XCTAssertEqual(controls.canRepeat, JumpVideoCapturePolicy.canBeginNewRecording(phase: phase), "repeat gate for \(phase)")
+            XCTAssertEqual(controls.showsReview, phase == .recorded, "review row for \(phase)")
+        }
+        let starting = JumpWorkflowPresentation.cameraControls(for: .starting)
+        XCTAssertTrue(starting.stopEnabled)
+        XCTAssertFalse(starting.canUse)
+        let recording = JumpWorkflowPresentation.cameraControls(for: .recording)
+        XCTAssertTrue(recording.stopEnabled)
+        XCTAssertFalse(recording.canUse)
+        let finalizing = JumpWorkflowPresentation.cameraControls(for: .finalizing)
+        XCTAssertTrue(finalizing.showsStop)
+        XCTAssertFalse(finalizing.stopEnabled)
+        XCTAssertFalse(finalizing.canUse)
+        XCTAssertFalse(finalizing.canRepeat)
+        let recorded = JumpWorkflowPresentation.cameraControls(for: .recorded)
+        XCTAssertTrue(recorded.canUse)
+        XCTAssertTrue(recorded.canRepeat)
+        XCTAssertTrue(recorded.showsCancel)
+        XCTAssertTrue(recorded.showsReview)
+        XCTAssertFalse(recorded.showsLivePreview)
+        for phase in [JumpVideoCapturePhase.denied, .unavailable, .failed] as [JumpVideoCapturePhase] {
+            let controls = JumpWorkflowPresentation.cameraControls(for: phase)
+            XCTAssertTrue(controls.showsRetry, "retry row for \(phase)")
+            XCTAssertTrue(controls.showsCancel, "cancel row for \(phase)")
+            XCTAssertFalse(controls.canUse, "never use from \(phase)")
+        }
+        XCTAssertFalse(JumpWorkflowPresentation.cameraControls(for: .denied).canRepeat)
+        XCTAssertFalse(JumpWorkflowPresentation.cameraControls(for: .unavailable).canRepeat)
+        XCTAssertTrue(JumpWorkflowPresentation.cameraControls(for: .failed).canRepeat)
+    }
+
+    func testCameraUseRequiresFreshRecordedBorrowerAndErrorsNeverDiscardAnalysis() {
+        // Use is gated to the finalized recorded phase at BOTH the policy
+        // and the matrix level, so a Use tap can never run from finalizing
+        // (writer not finalized) even if a stale borrower reference existed.
+        // Host borrower behavior (fresh handle per Use, preview borrower
+        // torn down before release, no handed-handle release, no dispose) is
+        // enforced at the call sites and is UNTESTED 0RUN here by contract.
+        for phase in [JumpVideoCapturePhase.idle, .requestingPermission, .preparing, .ready, .starting, .recording, .finalizing, .recorded, .denied, .unavailable, .failed] as [JumpVideoCapturePhase] {
+            XCTAssertEqual(JumpVideoCapturePolicy.canUseRecorded(phase: phase), phase == .recorded, "policy use gate for \(phase)")
+            XCTAssertEqual(JumpWorkflowPresentation.cameraControls(for: phase).canUse, phase == .recorded, "matrix use gate for \(phase)")
+        }
+        XCTAssertFalse(JumpWorkflowPresentation.cameraControls(for: .finalizing).canUse)
+        XCTAssertFalse(JumpWorkflowPresentation.cameraControls(for: .finalizing).canRepeat)
+        // Camera error paths expose no analysis-destructive action: Retry
+        // only re-prepares and Cancel only parks the camera attempt (the old
+        // analysis survives per the C2a SUCCESS-only commit guarantee).
+        // Cancel must never clear an already-parked suspend/dispose intent.
+        XCTAssertFalse(JumpVideoCapturePolicy.cancelClearsSuspendDuringFinalizing())
+        for phase in [JumpVideoCapturePhase.denied, .unavailable, .failed] as [JumpVideoCapturePhase] {
+            let controls = JumpWorkflowPresentation.cameraControls(for: phase)
+            XCTAssertTrue(controls.showsRetry)
+            XCTAssertTrue(controls.showsCancel)
+            XCTAssertFalse(controls.canUse)
+            XCTAssertFalse(controls.showsRecord)
+            XCTAssertFalse(controls.showsStop)
+            XCTAssertFalse(controls.showsReview)
+        }
+        // The pure layer holds no shared borrower slot: repeated evaluations
+        // are stateless and deterministic, so one Use can never implicitly
+        // reuse another attempt's handle at this level.
+        XCTAssertEqual(JumpWorkflowPresentation.cameraControls(for: .recorded), JumpWorkflowPresentation.cameraControls(for: .recorded))
+        XCTAssertEqual(Set(JumpCameraControls.newControlKeys).count, 4)
+    }
+
+    func testCameraControlKeysExistInAllLocalesWithoutNewPlistOrGalleryKeys() throws {
+        // The camera slice adds EXACTLY these four control labels; status and
+        // error text reuse the existing jumps.camera.* keys. Values must be
+        // honest per-locale strings (never the raw key, never empty).
+        let expectedKeys = ["jumps.camera.record", "jumps.camera.stop", "jumps.camera.useRecording", "jumps.camera.repeat"]
+        XCTAssertEqual(JumpCameraControls.newControlKeys, expectedKeys)
+        XCTAssertEqual(Set(JumpCameraControls.newControlKeys).count, 4)
+        for key in expectedKeys {
+            XCTAssertFalse(key.isEmpty)
+            XCTAssertTrue(key.hasPrefix("jumps.camera."))
+        }
+        let locales = ["en", "es", "fr", "de", "it", "pt-BR", "pt-PT", "tr"]
+        let oldSentinels = ["jumps.camera.ready", "jumps.camera.recording", "jumps.camera.review", "jumps.flow.continue", "common.cancel"]
+        for locale in locales {
+            guard let lproj = Bundle.main.path(forResource: locale, ofType: "lproj") else {
+                XCTFail("missing \(locale).lproj in host bundle")
+                continue
+            }
+            let stringsURL = URL(fileURLWithPath: lproj).appendingPathComponent("Localizable.strings")
+            let text = try String(contentsOf: stringsURL, encoding: .utf8)
+            let lines = text.components(separatedBy: .newlines)
+            let keyLines = lines.filter { $0.hasPrefix("\"") }
+            // Old 324 keys plus exactly the 4 additive camera control keys.
+            XCTAssertEqual(keyLines.count, 328, "key count for \(locale)")
+            for key in expectedKeys {
+                let matches = keyLines.filter { $0.hasPrefix("\"\(key)\" = \"") }
+                XCTAssertEqual(matches.count, 1, "single entry for \(key) in \(locale)")
+                guard let line = matches.first else { continue }
+                let prefix = "\"\(key)\" = \""
+                let remainder = String(line.dropFirst(prefix.count))
+                XCTAssertTrue(remainder.hasSuffix("\";"), "value terminator for \(key) in \(locale)")
+                let value = String(remainder.dropLast(2))
+                XCTAssertFalse(value.isEmpty, "nonempty value for \(key) in \(locale)")
+                XCTAssertNotEqual(value, key, "localized (not placeholder) value for \(key) in \(locale)")
+            }
+            for old in oldSentinels {
+                XCTAssertEqual(keyLines.filter { $0.hasPrefix("\"\(old)\" = \"") }.count, 1, "preserved old key \(old) in \(locale)")
+            }
+        }
+        // No new InfoPlist/mic/gallery surface through this slice: the camera
+        // usage description predates C2b, and mic + photo-write keys stay out.
+        XCTAssertNotNil(Bundle.main.object(forInfoDictionaryKey: "NSCameraUsageDescription"))
+        XCTAssertNil(Bundle.main.object(forInfoDictionaryKey: "NSMicrophoneUsageDescription"))
+        XCTAssertNil(Bundle.main.object(forInfoDictionaryKey: "NSPhotoLibraryAddUsageDescription"))
+        XCTAssertNil(Bundle.main.object(forInfoDictionaryKey: "NSPhotoLibraryUsageDescription"))
+    }
 }

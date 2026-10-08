@@ -8,7 +8,7 @@ enum JumpEventKind: String, Codable, CaseIterable, Sendable {
     case landing = "LANDING"
 }
 
-enum JumpVideoSource: String, Codable, Sendable { case photos = "PHOTOS", files = "FILES" }
+enum JumpVideoSource: String, Codable, Sendable { case photos = "PHOTOS", files = "FILES", camera = "CAMERA" }
 enum JumpTemporalState: String, Codable, Sendable {
     case unknown = "UNKNOWN"
     case realtimeDeclared = "REALTIME_DECLARED"

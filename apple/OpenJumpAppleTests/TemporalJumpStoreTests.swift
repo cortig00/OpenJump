@@ -70,6 +70,44 @@ final class TemporalJumpStoreTests: XCTestCase {
         return (url, athleteID, ownedID, unownedID)
     }
 
+    // Owned CAMERA-slice fixture helpers: render production metric/event rows
+    // as literal SQL value lists. Each test's table DDL stays a literal
+    // historical schema; these helpers only format row values.
+    private func metricInserts(_ id: UUID, _ metrics: [SavedMetric]) -> String {
+        metrics.map { metric in
+            "INSERT INTO attempt_metrics VALUES('\(id.uuidString)','\(metric.key)','\(metric.unit)',\(metric.value),\(metric.ordinal));"
+        }.joined(separator: "\n")
+    }
+
+    private func eventInserts(_ id: UUID, _ events: [JumpEventMark]) -> String {
+        events.enumerated().map { ordinal, event in
+            let previous = event.previousPtsUs.map(String.init) ?? "NULL"
+            let next = event.nextPtsUs.map(String.init) ?? "NULL"
+            return "INSERT INTO assessment_events VALUES('\(id.uuidString)','\(event.kind.rawValue)',\(ordinal),\(event.frameIndex),\(event.ptsUs),\(previous),\(next));"
+        }.joined(separator: "\n")
+    }
+
+    // Row counter for zero-row-safe PRAGMA reads (foreign_key_check,
+    // table_info): aggregates are avoided so the statement form matches
+    // production usage exactly. scalar(_:_:) would record a failure on an
+    // empty result because it expects exactly one SQLITE_ROW.
+    private func rowCount(_ url: URL, _ sql: String) throws -> Int {
+        var db: OpaquePointer?
+        XCTAssertEqual(sqlite3_open(url.path, &db), SQLITE_OK)
+        defer { if let db { sqlite3_close(db) } }
+        var statement: OpaquePointer?
+        XCTAssertEqual(sqlite3_prepare_v2(db, sql, -1, &statement, nil), SQLITE_OK)
+        defer { if let statement { sqlite3_finalize(statement) } }
+        var count = 0
+        while true {
+            let code = sqlite3_step(statement)
+            if code == SQLITE_ROW { count += 1; continue }
+            XCTAssertEqual(code, SQLITE_DONE)
+            break
+        }
+        return count
+    }
+
     func testFreshSchemaPersistsTemporalGraphAndRetryDoesNotReplaceIt() async throws {
         let url = temporaryURL(); defer { try? FileManager.default.removeItem(at: url) }
         let store = try SQLiteStore(databaseURL: url)
@@ -101,7 +139,7 @@ final class TemporalJumpStoreTests: XCTestCase {
         let fileGraph = try await store.temporalAnalysis(measurementID: fileSaved.id)
         XCTAssertEqual(fileGraph?.source.rawValue, "FILES")
         XCTAssertEqual(fileGraph?.events.map(\.kind.rawValue), ["MOVEMENT_START", "TAKEOFF", "LANDING"])
-        XCTAssertEqual(try scalar(url, "PRAGMA user_version"), 3)
+        XCTAssertEqual(try scalar(url, "PRAGMA user_version"), 4)
     }
 
     func testDifferentOwnerConflictsAndNewSaveRequiresActiveOwner() async throws {
@@ -129,7 +167,7 @@ final class TemporalJumpStoreTests: XCTestCase {
         XCTAssertEqual(retainedGraph?.events, draft(ownerID: first.id, sessionKey: "owned").events)
     }
 
-    func testVersionOneAndTwoMigrateAdditivelyToThree() async throws {
+    func testVersionOneAndTwoMigrateAdditivelyToFour() async throws {
         for version in [1, 2] {
             let (url, athleteID, ownedID, unownedID) = try legacyDatabase(version: version)
             defer { try? FileManager.default.removeItem(at: url) }
@@ -148,7 +186,7 @@ final class TemporalJumpStoreTests: XCTestCase {
             XCTAssertNil(page.items.first(where: { $0.id == unownedID })?.ownerID)
             let absentGraph = try await store.temporalAnalysis(measurementID: ownedID)
             XCTAssertNil(absentGraph, "legacy rows have no fabricated graph")
-            XCTAssertEqual(try scalar(url, "PRAGMA user_version"), 3)
+            XCTAssertEqual(try scalar(url, "PRAGMA user_version"), 4)
         }
     }
 
@@ -208,5 +246,211 @@ final class TemporalJumpStoreTests: XCTestCase {
             _ = try await store.temporalAnalysis(measurementID: clean.id)
             XCTFail("missing measurement must not be reported as a legacy graph")
         } catch { XCTAssertEqual(error as? StoreError, .notFound) }
+    }
+
+    func testCameraMigrationPreservesHistoricalV3RowsGraphsAndIndexes() async throws {
+        // OWNED historical v3 fixture: literal v3 DDL with the PHOTOS/FILES-only
+        // CHECK, never a fresh v4 database restamped to version 3. Covers two
+        // owned graphs, owned/unowned legacy rows without graphs, NULL/empty/
+        // nonempty notes, raw IDs/session keys, avatar, archive and dates.
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let athleteID = UUID(), archivedID = UUID()
+        let photosID = UUID(), filesID = UUID(), ownedLegacyID = UUID(), unownedLegacyID = UUID()
+        let photosDraft = draft(ownerID: athleteID, sessionKey: "camera-migration-photos", source: .photos)
+        let filesDraft = draft(ownerID: athleteID, sessionKey: "camera-migration-files", source: .files)
+        let photosMetrics = try TemporalJumpEngine.calculate(draft: photosDraft)
+        let filesMetrics = try TemporalJumpEngine.calculate(draft: filesDraft)
+        let sql = """
+            CREATE TABLE athletes (id TEXT PRIMARY KEY NOT NULL,name TEXT NOT NULL CHECK(length(trim(name)) BETWEEN 1 AND 120),weight_kg REAL CHECK(weight_kg IS NULL OR weight_kg > 0),height_cm REAL CHECK(height_cm IS NULL OR height_cm > 0),notes TEXT,created_at REAL NOT NULL,updated_at REAL NOT NULL,archived_at REAL,avatar_key TEXT);
+            INSERT INTO athletes VALUES('\(athleteID.uuidString)','Owner',70,180,'owner note',10,11,NULL,'avatar_legacy');
+            INSERT INTO athletes VALUES('\(archivedID.uuidString)','Archived',NULL,NULL,NULL,12,13,14,'avatar_legacy');
+            CREATE TABLE assessments (id TEXT PRIMARY KEY NOT NULL,session_key TEXT NOT NULL UNIQUE,owner_id TEXT REFERENCES athletes(id) ON DELETE RESTRICT,protocol_key TEXT NOT NULL CHECK(protocol_key IN ('CMJ','SJ','ABALAKOV','UNILATERAL','DROP_JUMP','HORIZONTAL','ASYMMETRY')),side TEXT,drop_height_cm REAL CHECK(drop_height_cm IS NULL OR drop_height_cm > 0),recorded_at REAL NOT NULL,notes TEXT);
+            CREATE INDEX athletes_active_name ON athletes(archived_at, name COLLATE NOCASE);
+            CREATE INDEX assessments_history ON assessments(recorded_at DESC, id DESC);
+            CREATE INDEX assessments_owner_history ON assessments(owner_id, recorded_at DESC, id DESC);
+            CREATE TABLE attempt_metrics (assessment_id TEXT NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,metric_key TEXT NOT NULL,unit TEXT NOT NULL,value REAL NOT NULL,ordinal INTEGER NOT NULL CHECK(ordinal >= 0),PRIMARY KEY(assessment_id, ordinal),UNIQUE(assessment_id, metric_key));
+            INSERT INTO assessments VALUES('\(photosID.uuidString)','camera-migration-photos','\(athleteID.uuidString)','CMJ',NULL,NULL,20,'photo note');
+            INSERT INTO assessments VALUES('\(filesID.uuidString)','camera-migration-files','\(athleteID.uuidString)','CMJ',NULL,NULL,21,'');
+            INSERT INTO assessments VALUES('\(ownedLegacyID.uuidString)','camera-migration-owned-legacy','\(athleteID.uuidString)','SJ',NULL,NULL,22,NULL);
+            INSERT INTO assessments VALUES('\(unownedLegacyID.uuidString)','camera-migration-unowned-legacy',NULL,'SJ',NULL,NULL,23,'unowned note');
+            \(metricInserts(photosID, photosMetrics))
+            \(metricInserts(filesID, filesMetrics))
+            INSERT INTO attempt_metrics VALUES('\(ownedLegacyID.uuidString)','HEIGHT_CM','CENTIMETER',27,0);
+            INSERT INTO attempt_metrics VALUES('\(unownedLegacyID.uuidString)','HEIGHT_CM','CENTIMETER',29,0);
+            CREATE TABLE assessment_events (assessment_id TEXT NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,event_key TEXT NOT NULL,ordinal INTEGER NOT NULL CHECK(ordinal >= 0),frame_index INTEGER NOT NULL CHECK(frame_index >= 0),pts_us INTEGER NOT NULL CHECK(pts_us >= 0),previous_pts_us INTEGER CHECK(previous_pts_us IS NULL OR previous_pts_us >= 0),next_pts_us INTEGER CHECK(next_pts_us IS NULL OR next_pts_us >= 0),PRIMARY KEY(assessment_id, ordinal),UNIQUE(assessment_id, event_key));
+            CREATE TABLE assessment_analysis (assessment_id TEXT PRIMARY KEY NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,source_kind TEXT NOT NULL CHECK(source_kind IN ('PHOTOS','FILES')),source_frame_count INTEGER NOT NULL CHECK(source_frame_count BETWEEN 2 AND 250000),source_origin_us INTEGER NOT NULL CHECK(source_origin_us >= 0),temporal_state TEXT NOT NULL CHECK(temporal_state IN ('UNKNOWN','REALTIME_DECLARED')),analysis_version INTEGER NOT NULL CHECK(analysis_version = 1));
+            INSERT INTO assessment_analysis VALUES('\(photosID.uuidString)','PHOTOS',12,1000000,'REALTIME_DECLARED',1);
+            INSERT INTO assessment_analysis VALUES('\(filesID.uuidString)','FILES',12,1000000,'REALTIME_DECLARED',1);
+            \(eventInserts(photosID, photosDraft.events))
+            \(eventInserts(filesID, filesDraft.events))
+            PRAGMA user_version=3;
+            """
+        try execute(url, sql)
+
+        let store = try SQLiteStore(databaseURL: url)
+        XCTAssertEqual(try scalar(url, "PRAGMA user_version"), 4)
+        let roster = try await store.athletes(includeArchived: true)
+        XCTAssertEqual(roster.count, 2)
+        let owner = try XCTUnwrap(roster.first { $0.id == athleteID })
+        XCTAssertEqual(owner.name, "Owner")
+        XCTAssertEqual(owner.weightKg, 70)
+        XCTAssertEqual(owner.heightCm, 180)
+        XCTAssertEqual(owner.notes, "owner note")
+        XCTAssertEqual(owner.avatarKey, "avatar_legacy")
+        XCTAssertNil(owner.archivedAt)
+        let archived = try XCTUnwrap(roster.first { $0.id == archivedID })
+        XCTAssertEqual(archived.archivedAt, Date(timeIntervalSince1970: 14))
+        XCTAssertEqual(archived.avatarKey, "avatar_legacy")
+        let page = try await store.history()
+        XCTAssertEqual(page.items.count, 4)
+        let items = Dictionary(uniqueKeysWithValues: page.items.map { ($0.id, $0) })
+        XCTAssertEqual(items[photosID]?.sessionKey, "camera-migration-photos")
+        XCTAssertEqual(items[photosID]?.notes, "photo note")
+        XCTAssertEqual(items[photosID]?.metrics, photosMetrics)
+        // Raw empty text stays empty in storage; the read model normalizes it.
+        XCTAssertNil(items[filesID]?.notes)
+        XCTAssertEqual(items[filesID]?.metrics, filesMetrics)
+        XCTAssertNil(items[ownedLegacyID]?.notes)
+        XCTAssertEqual(items[unownedLegacyID]?.sessionKey, "camera-migration-unowned-legacy")
+        XCTAssertEqual(items[unownedLegacyID]?.notes, "unowned note")
+        let photosGraph = try await store.temporalAnalysis(measurementID: photosID)
+        XCTAssertEqual(photosGraph?.source, .photos)
+        XCTAssertEqual(photosGraph?.sourceFrameCount, 12)
+        XCTAssertEqual(photosGraph?.sourceOriginUs, 1_000_000)
+        XCTAssertEqual(photosGraph?.temporalState, .realtimeDeclared)
+        XCTAssertEqual(photosGraph?.analysisVersion, 1)
+        XCTAssertEqual(photosGraph?.events, photosDraft.events)
+        let filesGraph = try await store.temporalAnalysis(measurementID: filesID)
+        XCTAssertEqual(filesGraph?.source, .files)
+        XCTAssertEqual(filesGraph?.events, filesDraft.events)
+        let ownedLegacyGraph = try await store.temporalAnalysis(measurementID: ownedLegacyID)
+        XCTAssertNil(ownedLegacyGraph, "legacy rows have no fabricated graph")
+        let unownedLegacyGraph = try await store.temporalAnalysis(measurementID: unownedLegacyID)
+        XCTAssertNil(unownedLegacyGraph, "legacy rows have no fabricated graph")
+        XCTAssertEqual(try scalar(url, "SELECT COUNT(*) FROM assessment_analysis"), 2)
+        XCTAssertEqual(try scalar(url, "SELECT COUNT(*) FROM assessment_events"), 6)
+        XCTAssertEqual(try scalar(url, "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name IN ('athletes_active_name','assessments_history','assessments_owner_history')"), 3)
+        XCTAssertEqual(try scalar(url, "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND tbl_name='assessment_analysis'"), 1)
+        XCTAssertEqual(try scalar(url, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='assessment_analysis_new'"), 0)
+        XCTAssertEqual(try rowCount(url, "PRAGMA foreign_key_check"), 0)
+        // The migrated database exports through the actual current pipeline.
+        let snapshot = try await store.exportData(format: .jsonBackup)
+        XCTAssertEqual(snapshot.profileCount, 2)
+        XCTAssertEqual(snapshot.measurementCount, 4)
+        XCTAssertEqual(snapshot.metricCount, 12)
+        let decoded = try JSONSerialization.jsonObject(with: snapshot.data)
+        let json = try XCTUnwrap(decoded as? [String: Any])
+        XCTAssertEqual(json["sourceSchemaVersion"] as? Int, 4)
+        let roots = try XCTUnwrap(json["measurements"] as? [[String: Any]])
+        let bySession = Dictionary(uniqueKeysWithValues: try roots.map { (try XCTUnwrap($0["sessionKey"] as? String), $0) })
+        XCTAssertEqual(bySession["camera-migration-photos"]?["notes"] as? String, "photo note")
+        XCTAssertEqual(bySession["camera-migration-files"]?["notes"] as? String, "")
+        XCTAssertTrue(bySession["camera-migration-owned-legacy"]?["notes"] is NSNull)
+        XCTAssertEqual((bySession["camera-migration-photos"]?["analysis"] as? [String: Any])?["source"] as? String, "PHOTOS")
+        // Repeated reopen at version 4 is a no-op preserving every graph.
+        let reopened = try SQLiteStore(databaseURL: url)
+        XCTAssertEqual(try scalar(url, "PRAGMA user_version"), 4)
+        let reopenedPhotosGraph = try await reopened.temporalAnalysis(measurementID: photosID)
+        XCTAssertEqual(reopenedPhotosGraph?.events, photosDraft.events)
+        let reopenedFilesGraph = try await reopened.temporalAnalysis(measurementID: filesID)
+        XCTAssertEqual(reopenedFilesGraph?.source, .files)
+    }
+
+    func testFreshCameraSourcePersistsGraphAndCannotBeReplaced() async throws {
+        let url = temporaryURL(); defer { try? FileManager.default.removeItem(at: url) }
+        let store = try SQLiteStore(databaseURL: url)
+        XCTAssertEqual(try scalar(url, "PRAGMA user_version"), 4)
+        let athlete = try await store.createAthlete(name: "Athlete")
+        let original = draft(ownerID: athlete.id, sessionKey: "camera-session", source: .camera)
+        let saved = try await store.saveTemporalJump(original)
+        let graph = try await store.temporalAnalysis(measurementID: saved.id)
+        XCTAssertEqual(graph?.source, .camera)
+        XCTAssertEqual(graph?.source.rawValue, "CAMERA")
+        XCTAssertEqual(graph?.sourceFrameCount, 12)
+        XCTAssertEqual(graph?.sourceOriginUs, 1_000_000)
+        XCTAssertEqual(graph?.analysisVersion, 1)
+        XCTAssertEqual(graph?.events, original.events)
+        // Canonical shared metrics are source-independent: the same marks
+        // through PHOTOS compute the identical metric array.
+        XCTAssertEqual(saved.metrics, try TemporalJumpEngine.calculate(draft: draft(ownerID: athlete.id, sessionKey: "photo-twin", source: .photos)))
+        XCTAssertEqual(saved.metrics.map(\.key), ["HEIGHT_CM", "FLIGHT_TIME_MS", "TAKEOFF_VELOCITY_MPS", "TIME_TO_TAKEOFF_MS", "RSI_MOD"])
+        // A retry on the same session with changed provenance and marks
+        // cannot replace the confirmed graph or its identity.
+        let changedMarks = [
+            JumpEventMark(kind: .movementStart, frameIndex: 1, ptsUs: 1_010_000, previousPtsUs: 1_000_000, nextPtsUs: 1_020_000),
+            JumpEventMark(kind: .takeoff, frameIndex: 4, ptsUs: 1_080_000, previousPtsUs: 1_070_000, nextPtsUs: 1_090_000),
+            JumpEventMark(kind: .landing, frameIndex: 8, ptsUs: 1_160_000, previousPtsUs: 1_150_000, nextPtsUs: 1_170_000)
+        ]
+        let retry = try await store.saveTemporalJump(draft(ownerID: athlete.id, sessionKey: "camera-session", source: .files, events: changedMarks))
+        XCTAssertEqual(retry.id, saved.id)
+        let persistedGraph = try await store.temporalAnalysis(measurementID: saved.id)
+        XCTAssertEqual(persistedGraph?.source, .camera)
+        XCTAssertEqual(persistedGraph?.events, original.events)
+        // No extra media/path/URI columns on the canonical analysis table.
+        XCTAssertEqual(try rowCount(url, "PRAGMA table_info(assessment_analysis)"), 6)
+        // Owner-conflict and inactive-owner policies are unchanged.
+        let second = try await store.createAthlete(name: "Second")
+        do {
+            _ = try await store.saveTemporalJump(draft(ownerID: second.id, sessionKey: "camera-session"))
+            XCTFail("a confirmed session cannot change owners")
+        } catch { XCTAssertEqual(error as? StoreError, .ownerConflict) }
+        try await store.setArchived(athlete.id, archived: true)
+        do {
+            _ = try await store.saveTemporalJump(draft(ownerID: athlete.id, sessionKey: "camera-after-archive"))
+            XCTFail("a new temporal measurement requires an active owner")
+        } catch { XCTAssertEqual(error as? StoreError, .inactiveOwner) }
+        let reopened = try SQLiteStore(databaseURL: url)
+        let reopenedCameraGraph = try await reopened.temporalAnalysis(measurementID: saved.id)
+        XCTAssertEqual(reopenedCameraGraph?.source, .camera)
+    }
+
+    func testCameraMigrationCollisionFailsClosedWithoutPartialSchema() async throws {
+        // OWNED disposable v3 fixture plus an owned probe occupying the
+        // production replacement-table name, so the migration must abort.
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let athleteID = UUID(), measurementID = UUID()
+        let valid = draft(ownerID: athleteID, sessionKey: "collision-session", source: .photos)
+        let metrics = try TemporalJumpEngine.calculate(draft: valid)
+        let sql = """
+            CREATE TABLE athletes (id TEXT PRIMARY KEY NOT NULL,name TEXT NOT NULL,weight_kg REAL,height_cm REAL,notes TEXT,created_at REAL NOT NULL,updated_at REAL NOT NULL,archived_at REAL,avatar_key TEXT);
+            INSERT INTO athletes VALUES('\(athleteID.uuidString)','Owner',70,180,NULL,10,11,NULL,'avatar_legacy');
+            CREATE TABLE assessments (id TEXT PRIMARY KEY NOT NULL,session_key TEXT NOT NULL UNIQUE,owner_id TEXT REFERENCES athletes(id) ON DELETE RESTRICT,protocol_key TEXT NOT NULL,side TEXT,drop_height_cm REAL,recorded_at REAL NOT NULL,notes TEXT);
+            CREATE TABLE attempt_metrics (assessment_id TEXT NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,metric_key TEXT NOT NULL,unit TEXT NOT NULL,value REAL NOT NULL,ordinal INTEGER NOT NULL,PRIMARY KEY(assessment_id, ordinal),UNIQUE(assessment_id, metric_key));
+            INSERT INTO assessments VALUES('\(measurementID.uuidString)','collision-session','\(athleteID.uuidString)','CMJ',NULL,NULL,20,NULL);
+            \(metricInserts(measurementID, metrics))
+            CREATE TABLE assessment_events (assessment_id TEXT NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,event_key TEXT NOT NULL,ordinal INTEGER NOT NULL,frame_index INTEGER NOT NULL,pts_us INTEGER NOT NULL,previous_pts_us INTEGER,next_pts_us INTEGER,PRIMARY KEY(assessment_id, ordinal),UNIQUE(assessment_id, event_key));
+            CREATE TABLE assessment_analysis (assessment_id TEXT PRIMARY KEY NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,source_kind TEXT NOT NULL CHECK(source_kind IN ('PHOTOS','FILES')),source_frame_count INTEGER NOT NULL CHECK(source_frame_count BETWEEN 2 AND 250000),source_origin_us INTEGER NOT NULL CHECK(source_origin_us >= 0),temporal_state TEXT NOT NULL CHECK(temporal_state IN ('UNKNOWN','REALTIME_DECLARED')),analysis_version INTEGER NOT NULL CHECK(analysis_version = 1));
+            INSERT INTO assessment_analysis VALUES('\(measurementID.uuidString)','PHOTOS',12,1000000,'REALTIME_DECLARED',1);
+            \(eventInserts(measurementID, valid.events))
+            CREATE TABLE assessment_analysis_new(id INTEGER PRIMARY KEY);
+            PRAGMA user_version=3;
+            """
+        try execute(url, sql)
+        do {
+            _ = try SQLiteStore(databaseURL: url)
+            XCTFail("a colliding replacement table must abort the camera migration")
+        } catch { XCTAssertTrue(error is StoreError) }
+        XCTAssertEqual(try scalar(url, "PRAGMA user_version"), 3)
+        XCTAssertEqual(try scalar(url, "SELECT COUNT(*) FROM assessments"), 1)
+        XCTAssertEqual(try scalar(url, "SELECT COUNT(*) FROM attempt_metrics"), metrics.count)
+        XCTAssertEqual(try scalar(url, "SELECT COUNT(*) FROM assessment_analysis"), 1)
+        XCTAssertEqual(try scalar(url, "SELECT COUNT(*) FROM assessment_events"), 3)
+        XCTAssertEqual(try rowCount(url, "PRAGMA foreign_key_check"), 0)
+        // Unknown provenance is rejected by the preserved v3 CHECK and the Swift enum.
+        XCTAssertNil(JumpVideoSource(rawValue: "UNKNOWN"))
+        var raw: OpaquePointer?
+        XCTAssertEqual(sqlite3_open(url.path, &raw), SQLITE_OK)
+        defer { if let raw { sqlite3_close(raw) } }
+        guard let raw else { XCTFail("fixture database must open"); return }
+        XCTAssertNotEqual(sqlite3_exec(raw, "INSERT INTO assessment_analysis VALUES('\(UUID().uuidString)','CAMERA',12,1000000,'REALTIME_DECLARED',1);", nil, nil, nil), SQLITE_OK)
+        // Removing ONLY the owned probe unblocks the migration; preserved rows migrate.
+        try execute(url, "DROP TABLE assessment_analysis_new;")
+        let recovered = try SQLiteStore(databaseURL: url)
+        XCTAssertEqual(try scalar(url, "PRAGMA user_version"), 4)
+        let recoveredGraph = try await recovered.temporalAnalysis(measurementID: measurementID)
+        XCTAssertEqual(recoveredGraph?.source, .photos)
+        XCTAssertEqual(recoveredGraph?.events, valid.events)
     }
 }

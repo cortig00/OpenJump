@@ -35,6 +35,61 @@ struct NativePlayerLayer: UIViewRepresentable {
     }
 }
 
+/// Live capture preview host (C2b). Mirrors `NativePlayerLayer` teardown:
+/// the view never owns capture — it only renders the readonly session handle
+/// from `previewSessionForFutureHost`, and only on the main thread, via
+/// `AVCaptureVideoPreviewLayer` (iOS 4.0 floor) with `.resizeAspectFill`.
+/// The handle is never configured through this view: no begin/commit, no
+/// add/remove, no device locks. Orientation stays on the existing guarded
+/// engine seam (`updateVideoOrientation`, rejected while starting/recording/
+/// finalizing); this host never touches `videoRotationAngle` (iOS 17).
+/// Dismantle removes the layer and nils it BEFORE any borrower release or
+/// facade dispose runs.
+struct CameraPreviewHost: UIViewRepresentable {
+    /// Readonly session handle from the facade. Nil renders black until the
+    /// engine publishes a session.
+    let session: AVCaptureSession?
+
+    func makeUIView(context: Context) -> CameraPreviewContainerView {
+        let view = CameraPreviewContainerView()
+        view.backgroundColor = .black
+        attach(session: session, to: view)
+        return view
+    }
+
+    func updateUIView(_ uiView: CameraPreviewContainerView, context: Context) {
+        // SwiftUI invokes representable methods on the main thread. Reattach
+        // only when the session identity actually changed; never reconfigure.
+        if uiView.previewLayer?.session !== session {
+            attach(session: session, to: uiView)
+        }
+    }
+
+    static func dismantleUIView(_ uiView: CameraPreviewContainerView, coordinator: ()) {
+        uiView.previewLayer?.removeFromSuperlayer()
+        uiView.previewLayer = nil
+    }
+
+    private func attach(session: AVCaptureSession?, to view: CameraPreviewContainerView) {
+        view.previewLayer?.removeFromSuperlayer()
+        view.previewLayer = nil
+        guard let session else { return }
+        let layer = AVCaptureVideoPreviewLayer(session: session)
+        layer.videoGravity = .resizeAspectFill
+        layer.frame = view.bounds
+        view.layer.addSublayer(layer)
+        view.previewLayer = layer
+    }
+
+    final class CameraPreviewContainerView: UIView {
+        var previewLayer: AVCaptureVideoPreviewLayer?
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            previewLayer?.frame = bounds
+        }
+    }
+}
+
 /// Available content width for the analysis section (P2c adaptive layout).
 /// Passive read-only geometry: defaults to 0 (single column until known).
 /// Never persisted, never drives measurement or workflow state.
@@ -51,12 +106,37 @@ struct JumpHomeView: View {
     let openProfiles: () -> Void
     let openHistory: () -> Void
     @StateObject private var workflow = JumpWorkflowState()
+    /// ONE persistent capture facade for the whole Home lifetime. It survives
+    /// typed-route changes and is never re-created per appearance or per
+    /// route; the camera section drives it with viewAppeared/viewDisappeared
+    /// only on real visibility. `dispose()` is intentionally NOT called on
+    /// transient disappear (it is terminal: engine released, never
+    /// resurrected); parking via viewDisappeared preserves the draft, and the
+    /// engine deinit removes its observers when Home truly deallocates.
+    @StateObject private var camera = JumpVideoCaptureFacade()
+    /// Review-playback borrower + player for the finalized candidate. The
+    /// borrower is FRESH per preview attach and is released only AFTER the
+    /// player/item is torn down; Use mints its own separate fresh borrower.
+    @State private var reviewBorrower: JumpVideoCaptureBorrower?
+    @State private var reviewPlayer: AVPlayer?
+    @State private var isReviewPlaying = false
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var showFileImporter = false
-    /// Local-only catalog visibility. Starts true so the illustrated catalog
-    /// is the initial pre-video UI; a late manifest/video always takes
-    /// precedence over this flag.
-    @State private var choosingProtocol = true
+    /// Value-only staged route path. It owns no state, player, or leases:
+    /// the single `workflow` StateObject above stays persistent while routes
+    /// push and pop natively. Popping never discards media, marks, or notes.
+    @State private var flowPath: [JumpFlowRoute] = []
+    /// Catalog protocol tapped while a dirty draft holds the confirmation
+    /// dialog open. Prepare is pushed only after `confirmDiscard` applies it.
+    @State private var pendingCatalogProtocol: SavedProtocol?
+    /// New-video request waiting on the same confirmation dialog. After the
+    /// confirmed clip disposal it routes to Obtain video instead of catalog.
+    @State private var pendingPostDiscardObtain = false
+    /// Actual Jumps-tab visibility. Path-last alone cannot prove on-screen
+    /// when tabs exist, so async auto-advance and viewer activation gate on
+    /// this flag plus scene activity. Set true on root appear, false before
+    /// pausing on root disappear. Never drives measurement or persistence.
+    @State private var isJumpsVisible = false
     /// Local-only UI width for adaptive analysis layout. Never persisted,
     /// never touches workflow state, marks, or analysis math.
     @State private var analysisContentWidth: CGFloat = 0
@@ -69,114 +149,128 @@ struct JumpHomeView: View {
     private var requiredProtocolOptions: [SavedProtocol] { TemporalJumpDraft.supportedProtocols }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    headerBlock
-                    flowIndicator
-                    if workflow.manifest == nil {
-                        if choosingProtocol && workflow.video == nil {
-                            catalogSection
-                        } else {
-                            if workflow.video == nil {
-                                changeProtocolButton
-                            }
-                            setupSection
-                            importSection
-                        }
-                    } else {
-                        indexedContextCard
-                        DisclosureGroup {
-                            setupSection
-                        } label: {
-                            Text(AppText.string("jumps.setup.show", language: language)).frame(minHeight: 44)
-                        }
-                        DisclosureGroup {
-                            importSection
-                        } label: {
-                            Text(AppText.string("jumps.import.show", language: language)).frame(minHeight: 44)
-                        }
-                    }
-                    if workflow.isImporting {
-                        ProgressView(AppText.string("jumps.import.busy", language: language))
-                    }
-                    if workflow.isIndexing {
-                        ProgressView(AppText.string("jumps.video.loading", language: language))
-                    }
-                    if let manifest = workflow.manifest, let video = workflow.video {
-                        analysisSection(manifest: manifest, video: video)
-                    }
-                    if let errorKey = workflow.errorKey, workflow.manifest == nil {
-                        Text(AppText.string(errorKey, language: language))
-                            .font(.footnote).foregroundStyle(.red)
-                            .accessibilityAddTraits(.updatesFrequently)
+        NavigationStack(path: $flowPath) {
+            catalogRoot
+                .navigationTitle(AppText.string("tab.jumps", language: language))
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        flowCancelButton
                     }
                 }
-                .padding(.horizontal, 16).padding(.vertical, 20)
-                .frame(maxWidth: 960, alignment: .leading).frame(maxWidth: .infinity)
-                .background(GeometryReader { proxy in
-                    Color.clear.preference(key: AnalysisWidthKey.self, value: proxy.size.width)
-                })
-                .onPreferenceChange(AnalysisWidthKey.self) { width in
-                    if width != analysisContentWidth { analysisContentWidth = width }
+                .navigationDestination(for: JumpFlowRoute.self) { route in
+                    stageDestination(for: route)
                 }
+        }
+        .appLocale(state.preferences.language)
+        .task { workflow.synchronize(with: state) }
+        .onAppear {
+            isJumpsVisible = true
+            synchronizeViewerForVisibleRoute()
+        }
+        .onDisappear {
+            isJumpsVisible = false
+            workflow.viewerDisappeared()
+        }
+        .onChange(of: scenePhase) { phase in
+            if phase == .active {
+                if JumpWorkflowPresentation.shouldActivateViewer(isVisible: isJumpsVisible, isActiveScene: true, visibleRoute: visibleRoute) { workflow.resumeViewerFromBackground() }
             }
-            .navigationTitle(AppText.string("tab.jumps", language: language))
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(AppText.string("common.cancel", language: language)) { cancelToCatalog() }
-                        .disabled(workflow.isSaving).frame(minHeight: 48)
-                        .accessibilityIdentifier("jumps.cancel")
-                }
+            else if phase == .inactive || phase == .background { workflow.suspendViewerForBackground() }
+        }
+        .onChange(of: selectedPhoto) { item in
+            if let item {
+                workflow.requestPhotos(item, app: state)
+                selectedPhoto = nil
             }
-            .fileImporter(isPresented: $showFileImporter, allowedContentTypes: [.movie]) { result in
-                switch result {
-                case .success(let url): workflow.requestFile(url, app: state)
-                case .failure(let error):
-                    if (error as? CocoaError)?.code != .userCancelled {
-                        workflow.reportVideoImportFailure()
-                    }
-                }
+        }
+        .onChange(of: state.preferences.units) { _ in workflow.preferenceContextChanged(app: state) }
+        .onChange(of: state.preferences.language) { _ in workflow.preferenceContextChanged(app: state) }
+        .onChange(of: state.preferences.selectedAthleteID) { id in
+            if id != workflow.activeOwnerID { workflow.requestOwner(id, app: state) }
+        }
+        .onChange(of: flowPath) { _ in synchronizeViewerForVisibleRoute() }
+        .onChange(of: workflow.video == nil) { _ in reconcilePathAfterStateChange() }
+        .onChange(of: workflow.manifest == nil) { _ in
+            // Successful indexing auto-advances ONLY while the Jumps root is
+            // actually appeared, the scene is active, and Obtain video is the
+            // visible stage; a user who went Back, to the catalog, or to
+            // another tab mid-import is never yanked forward. Hidden
+            // completions surface via explicit Continue/Resume instead.
+            if workflow.manifest != nil {
+                if JumpWorkflowPresentation.shouldAutoAdvanceToAnalyse(isVisible: isJumpsVisible, isActiveScene: scenePhase == .active, visibleRoute: visibleRoute, manifestAvailable: workflow.manifest != nil) { pushRoute(.analyse) }
+            } else {
+                reconcilePathAfterStateChange()
             }
-            .confirmationDialog(
-                AppText.string("jumps.discard.title", language: language),
-                isPresented: $workflow.showDiscardConfirmation,
-                titleVisibility: .visible
-            ) {
-                Button(AppText.string("jumps.discard.confirm", language: language), role: .destructive) {
-                    workflow.confirmDiscard()
-                }.frame(minHeight: 48)
-                Button(AppText.string("common.cancel", language: language), role: .cancel) {
-                    workflow.cancelDiscard()
-                }.frame(minHeight: 48)
-            } message: {
-                Text(AppText.string("jumps.discard.body", language: language))
+        }
+        .onChange(of: workflow.metrics == nil) { _ in
+            // Successful calculation auto-advances ONLY while the Jumps root
+            // is actually appeared, the scene is active, and Analyse is
+            // visible. Failed calculations keep metrics nil and stay put;
+            // invalidated results pop back to a valid earlier stage. Hidden
+            // completions surface via explicit Review result instead.
+            if workflow.metrics != nil {
+                if JumpWorkflowPresentation.shouldAutoAdvanceToResult(isVisible: isJumpsVisible, isActiveScene: scenePhase == .active, visibleRoute: visibleRoute, resultAvailable: workflow.metrics != nil) { pushRoute(.result) }
+            } else if visibleRoute == .result {
+                reconcilePathAfterStateChange()
             }
-            .task { workflow.synchronize(with: state) }
-            .onAppear { workflow.viewerAppeared() }
-            .onDisappear { workflow.viewerDisappeared() }
-            .onChange(of: scenePhase) { phase in
-                if phase == .active { workflow.resumeViewerFromBackground() }
-                else if phase == .inactive || phase == .background { workflow.suspendViewerForBackground() }
-            }
-            .onChange(of: selectedPhoto) { item in
-                if let item {
-                    workflow.requestPhotos(item, app: state)
-                    selectedPhoto = nil
-                }
-            }
-            .onChange(of: state.preferences.units) { _ in workflow.preferenceContextChanged(app: state) }
-            .onChange(of: state.preferences.language) { _ in workflow.preferenceContextChanged(app: state) }
-            .onChange(of: state.preferences.selectedAthleteID) { id in
-                if id != workflow.activeOwnerID { workflow.requestOwner(id, app: state) }
-            }
-            .safeAreaInset(edge: .bottom) {
-                if workflow.manifest != nil, workflow.video != nil {
-                    anchoredPrimaryBar
+        }
+        .fileImporter(isPresented: $showFileImporter, allowedContentTypes: [.movie]) { result in
+            switch result {
+            case .success(let url): workflow.requestFile(url, app: state)
+            case .failure(let error):
+                if (error as? CocoaError)?.code != .userCancelled {
+                    workflow.reportVideoImportFailure()
                 }
             }
         }
-        .appLocale(state.preferences.language)
+        .confirmationDialog(
+            AppText.string("jumps.discard.title", language: language),
+            isPresented: $workflow.showDiscardConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button(AppText.string("jumps.discard.confirm", language: language), role: .destructive) {
+                confirmDiscardAndRoute()
+            }.frame(minHeight: 48)
+            Button(AppText.string("common.cancel", language: language), role: .cancel) {
+                cancelDiscardAndStay()
+            }.frame(minHeight: 48)
+        } message: {
+            Text(AppText.string("jumps.discard.body", language: language))
+        }
+    }
+
+    /// Illustrated catalog root. The only screen without a route indicator;
+    /// a single 48pt Resume CTA appears whenever retained work exists.
+    /// Native Back from any stage returns here without discarding.
+    private var catalogRoot: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                headerBlock
+                catalogSection
+                if hasResumeDraft {
+                    Button {
+                        resumeToBestRoute()
+                    } label: {
+                        Label(AppText.string("jumps.flow.resume", language: language), systemImage: "arrow.clockwise")
+                            .frame(maxWidth: .infinity, minHeight: 48)
+                    }
+                    .buttonStyle(.borderedProminent).tint(.openJumpGreen)
+                    .disabled(workflow.isSaving)
+                    .accessibilityIdentifier("jumps.flow.resume")
+                }
+            }
+            .padding(.horizontal, 16).padding(.vertical, 20)
+            .frame(maxWidth: 960, alignment: .leading).frame(maxWidth: .infinity)
+        }
+    }
+
+    /// Explicit Cancel keeps its existing identifier and stays in the
+    /// trailing position on every stage, so the native Back button remains
+    /// visually and semantically distinct.
+    private var flowCancelButton: some View {
+        Button(AppText.string("common.cancel", language: language)) { cancelFlow() }
+            .disabled(workflow.isSaving).frame(minHeight: 48)
+            .accessibilityIdentifier("jumps.cancel")
     }
 
     /// Compact header: the full title/subtitle stays pre-video, while the
@@ -194,48 +288,39 @@ struct JumpHomeView: View {
         }
     }
 
-    /// View-only four-stage indicator (Android JumpFlowProgress concept).
-    /// Derived from existing workflow state; never persists, never completes.
-    private enum FlowStage: CaseIterable {
-        case prepare, importing, mark, results
-    }
-
-    private var currentStage: FlowStage {
-        if workflow.savedMeasurement != nil || workflow.metrics != nil { return .results }
-        if workflow.manifest != nil { return .mark }
-        if workflow.video != nil || workflow.isImporting || workflow.isIndexing { return .importing }
-        return .prepare
-    }
-
-    private func flowStageKey(_ stage: FlowStage) -> String {
-        switch stage {
+    /// View-only staged indicator (Android JumpFlowProgress concept).
+    /// Reflects the VISIBLE route, never the highest derived state, so Back
+    /// never mislabels an earlier stage. The root catalog omits it.
+    /// Never persists, never completes.
+    private func routeStageKey(_ route: JumpFlowRoute) -> String {
+        switch route {
         case .prepare: "jumps.flow.prepare"
-        case .importing: "jumps.flow.import"
-        case .mark: "jumps.flow.mark"
-        case .results: "jumps.flow.results"
+        case .obtainVideo: "jumps.flow.import"
+        case .analyse: "jumps.flow.mark"
+        case .result: "jumps.flow.results"
         }
     }
 
-    private func flowOrder(_ stage: FlowStage) -> Int {
-        switch stage {
+    private func routeOrder(_ route: JumpFlowRoute) -> Int {
+        switch route {
         case .prepare: 1
-        case .importing: 2
-        case .mark: 3
-        case .results: 4
+        case .obtainVideo: 2
+        case .analyse: 3
+        case .result: 4
         }
     }
 
-    private var flowIndicator: some View {
+    private func routeIndicator(for visible: JumpFlowRoute) -> some View {
         HStack(spacing: OpenJumpSpacing.sm) {
-            ForEach(FlowStage.allCases, id: \.self) { stage in
-                let isCurrent = stage == currentStage
+            ForEach(JumpFlowRoute.allCases, id: \.self) { route in
+                let isCurrent = route == visible
                 VStack(spacing: 2) {
-                    Text(verbatim: String(flowOrder(stage)))
+                    Text(verbatim: String(routeOrder(route)))
                         .font(.caption.bold())
                         .foregroundStyle(isCurrent ? Color.white : Color.secondary)
                         .frame(width: 24, height: 24)
                         .background(isCurrent ? Color.openJumpGreen : Color.openJumpSurface, in: Circle())
-                    Text(AppText.string(flowStageKey(stage), language: language))
+                    Text(AppText.string(routeStageKey(route), language: language))
                         .font(.caption)
                         .fontWeight(isCurrent ? .semibold : .regular)
                         .foregroundStyle(isCurrent ? Color.primary : Color.secondary)
@@ -247,7 +332,7 @@ struct JumpHomeView: View {
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(AppText.string(flowStageKey(currentStage), language: language))
+        .accessibilityLabel(AppText.string(routeStageKey(visible), language: language))
         .accessibilityIdentifier("jumps.flow.indicator")
     }
 
@@ -282,8 +367,7 @@ struct JumpHomeView: View {
         let title = AppText.string(protocolKey.titleKey, language: language)
         let detail = AppText.string(catalogDescriptionKey(for: protocolKey), language: language)
         return Button {
-            workflow.requestProtocol(protocolKey, app: state)
-            choosingProtocol = false
+            selectCatalogProtocol(protocolKey)
         } label: {
             VStack(alignment: .leading, spacing: OpenJumpSpacing.sm) {
                 HStack(spacing: OpenJumpSpacing.sm) {
@@ -340,26 +424,192 @@ struct JumpHomeView: View {
         }
     }
 
-    /// Returns to the catalog without touching workflow state: no
-    /// cancelAnalysis, so owner/notes are never cleared. Pre-video only.
-    private var changeProtocolButton: some View {
-        Button {
-            choosingProtocol = true
-        } label: {
-            Label(AppText.string("jumps.catalog.change", language: language), systemImage: "square.grid.2x2")
-                .frame(maxWidth: .infinity, minHeight: 48)
-        }
-        .buttonStyle(.bordered)
-        .disabled(workflow.isImporting || workflow.isIndexing || workflow.isSaving)
-        .accessibilityIdentifier("jumps.catalog.change")
+    // MARK: - Staged value-route navigation (single StateObject above path)
+
+    /// Visible staged route, if any. Nil at the illustrated catalog root.
+    private var visibleRoute: JumpFlowRoute? { flowPath.last }
+
+    /// Pushes a stage only when it is not already visible. Never duplicates
+    /// entries from repeated appearance callbacks.
+    private func pushRoute(_ route: JumpFlowRoute) {
+        if flowPath.last != route { flowPath.append(route) }
     }
 
-    /// Top Cancel keeps existing transport semantics; when no clip exists yet
-    /// it only flips the local catalog flag back (never discards media).
-    private func cancelToCatalog() {
+    /// Catalog selection: requests the existing protocol setup, then pushes
+    /// Prepare ONLY when the request actually took effect. A dirty draft
+    /// keeps the confirmation dialog open and the push waits for confirm;
+    /// a saved-locked setup never silently switches and instead resumes the
+    /// existing saved context.
+    private func selectCatalogProtocol(_ key: SavedProtocol) {
+        if workflow.savedMeasurement != nil {
+            resumeToBestRoute()
+            return
+        }
+        workflow.requestProtocol(key, app: state)
+        if workflow.showDiscardConfirmation {
+            pendingCatalogProtocol = key
+        } else {
+            pendingCatalogProtocol = nil
+            if workflow.setup.protocolKey == key {
+                pushRoute(.prepare)
+            }
+        }
+    }
+
+    /// Draft exists when any clip, activity, mark, declaration, result, save,
+    /// or note is retained. The catalog offers a single Resume CTA then.
+    private var hasResumeDraft: Bool {
+        workflow.video != nil || workflow.manifest != nil
+            || workflow.isImporting || workflow.isIndexing
+            || !workflow.events.isEmpty || workflow.realtimeDeclared
+            || workflow.metrics != nil || workflow.savedMeasurement != nil
+            || !workflow.notes.isEmpty
+    }
+
+    /// Resume picks the most useful valid route via existing state, without
+    /// clearing or inventing data: result, analyse, obtain, then prepare.
+    private func resumeToBestRoute() {
+        let target = JumpWorkflowPresentation.resumeRoute(
+            hasResult: workflow.savedMeasurement != nil || workflow.metrics != nil,
+            hasManifest: workflow.manifest != nil && workflow.video != nil,
+            hasVideoOrImportActivity: workflow.video != nil || workflow.isImporting || workflow.isIndexing
+        )
+        flowPath = JumpWorkflowPresentation.path(to: target)
+    }
+
+    /// Trims stages whose content no longer exists (discard, invalidation),
+    /// preserving order. Never pushes and never touches workflow data.
+    private func reconcilePathAfterStateChange() {
+        var valid: [JumpFlowRoute] = []
+        for route in flowPath {
+            switch route {
+            case .prepare, .obtainVideo:
+                valid.append(route)
+            case .analyse:
+                if workflow.manifest != nil, workflow.video != nil { valid.append(route) }
+            case .result:
+                if workflow.metrics != nil || workflow.savedMeasurement != nil { valid.append(route) }
+            }
+        }
+        if valid != flowPath { flowPath = valid }
+    }
+
+    /// Explicit Cancel keeps existing transport/confirmation semantics and
+    /// stays distinct from native Back. Immediate discards return to the
+    /// catalog; dialog confirmations route in `confirmDiscardAndRoute`.
+    private func cancelFlow() {
         workflow.cancelAnalysis()
-        if workflow.video == nil && workflow.manifest == nil {
-            choosingProtocol = true
+        if !workflow.showDiscardConfirmation {
+            if workflow.video == nil, workflow.manifest == nil {
+                flowPath = []
+            } else {
+                reconcilePathAfterStateChange()
+            }
+        }
+    }
+
+    /// Confirmation applies through the existing workflow, then routes:
+    /// pending catalog protocol goes Prepare; pending new-video goes Obtain;
+    /// an actual source clear returns to catalog; otherwise invalid stages
+    /// are trimmed. Cancelling the dialog keeps the route and all data.
+    private func confirmDiscardAndRoute() {
+        let pending = pendingCatalogProtocol
+        let wantsObtain = pendingPostDiscardObtain
+        workflow.confirmDiscard()
+        if let pending {
+            pendingCatalogProtocol = nil
+            pendingPostDiscardObtain = false
+            if JumpWorkflowPresentation.routeForConfirmedCatalogProtocol(pending: pending, confirmed: workflow.setup.protocolKey) == .prepare {
+                pushRoute(.prepare)
+            } else {
+                reconcilePathAfterStateChange()
+            }
+        } else if wantsObtain {
+            pendingPostDiscardObtain = false
+            if workflow.video == nil, workflow.manifest == nil {
+                flowPath = JumpWorkflowPresentation.path(to: .obtainVideo)
+            } else {
+                reconcilePathAfterStateChange()
+            }
+        } else if workflow.video == nil, workflow.manifest == nil {
+            flowPath = []
+        } else {
+            reconcilePathAfterStateChange()
+        }
+    }
+
+    private func cancelDiscardAndStay() {
+        workflow.cancelDiscard()
+        pendingCatalogProtocol = nil
+        pendingPostDiscardObtain = false
+    }
+
+    /// The viewer is active ONLY when the Jumps root is actually appeared,
+    /// the scene is active, and Analyse is the visible route. Entering
+    /// Analyse resumes the kept exact frame without autoplay; every other
+    /// visible route, the catalog, a hidden tab, or an inactive scene pauses
+    /// without discarding artifacts. The StateObject, player, and leases are
+    /// never reallocated here.
+    private func synchronizeViewerForVisibleRoute() {
+        if JumpWorkflowPresentation.shouldActivateViewer(isVisible: isJumpsVisible, isActiveScene: scenePhase == .active, visibleRoute: visibleRoute) {
+            workflow.viewerAppeared()
+        } else {
+            workflow.viewerDisappeared()
+        }
+    }
+
+    /// Prepare Continue: advances only through the read-only preparation
+    /// gate (active owner, valid parameters, nothing busy).
+    private func continueFromPrepare() {
+        if workflow.canContinuePreparation(for: state) {
+            pushRoute(.obtainVideo)
+        }
+    }
+
+    /// Obtain Continue: the retained clip manifest is already valid, so an
+    /// explicit tap resumes analysis. Background work never auto-pushes.
+    private func continueToAnalyse() {
+        if workflow.manifest != nil, workflow.video != nil {
+            pushRoute(.analyse)
+        }
+    }
+
+    /// Result Review events: returns to Analyse for precise frame
+    /// inspection with no reset, no recalculation, and no data change.
+    private func reviewEventsFromResult() {
+        if let index = flowPath.lastIndex(of: .result) {
+            flowPath.remove(at: index)
+        }
+        if workflow.manifest != nil, workflow.video != nil {
+            pushRoute(.analyse)
+        } else {
+            reconcilePathAfterStateChange()
+        }
+    }
+
+    /// Saved Another trial reuses the confirmed video lease with a fresh
+    /// session, then routes to Analyse. Guard no-ops stay on Result.
+    private func anotherTrialAndRoute() {
+        let before = workflow.savedMeasurement?.id
+        workflow.startAnotherTrial(using: state)
+        if before != nil, workflow.savedMeasurement == nil {
+            flowPath = JumpWorkflowPresentation.path(to: .analyse)
+        }
+    }
+
+    /// Saved New video disposes the confirmed clip through the existing
+    /// guarded path (protocol and owner stay in setup), then hosts the next
+    /// import. Dialog confirmations route in `confirmDiscardAndRoute`.
+    private func newVideoAndRoute() {
+        workflow.cancelAnalysis()
+        if !workflow.showDiscardConfirmation {
+            if workflow.video == nil, workflow.manifest == nil {
+                flowPath = JumpWorkflowPresentation.path(to: .obtainVideo)
+            } else {
+                reconcilePathAfterStateChange()
+            }
+        } else {
+            pendingPostDiscardObtain = true
         }
     }
 
@@ -502,6 +752,262 @@ struct JumpHomeView: View {
         }
     }
 
+    /// Direct-record camera entry (C2b). Lives ONLY inside the Obtain-video
+    /// stage and activates ONLY while the Jumps root is actually appeared,
+    /// the scene is active, and Obtain video is the visible route (same gate
+    /// shape as the viewer). The single `camera` facade above survives route
+    /// changes; it is never re-created per appearance or per route.
+    /// Recording always starts from an explicit Record tap — background, tab
+    /// switches, and hidden reappears never record. Back/tab/background
+    /// preserve the workflow draft; finalizing persists until the real
+    /// engine delegate lands.
+    private var cameraSection: some View {
+        let controls = JumpWorkflowPresentation.cameraControls(for: camera.phase)
+        return OpenJumpSection(title: AppText.string("jumps.source.CAMERA", language: language)) {
+            VStack(alignment: .leading, spacing: 10) {
+                if cameraEligible && controls.showsLivePreview {
+                    CameraPreviewHost(session: camera.previewSessionForFutureHost)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: JumpWorkflowPresentation.placeholderHeight)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .accessibilityLabel(AppText.string(camera.statusKey, language: language))
+                        .accessibilityIdentifier("jumps.camera.preview")
+                }
+                Text(AppText.string(camera.errorKey ?? camera.statusKey, language: language))
+                    .font(.footnote).foregroundStyle(.secondary)
+                    .accessibilityAddTraits(.updatesFrequently)
+                    .accessibilityIdentifier("jumps.camera.status")
+                if controls.showsRecord {
+                    Button {
+                        recordTapped()
+                    } label: {
+                        Label(AppText.string(JumpCameraControls.recordKey, language: language), systemImage: "video.badge.plus")
+                            .frame(maxWidth: .infinity, minHeight: 48)
+                    }
+                    .buttonStyle(.borderedProminent).tint(.openJumpGreen)
+                    .disabled(stagingActive || workflow.isSaving)
+                    .accessibilityIdentifier("jumps.camera.record")
+                }
+                if controls.showsStop {
+                    Button {
+                        camera.stopRecording()
+                    } label: {
+                        Label(AppText.string(JumpCameraControls.stopKey, language: language), systemImage: "stop.fill")
+                            .frame(maxWidth: .infinity, minHeight: 48)
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(!controls.stopEnabled || stagingActive || workflow.isSaving)
+                    .accessibilityIdentifier("jumps.camera.stop")
+                }
+                if controls.showsReview {
+                    reviewSection
+                }
+                if controls.showsRetry {
+                    Button {
+                        camera.requestPermissionAndPrepare(isActive: cameraEligible)
+                    } label: {
+                        Label(AppText.string("common.retry", language: language), systemImage: "arrow.clockwise")
+                            .frame(maxWidth: .infinity, minHeight: 48)
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(stagingActive || workflow.isSaving)
+                    .accessibilityIdentifier("jumps.camera.retry")
+                }
+                if controls.showsCancel {
+                    Button(role: .cancel) {
+                        cancelCameraAttempt()
+                    } label: {
+                        Text(AppText.string("common.cancel", language: language))
+                            .frame(maxWidth: .infinity, minHeight: 48)
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(stagingActive || workflow.isSaving)
+                    .accessibilityIdentifier("jumps.camera.cancel")
+                }
+                if controls.canRepeat {
+                    Button {
+                        repeatRecording()
+                    } label: {
+                        Label(AppText.string(JumpCameraControls.repeatKey, language: language), systemImage: "arrow.triangle.2.circlepath")
+                            .frame(maxWidth: .infinity, minHeight: 48)
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(stagingActive || workflow.isSaving)
+                    .accessibilityIdentifier("jumps.camera.repeat")
+                }
+                if stagingActive && camera.phase == .recorded {
+                    Button(role: .cancel) {
+                        workflow.cancelCapturedImport()
+                    } label: {
+                        Text(AppText.string("common.cancel", language: language))
+                            .frame(maxWidth: .infinity, minHeight: 48)
+                    }
+                    .buttonStyle(.bordered)
+                    .accessibilityIdentifier("jumps.camera.stagingCancel")
+                }
+            }
+        }
+        .onAppear { cameraSectionAppeared() }
+        .onDisappear { cameraSectionDisappeared() }
+        .onChange(of: cameraEligible) { eligible in
+            if eligible { camera.viewAppeared() }
+            else { cameraSectionDisappeared() }
+        }
+        .onChange(of: camera.phase) { phase in
+            if phase == .recorded { attachReviewPlayback() }
+            else { teardownReviewPlayback() }
+        }
+    }
+
+    /// Finalized-candidate review (C2b). Renders the candidate through a
+    /// FRESH preview borrower (never the borrower later handed to Use) with
+    /// the existing `NativePlayerLayer` pattern. The player/item is always
+    /// torn down BEFORE the borrower is released; Use mints its own fresh
+    /// `borrowRecorded()` handle per tap and transfers it to the C2a
+    /// `requestCapturedFile` worker (never released here, never disposed).
+    private var reviewSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let player = reviewPlayer {
+                NativePlayerLayer(player: player)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: JumpWorkflowPresentation.placeholderHeight)
+                    .background(.black)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .accessibilityLabel(AppText.string("jumps.camera.review", language: language))
+                    .accessibilityIdentifier("jumps.camera.reviewPlayer")
+                Button {
+                    toggleReviewPlayback()
+                } label: {
+                    Label(
+                        isReviewPlaying
+                            ? AppText.string("jumps.playback.pause", language: language)
+                            : AppText.string("jumps.playback.play", language: language),
+                        systemImage: isReviewPlaying ? "pause.fill" : "play.fill"
+                    )
+                    .frame(maxWidth: .infinity, minHeight: 48)
+                }
+                .buttonStyle(.bordered)
+                .disabled(stagingActive || workflow.isSaving)
+                .accessibilityIdentifier("jumps.camera.reviewToggle")
+            }
+            Button {
+                useRecording()
+            } label: {
+                Label(AppText.string(JumpCameraControls.useRecordingKey, language: language), systemImage: "checkmark.circle")
+                    .frame(maxWidth: .infinity, minHeight: 48)
+            }
+            .buttonStyle(.borderedProminent).tint(.openJumpGreen)
+            .disabled(!camera.canUseRecorded || stagingActive || workflow.isSaving || workflow.showDiscardConfirmation)
+            .accessibilityIdentifier("jumps.camera.use")
+        }
+    }
+
+    /// Staging activity that may hold a camera Use (copy + SAME-analyzer
+    /// inspect). Files/Photos imports also set these flags; the
+    /// staging-cancel control only calls the camera-scoped
+    /// `cancelCapturedImport`, which no-ops when no captured staging exists,
+    /// so it can never disturb another import.
+    private var stagingActive: Bool {
+        workflow.isImporting || workflow.isIndexing
+    }
+
+    /// Same visibility gate as the viewer, pointed at Obtain video: camera
+    /// preview + facade lifecycle run only here. Background, hidden tabs, and
+    /// wrong routes all fail closed.
+    private var cameraEligible: Bool {
+        JumpWorkflowPresentation.isCameraEligible(isVisible: isJumpsVisible, isActiveScene: scenePhase == .active, visibleRoute: visibleRoute)
+    }
+
+    /// Explicit Record tap: prepare on first need, then start only when the
+    /// facade reports ready. Both entries are policy-gated (prepare no-ops
+    /// outside idle/denied/failed; start no-ops unless ready), and nothing
+    /// here runs without the tap — never auto-record.
+    private func recordTapped() {
+        camera.requestPermissionAndPrepare(isActive: cameraEligible)
+        camera.startRecording()
+    }
+
+    /// Explicit Use tap: mints a FRESH borrower per action (never the preview
+    /// borrower) and hands it to the SAME C2a analyzer entry. Ownership moves
+    /// to the C2a staging task, which retains it INSIDE the copy worker until
+    /// real worker exit: never `release()` the handed handle here, never
+    /// dispose the candidate or the old video. Honors busy + dialog gates.
+    private func useRecording() {
+        guard camera.phase == .recorded, camera.canUseRecorded else { return }
+        guard !workflow.isBusy, !workflow.showDiscardConfirmation else { return }
+        guard let fresh = camera.borrowRecorded() else { return }
+        workflow.requestCapturedFile(borrower: fresh, app: state)
+    }
+
+    /// Repeat: tear the review player down BEFORE releasing the preview
+    /// borrower, then ask for a new recording (ready/recorded/failed only,
+    /// never finalizing — the engine rejects the rest).
+    private func repeatRecording() {
+        teardownReviewPlayback()
+        camera.prepareForNewRecording()
+    }
+
+    /// Cancel: tear the review player down BEFORE releasing the preview
+    /// borrower, then cancel the camera attempt. The old analysis is never
+    /// cleared by any camera path (C2a guarantee).
+    private func cancelCameraAttempt() {
+        teardownReviewPlayback()
+        camera.cancel()
+    }
+
+    /// Explicit review play/pause for the finalized candidate. Render-only:
+    /// never touches capture, staging, or analysis.
+    private func toggleReviewPlayback() {
+        guard let player = reviewPlayer else { return }
+        if player.rate == 0 {
+            player.play()
+            isReviewPlaying = true
+        } else {
+            player.pause()
+            isReviewPlaying = false
+        }
+    }
+
+    /// Route became visible while eligible: mark view visible so the engine
+    /// may restart a suspended READY preview. Never starts recording.
+    private func cameraSectionAppeared() {
+        if camera.phase == .recorded { attachReviewPlayback() }
+        guard cameraEligible else { return }
+        camera.viewAppeared()
+    }
+
+    /// Route hidden, tab hidden, or scene inactive: detach the review player
+    /// BEFORE releasing its borrower, then park the session. A recording in
+    /// flight auto-stops and still finalizes through the delegate; the
+    /// workflow draft is preserved and nothing yanks the route.
+    private func cameraSectionDisappeared() {
+        teardownReviewPlayback()
+        camera.viewDisappeared()
+    }
+
+    /// Attach review playback from a FRESH preview borrower. Always tears
+    /// down any previous player first so the old borrower is released only
+    /// after its player/item detached.
+    private func attachReviewPlayback() {
+        teardownReviewPlayback()
+        guard camera.phase == .recorded else { return }
+        guard let preview = camera.borrowRecorded() else { return }
+        guard let url = preview.fileURL else { return }
+        reviewBorrower = preview
+        reviewPlayer = AVPlayer(url: url)
+    }
+
+    /// Detach-then-release ordering: pause, drop the item, drop the player,
+    /// and only then release the borrower. Call before every borrower
+    /// release, every Repeat/Cancel, and every disappear.
+    private func teardownReviewPlayback() {
+        reviewPlayer?.pause()
+        reviewPlayer?.replaceCurrentItem(with: nil)
+        reviewPlayer = nil
+        isReviewPlaying = false
+        reviewBorrower = nil
+    }
+
     /// Compact immutable context once a video is indexed. The setup pickers
     /// stay available inside expandable sections; this card never duplicates
     /// the full header and never edits the confirmed root after saving.
@@ -551,36 +1057,212 @@ struct JumpHomeView: View {
         !dynamicTypeSize.isAccessibilitySize && analysisContentWidth >= AnalysisLayout.wideThreshold
     }
 
-    private func analysisSection(manifest: JumpVideoManifest, video: ImportedJumpVideo) -> some View {
-        VStack(alignment: .leading, spacing: 18) {
-            if isWideAnalysisLayout {
-                HStack(alignment: .top, spacing: 16) {
-                    frameReview(manifest: manifest, video: video)
-                        .frame(minWidth: 420).frame(maxWidth: .infinity, alignment: .leading)
-                    analysisToolsPanel()
-                        .frame(minWidth: 280, maxWidth: 340, alignment: .leading)
-                }
-            } else {
-                frameReview(manifest: manifest, video: video)
-                analysisToolsPanel()
+    /// Value-route dispatcher: each stage renders only its own content in
+    /// a local scroll view with a pinned stage action. The single workflow
+    /// StateObject is captured from the root, never reinstantiated per route.
+    @ViewBuilder
+    private func stageDestination(for route: JumpFlowRoute) -> some View {
+        switch route {
+        case .prepare: prepareScreen
+        case .obtainVideo: obtainVideoScreen
+        case .analyse: analyseScreen
+        case .result: resultScreen
+        }
+    }
+
+    /// Prepare hosts the existing setup section and protocol art. Continue
+    /// advances only through the read-only preparation gate; native Back
+    /// returns to the catalog with no discard.
+    private var prepareScreen: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                routeIndicator(for: .prepare)
+                setupSection
             }
-            // Results stay full width below the pair, before the anchored action.
-            // The single primary Calculate action lives in the anchored bottom
-            // bar; only the busy indicator stays inline.
-            if workflow.isCalculating { ProgressView().accessibilityIdentifier("jumps.calculate.loading") }
-            if let metrics = workflow.metrics {
-                resultPreview(metrics)
-            }
-            if workflow.savedMeasurement != nil {
-                savedRoutes
-            } else if let errorKey = workflow.errorKey, workflow.manifest != nil {
-                Text(AppText.string(errorKey, language: language))
-                    .font(.footnote).foregroundStyle(.red)
-                    .accessibilityAddTraits(.updatesFrequently)
+            .padding(.horizontal, 16).padding(.vertical, 20)
+            .frame(maxWidth: 960, alignment: .leading).frame(maxWidth: .infinity)
+        }
+        .navigationTitle(AppText.string("jumps.flow.prepare", language: language))
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                flowCancelButton
             }
         }
-        .padding(16)
-        .background(Color.openJumpSurface, in: RoundedRectangle(cornerRadius: 16))
+        .safeAreaInset(edge: .bottom) {
+            VStack(alignment: .leading, spacing: OpenJumpSpacing.xs) {
+                if !workflow.canContinuePreparation(for: state) {
+                    Text(AppText.string("jumps.flow.preparationRequired", language: language))
+                        .font(.footnote).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Button {
+                    continueFromPrepare()
+                } label: {
+                    Label(AppText.string("jumps.flow.continue", language: language), systemImage: "arrow.right")
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                }
+                .buttonStyle(.borderedProminent).tint(.openJumpGreen)
+                .disabled(!workflow.canContinuePreparation(for: state))
+                .accessibilityIdentifier("jumps.flow.continue")
+            }
+            .padding(.horizontal, 16).padding(.vertical, 10)
+            .frame(maxWidth: 960, alignment: .leading).frame(maxWidth: .infinity)
+            .background(Color.openJumpSurface)
+        }
+    }
+
+    /// Obtain video hosts the Photos/Files importers plus the direct-record
+    /// camera entry below (never a fake button), plus busy/index status, the
+    /// pre-index error, and the retained-clip context once indexed.
+    /// pre-index error, and the retained-clip context once indexed.
+    /// Cancelling a provider leaves the old source and marks untouched.
+    private var obtainVideoScreen: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                routeIndicator(for: .obtainVideo)
+                importSection
+                cameraSection
+                if workflow.isImporting {
+                    ProgressView(AppText.string("jumps.import.busy", language: language))
+                }
+                if workflow.isIndexing {
+                    ProgressView(AppText.string("jumps.video.loading", language: language))
+                }
+                if let errorKey = workflow.errorKey, workflow.manifest == nil {
+                    Text(AppText.string(errorKey, language: language))
+                        .font(.footnote).foregroundStyle(.red)
+                        .accessibilityAddTraits(.updatesFrequently)
+                }
+                if workflow.manifest != nil, workflow.video != nil {
+                    indexedContextCard
+                }
+            }
+            .padding(.horizontal, 16).padding(.vertical, 20)
+            .frame(maxWidth: 960, alignment: .leading).frame(maxWidth: .infinity)
+        }
+        .navigationTitle(AppText.string("jumps.flow.obtainVideo", language: language))
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                flowCancelButton
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
+            VStack(alignment: .leading, spacing: OpenJumpSpacing.xs) {
+                if workflow.isBusy {
+                    Text(AppText.string("jumps.action.busy", language: language))
+                        .font(.footnote).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Button {
+                    continueToAnalyse()
+                } label: {
+                    Label(AppText.string("jumps.flow.continue", language: language), systemImage: "arrow.right")
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                }
+                .buttonStyle(.borderedProminent).tint(.openJumpGreen)
+                .disabled(workflow.manifest == nil || workflow.video == nil || workflow.isSaving)
+                .accessibilityIdentifier("jumps.flow.continue")
+            }
+            .padding(.horizontal, 16).padding(.vertical, 10)
+            .frame(maxWidth: 960, alignment: .leading).frame(maxWidth: .infinity)
+            .background(Color.openJumpSurface)
+        }
+    }
+
+    /// Analyse hosts the indexed context plus the unchanged frame review,
+    /// event controls, timing preview, realtime guard, and editable notes.
+    /// No embedded result preview and no saved routes here; the bottom
+    /// primary only marks, calculates, or reviews an existing result.
+    private var analyseScreen: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                routeIndicator(for: .analyse)
+                if let manifest = workflow.manifest, let video = workflow.video {
+                    indexedContextCard
+                    if isWideAnalysisLayout {
+                        HStack(alignment: .top, spacing: 16) {
+                            frameReview(manifest: manifest, video: video)
+                                .frame(minWidth: 420).frame(maxWidth: .infinity, alignment: .leading)
+                            analysisToolsPanel()
+                                .frame(minWidth: 280, maxWidth: 340, alignment: .leading)
+                        }
+                    } else {
+                        frameReview(manifest: manifest, video: video)
+                        analysisToolsPanel()
+                    }
+                    // Only the busy indicator stays inline; the single primary
+                    // mark/calculate action lives in the pinned bottom bar.
+                    if workflow.isCalculating { ProgressView().accessibilityIdentifier("jumps.calculate.loading") }
+                    if workflow.savedMeasurement == nil, let errorKey = workflow.errorKey {
+                        Text(AppText.string(errorKey, language: language))
+                            .font(.footnote).foregroundStyle(.red)
+                            .accessibilityAddTraits(.updatesFrequently)
+                    }
+                } else {
+                    Text(AppText.string("jumps.video.waiting", language: language))
+                        .font(.callout).foregroundStyle(.secondary)
+                }
+            }
+            .padding(.horizontal, 16).padding(.vertical, 20)
+            .frame(maxWidth: 960, alignment: .leading).frame(maxWidth: .infinity)
+            .background(GeometryReader { proxy in
+                Color.clear.preference(key: AnalysisWidthKey.self, value: proxy.size.width)
+            })
+            .onPreferenceChange(AnalysisWidthKey.self) { width in
+                if width != analysisContentWidth { analysisContentWidth = width }
+            }
+        }
+        .navigationTitle(AppText.string("jumps.flow.mark", language: language))
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                flowCancelButton
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
+            analysePrimaryBar
+        }
+    }
+
+    /// Result hosts the metric summary, the compact timing warning (kept
+    /// visible because the analysis warning now lives on another screen),
+    /// the read-only review context, and the saved routes. Save and History
+    /// are primary only here; notes stay read-only with Review events
+    /// returning to Analyse for any edit (which then requires recalculation
+    /// through the unchanged invalidation semantics).
+    private var resultScreen: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                routeIndicator(for: .result)
+                Text(AppText.string("jumps.timing.warning", language: language))
+                    .font(.footnote).foregroundStyle(.secondary)
+                if let metrics = workflow.metrics {
+                    resultPreview(metrics)
+                }
+                if workflow.savedMeasurement != nil {
+                    savedRoutes
+                }
+                Button {
+                    reviewEventsFromResult()
+                } label: {
+                    Label(AppText.string("jumps.flow.reviewEvents", language: language), systemImage: "film")
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                }
+                .buttonStyle(.bordered)
+                .disabled(workflow.isSaving)
+                .accessibilityIdentifier("jumps.flow.reviewEvents")
+            }
+            .padding(.horizontal, 16).padding(.vertical, 20)
+            .frame(maxWidth: 960, alignment: .leading).frame(maxWidth: .infinity)
+        }
+        .navigationTitle(AppText.string("jumps.flow.results", language: language))
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                flowCancelButton
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
+            resultPrimaryBar
+        }
     }
 
     /// Marks/timing/notes sidebar (P2c). Single definition rendered once in
@@ -1061,10 +1743,10 @@ struct JumpHomeView: View {
             Label(AppText.string("jumps.results.saved", language: language), systemImage: "checkmark.circle.fill")
                 .font(.headline).foregroundStyle(Color.openJumpGreen).accessibilityAddTraits(.updatesFrequently)
                 .accessibilityIdentifier("jumps.saved")
-            // The single primary history action lives in the anchored bottom bar;
+            // The single primary history action lives in the result bottom bar;
             // trial/video routes keep their original IDs here.
             Button {
-                workflow.startAnotherTrial(using: state)
+                anotherTrialAndRoute()
             } label: {
                 Label(AppText.string("jumps.results.anotherTrial", language: language), systemImage: "repeat")
                     .frame(maxWidth: .infinity, minHeight: 48)
@@ -1072,7 +1754,7 @@ struct JumpHomeView: View {
             .buttonStyle(.bordered).disabled(workflow.isSaving || workflow.isImporting || workflow.isIndexing)
             .accessibilityIdentifier("jumps.anotherTrial")
             Button {
-                workflow.cancelAnalysis()
+                newVideoAndRoute()
             } label: {
                 Label(AppText.string("jumps.results.newVideo", language: language), systemImage: "video.badge.plus")
                     .frame(maxWidth: .infinity, minHeight: 48)
@@ -1115,10 +1797,60 @@ struct JumpHomeView: View {
         return AppText.string("jumps.action.ready", language: language)
     }
 
-    /// Anchored single primary action (Android JumpMarkingActionBar equivalent).
-    /// One 48pt primary only: saved→history, metrics→save, all marks→calculate,
-    /// else mark. Existing IDs render exactly once here.
-    private var anchoredPrimaryBar: some View {
+    /// Analyse bottom primary (Android JumpMarkingActionBar equivalent).
+    /// One 48pt primary only: calculated metrics offer Review result,
+    /// all marks offer Calculate, otherwise Mark. Save never appears on
+    /// the Analyse route. Existing IDs render exactly once per visible
+    /// stage.
+    private var analysePrimaryBar: some View {
+        VStack(alignment: .leading, spacing: OpenJumpSpacing.xs) {
+            if let hint = bottomHint {
+                Text(hint)
+                    .font(.footnote).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("jumps.action.hint")
+            }
+            if workflow.metrics != nil {
+                Button {
+                    pushRoute(.result)
+                } label: {
+                    Label(AppText.string("jumps.flow.reviewResult", language: language), systemImage: "chart.bar")
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                }
+                .buttonStyle(.borderedProminent).tint(.openJumpGreen)
+                .disabled(workflow.isSaving || workflow.isCalculating)
+                .accessibilityIdentifier("jumps.flow.reviewResult")
+            } else if allRequiredMarked {
+                Button {
+                    workflow.calculate(using: state)
+                } label: {
+                    Label(AppText.string("jumps.results.calculate", language: language), systemImage: "function")
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                }
+                .buttonStyle(.borderedProminent).tint(.openJumpGreen)
+                .disabled(!workflow.canCalculate(for: state) || workflow.isBusy)
+                .accessibilityIdentifier("jumps.calculate")
+            } else {
+                Button {
+                    workflow.markSelectedEvent()
+                } label: {
+                    Label(markButtonTitle, systemImage: "mappin.and.ellipse")
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                }
+                .buttonStyle(.borderedProminent).tint(.openJumpGreen)
+                .disabled(!workflow.canMarkDisplayedFrame || workflow.selectedEvent == nil)
+                .accessibilityIdentifier("jumps.event.mark")
+            }
+        }
+        .padding(.horizontal, 16).padding(.vertical, 10)
+        .frame(maxWidth: 960, alignment: .leading).frame(maxWidth: .infinity)
+        .background(Color.openJumpSurface)
+    }
+
+    /// Result bottom primary. One 48pt primary only: saved measurements
+    /// open History, calculated metrics offer Save. Existing IDs render
+    /// exactly once per visible stage.
+    private var resultPrimaryBar: some View {
         VStack(alignment: .leading, spacing: OpenJumpSpacing.xs) {
             if let hint = bottomHint {
                 Text(hint)
@@ -1145,26 +1877,6 @@ struct JumpHomeView: View {
                 .buttonStyle(.borderedProminent).tint(.openJumpGreen)
                 .disabled(workflow.isSaving || workflow.isCalculating)
                 .accessibilityIdentifier("jumps.save")
-            } else if allRequiredMarked {
-                Button {
-                    workflow.calculate(using: state)
-                } label: {
-                    Label(AppText.string("jumps.results.calculate", language: language), systemImage: "function")
-                        .frame(maxWidth: .infinity, minHeight: 48)
-                }
-                .buttonStyle(.borderedProminent).tint(.openJumpGreen)
-                .disabled(!workflow.canCalculate(for: state) || workflow.isBusy)
-                .accessibilityIdentifier("jumps.calculate")
-            } else {
-                Button {
-                    workflow.markSelectedEvent()
-                } label: {
-                    Label(markButtonTitle, systemImage: "mappin.and.ellipse")
-                        .frame(maxWidth: .infinity, minHeight: 48)
-                }
-                .buttonStyle(.borderedProminent).tint(.openJumpGreen)
-                .disabled(!workflow.canMarkDisplayedFrame || workflow.selectedEvent == nil)
-                .accessibilityIdentifier("jumps.event.mark")
             }
         }
         .padding(.horizontal, 16).padding(.vertical, 10)

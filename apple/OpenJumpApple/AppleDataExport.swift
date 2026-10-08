@@ -129,7 +129,7 @@ enum AppleDataExport {
     private struct Header: Encodable {
         let contract = "openjump-apple-backup"
         let formatVersion = 1
-        let sourceSchemaVersion = 3
+        let sourceSchemaVersion = 4
         let dateEncoding = "unix-seconds"
         let canonicalUnits = true
         let mediaIncluded = false

@@ -242,4 +242,49 @@ final class HistoryFilterTests: XCTestCase {
         XCTAssertEqual(Set(seen).count, 5)
         XCTAssertNil(cursor)
     }
+
+    // MARK: - Removable-filter recovery predicate (pure view helper)
+
+    func testHasRemovableFiltersUnfilteredGlobalIsFalseAndFixedOwnerIgnoresSelection() {
+        XCTAssertFalse(HistoryFilters.hasRemovableFilters(protocolKey: nil, selectedOwnerID: nil, fixedOwnerID: nil, period: .allTime, query: ""))
+        let fixed = UUID()
+        let other = UUID()
+        // A fixed profile owner never counts as removable; any selected owner
+        // is ignored while the fixed owner is present.
+        XCTAssertFalse(HistoryFilters.hasRemovableFilters(protocolKey: nil, selectedOwnerID: fixed, fixedOwnerID: fixed, period: .allTime, query: ""))
+        XCTAssertFalse(HistoryFilters.hasRemovableFilters(protocolKey: nil, selectedOwnerID: other, fixedOwnerID: fixed, period: .allTime, query: ""))
+        XCTAssertFalse(HistoryFilters.hasRemovableFilters(protocolKey: nil, selectedOwnerID: nil, fixedOwnerID: fixed, period: .allTime, query: ""))
+    }
+
+    func testHasRemovableFiltersProtocolAndGlobalOwnerAreRemovable() {
+        // All seven stored protocols (including legacy) count as removable.
+        for proto in SavedProtocol.allCases {
+            XCTAssertTrue(HistoryFilters.hasRemovableFilters(protocolKey: proto, selectedOwnerID: nil, fixedOwnerID: nil, period: .allTime, query: ""), "protocol \(proto) must count as removable")
+        }
+        XCTAssertEqual(SavedProtocol.allCases.count, 7)
+        // A global (non-fixed) owner selection is removable.
+        XCTAssertTrue(HistoryFilters.hasRemovableFilters(protocolKey: nil, selectedOwnerID: UUID(), fixedOwnerID: nil, period: .allTime, query: ""))
+        // The same selection is ignored while a fixed owner is present, unless
+        // another removable filter (here: protocol) is active.
+        let fixed = UUID()
+        XCTAssertFalse(HistoryFilters.hasRemovableFilters(protocolKey: nil, selectedOwnerID: UUID(), fixedOwnerID: fixed, period: .allTime, query: ""))
+        XCTAssertTrue(HistoryFilters.hasRemovableFilters(protocolKey: .cmj, selectedOwnerID: UUID(), fixedOwnerID: fixed, period: .allTime, query: ""))
+    }
+
+    func testHasRemovableFiltersPeriodPresets() {
+        XCTAssertFalse(HistoryFilters.hasRemovableFilters(protocolKey: nil, selectedOwnerID: nil, fixedOwnerID: nil, period: .allTime, query: ""))
+        // View predicate only: custom counts as removable without date bounds.
+        XCTAssertTrue(HistoryFilters.hasRemovableFilters(protocolKey: nil, selectedOwnerID: nil, fixedOwnerID: nil, period: .last7Days, query: ""))
+        XCTAssertTrue(HistoryFilters.hasRemovableFilters(protocolKey: nil, selectedOwnerID: nil, fixedOwnerID: nil, period: .last30Days, query: ""))
+        XCTAssertTrue(HistoryFilters.hasRemovableFilters(protocolKey: nil, selectedOwnerID: nil, fixedOwnerID: nil, period: .custom, query: ""))
+    }
+
+    func testHasRemovableFiltersRawQueryWhitespaceCountsAsRemovable() {
+        XCTAssertFalse(HistoryFilters.hasRemovableFilters(protocolKey: nil, selectedOwnerID: nil, fixedOwnerID: nil, period: .allTime, query: ""))
+        // RAW query: whitespace still issues a store search (`query.isEmpty ? nil : query`).
+        XCTAssertTrue(HistoryFilters.hasRemovableFilters(protocolKey: nil, selectedOwnerID: nil, fixedOwnerID: nil, period: .allTime, query: " "))
+        XCTAssertTrue(HistoryFilters.hasRemovableFilters(protocolKey: nil, selectedOwnerID: nil, fixedOwnerID: nil, period: .allTime, query: "\n"))
+        XCTAssertTrue(HistoryFilters.hasRemovableFilters(protocolKey: nil, selectedOwnerID: nil, fixedOwnerID: nil, period: .allTime, query: "  cmj  "))
+        XCTAssertTrue(HistoryFilters.hasRemovableFilters(protocolKey: nil, selectedOwnerID: nil, fixedOwnerID: nil, period: .allTime, query: "zzz-no-such-session"))
+    }
 }

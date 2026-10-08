@@ -49,6 +49,18 @@ final class AppleDataExportTests: XCTestCase {
             notes: "marked note", source: .files, sourceFrameCount: 10, sourceOriginUs: 0,
             temporalState: .realtimeDeclared, events: events)
     }
+    // Narrow CAMERA-slice helper: same canonical CMJ marks as draft(_:),
+    // with an explicit provenance/source. Existing helpers are untouched.
+    private func sourcedDraft(_ owner: UUID, source: JumpVideoSource, session: String = UUID().uuidString, notes: String? = "marked note") -> TemporalJumpDraft {
+        let events = [
+            JumpEventMark(kind: .movementStart, frameIndex: 1, ptsUs: 100_000, previousPtsUs: 0, nextPtsUs: 200_000),
+            JumpEventMark(kind: .takeoff, frameIndex: 4, ptsUs: 400_000, previousPtsUs: 300_000, nextPtsUs: 500_000),
+            JumpEventMark(kind: .landing, frameIndex: 9, ptsUs: 900_000, previousPtsUs: 800_000, nextPtsUs: nil)]
+        return TemporalJumpDraft(sessionKey: session, ownerID: owner, protocolKey: .cmj,
+            side: nil, dropHeightCm: nil, recordedAt: Date(timeIntervalSince1970: 1_700_000_000.125),
+            notes: notes, source: source, sourceFrameCount: 10, sourceOriginUs: 0,
+            temporalState: .realtimeDeclared, events: events)
+    }
     private func expectFailure(_ store: SQLiteStore, format: AppleExportFormat = .jsonBackup,
                                limits: AppleExportLimits = .standard, error expected: AppleDataExportError) async {
         do { _ = try await store.exportData(format: format, limits: limits); XCTFail("Invalid snapshot must not return any document") }
@@ -121,7 +133,7 @@ final class AppleDataExportTests: XCTestCase {
         let snapshot = try await store.exportData(format: .jsonBackup, createdAt: Date(timeIntervalSince1970: 42.25))
         let json = try object(snapshot)
         XCTAssertEqual(json["contract"] as? String, "openjump-apple-backup")
-        XCTAssertEqual(json["sourceSchemaVersion"] as? Int, 3)
+        XCTAssertEqual(json["sourceSchemaVersion"] as? Int, 4)
         XCTAssertEqual(json["dateEncoding"] as? String, "unix-seconds")
         XCTAssertEqual(json["createdAtEpochSeconds"] as? Double, 42.25)
         for key in ["mediaIncluded", "preferencesIncluded", "restorationSupported", "androidCompatible"] {
@@ -325,5 +337,136 @@ final class AppleDataExportTests: XCTestCase {
         try execute(url, "PRAGMA ignore_check_constraints=ON; UPDATE athletes SET name='\(pathological)'")
         await expectFailure(store, error: .tooLarge)
         XCTAssertEqual(try scalar(url, "SELECT COUNT(*) FROM athletes"), 1)
+    }
+
+    func testCameraGraphExportsJSONAndCSVWithoutMediaLeakage() async throws {
+        let url = temporaryURL(); defer { try? FileManager.default.removeItem(at: url) }
+        let store = try SQLiteStore(databaseURL: url)
+        let owner = try await store.createAthlete(name: "Owner")
+        let saved = try await store.saveTemporalJump(sourcedDraft(owner.id, source: .camera, notes: "camera note"))
+        let snapshot = try await store.exportData(format: .jsonBackup)
+        XCTAssertEqual(snapshot.profileCount, 1)
+        XCTAssertEqual(snapshot.measurementCount, 1)
+        XCTAssertEqual(snapshot.metricCount, 5)
+        let json = try object(snapshot)
+        XCTAssertEqual(json["contract"] as? String, "openjump-apple-backup")
+        XCTAssertEqual(json["formatVersion"] as? Int, 1)
+        XCTAssertEqual(json["sourceSchemaVersion"] as? Int, 4)
+        for key in ["mediaIncluded", "preferencesIncluded", "restorationSupported", "androidCompatible"] {
+            XCTAssertEqual(json[key] as? Bool, false)
+        }
+        let root = try XCTUnwrap((json["measurements"] as? [[String: Any]])?.first)
+        XCTAssertEqual(root["id"] as? String, saved.id.uuidString)
+        XCTAssertEqual(root["sessionKey"] as? String, saved.sessionKey)
+        XCTAssertEqual(root["notes"] as? String, "camera note")
+        let metrics = try XCTUnwrap(root["metrics"] as? [[String: Any]])
+        XCTAssertEqual(metrics.count, 5)
+        let keys = try metrics.map { try XCTUnwrap($0["key"] as? String) }
+        XCTAssertEqual(keys, ["HEIGHT_CM", "FLIGHT_TIME_MS", "TAKEOFF_VELOCITY_MPS", "TIME_TO_TAKEOFF_MS", "RSI_MOD"])
+        let height = try XCTUnwrap(metrics[0]["value"] as? Double)
+        XCTAssertEqual(height, 30.64578125, accuracy: 1e-10)
+        let graph = try XCTUnwrap(root["analysis"] as? [String: Any])
+        XCTAssertEqual(graph["source"] as? String, "CAMERA")
+        XCTAssertEqual(graph["analysisVersion"] as? Int, 1)
+        XCTAssertEqual(graph["sourceFrameCount"] as? Int, 10)
+        XCTAssertEqual(graph["sourceOriginUs"] as? Int, 0)
+        XCTAssertEqual(graph["temporalState"] as? String, "REALTIME_DECLARED")
+        let events = try XCTUnwrap(graph["events"] as? [[String: Any]])
+        XCTAssertEqual(events.count, 3)
+        XCTAssertEqual(events[0]["frameIndex"] as? Int, 1)
+        XCTAssertEqual(events[0]["ptsUs"] as? Int, 100_000)
+        XCTAssertEqual(events[1]["frameIndex"] as? Int, 4)
+        XCTAssertEqual(events[1]["ptsUs"] as? Int, 400_000)
+        XCTAssertEqual(events[2]["frameIndex"] as? Int, 9)
+        XCTAssertEqual(events[2]["ptsUs"] as? Int, 900_000)
+        XCTAssertNil(events[2]["nextPtsUs"])
+        XCTAssertFalse(events[2].keys.contains("nextPtsUs"))
+        let csv = try await store.exportData(format: .analyticalCSV)
+        let rows = try parseCSV(XCTUnwrap(String(data: csv.data, encoding: .utf8)))
+        XCTAssertEqual(rows[0].count, 28)
+        XCTAssertEqual(rows.count, 6)
+        for row in rows.dropFirst() {
+            XCTAssertEqual(row[0], "1")
+            XCTAssertEqual(row[1], saved.id.uuidString)
+            XCTAssertEqual(row[14], "CAMERA")
+            XCTAssertEqual(row[15], "1")
+            XCTAssertEqual(row[16], "10")
+            XCTAssertEqual(row[17], "0")
+            XCTAssertEqual(row[18], "REALTIME_DECLARED")
+        }
+        XCTAssertEqual(rows[1][19], "1")
+        XCTAssertEqual(rows[1][20], "100000")
+        XCTAssertEqual(rows[1][21], "")
+        XCTAssertEqual(rows[1][22], "")
+        XCTAssertEqual(rows[1][23], "4")
+        XCTAssertEqual(rows[1][24], "400000")
+        XCTAssertEqual(rows[1][25], "9")
+        XCTAssertEqual(rows[1][26], "900000")
+        let text = try XCTUnwrap(String(data: snapshot.data, encoding: .utf8))
+        XCTAssertFalse(text.contains(url.path))
+        XCTAssertFalse(text.contains("videoURL"))
+        XCTAssertFalse(text.contains("openjump.apple."))
+        let csvText = try XCTUnwrap(String(data: csv.data, encoding: .utf8))
+        XCTAssertFalse(csvText.contains("videoURL"))
+    }
+
+    func testMixedSourcesAndArchivedOwnerPreservedAcrossBothFormats() async throws {
+        let url = temporaryURL(); defer { try? FileManager.default.removeItem(at: url) }
+        let store = try SQLiteStore(databaseURL: url)
+        let owner = try await store.createAthlete(name: "Keeper")
+        _ = try await store.createAthlete(name: "Active")
+        let photosSaved = try await store.saveTemporalJump(sourcedDraft(owner.id, source: .photos, session: "mixed-photos", notes: "photo note"))
+        let filesSaved = try await store.saveTemporalJump(sourcedDraft(owner.id, source: .files, session: "mixed-files", notes: "file note"))
+        let cameraSaved = try await store.saveTemporalJump(sourcedDraft(owner.id, source: .camera, session: "mixed-camera", notes: nil))
+        let legacySaved = try await store.save(legacy(owner: owner.id, session: "mixed-legacy"))
+        try await store.setArchived(owner.id, archived: true, now: Date(timeIntervalSince1970: 1_700_000_050))
+        let snapshot = try await store.exportData(format: .jsonBackup)
+        XCTAssertEqual(snapshot.profileCount, 2)
+        XCTAssertEqual(snapshot.measurementCount, 4)
+        XCTAssertEqual(snapshot.metricCount, 16)
+        let json = try object(snapshot)
+        XCTAssertEqual(json["sourceSchemaVersion"] as? Int, 4)
+        for key in ["mediaIncluded", "preferencesIncluded", "restorationSupported", "androidCompatible"] {
+            XCTAssertEqual(json[key] as? Bool, false)
+        }
+        let roots = try XCTUnwrap(json["measurements"] as? [[String: Any]])
+        let byID = Dictionary(uniqueKeysWithValues: try roots.map { (try XCTUnwrap($0["id"] as? String), $0) })
+        let photosRoot = try XCTUnwrap(byID[photosSaved.id.uuidString])
+        let filesRoot = try XCTUnwrap(byID[filesSaved.id.uuidString])
+        let cameraRoot = try XCTUnwrap(byID[cameraSaved.id.uuidString])
+        let legacyRoot = try XCTUnwrap(byID[legacySaved.id.uuidString])
+        XCTAssertEqual((photosRoot["analysis"] as? [String: Any])?["source"] as? String, "PHOTOS")
+        XCTAssertEqual((filesRoot["analysis"] as? [String: Any])?["source"] as? String, "FILES")
+        XCTAssertEqual((cameraRoot["analysis"] as? [String: Any])?["source"] as? String, "CAMERA")
+        XCTAssertTrue(legacyRoot["analysis"] is NSNull)
+        XCTAssertEqual(photosRoot["sessionKey"] as? String, "mixed-photos")
+        XCTAssertEqual(photosRoot["notes"] as? String, "photo note")
+        XCTAssertEqual(filesRoot["notes"] as? String, "file note")
+        XCTAssertTrue(cameraRoot["notes"] is NSNull)
+        XCTAssertEqual(legacyRoot["notes"] as? String, "legacy")
+        for saved in [photosSaved, filesSaved, cameraSaved] {
+            let exported = try XCTUnwrap(byID[saved.id.uuidString])
+            let metrics = try XCTUnwrap(exported["metrics"] as? [[String: Any]])
+            XCTAssertEqual(metrics.count, 5)
+            let value = try XCTUnwrap(metrics[0]["value"] as? Double)
+            XCTAssertEqual(value, 30.64578125, accuracy: 1e-10)
+        }
+        let csv = try await store.exportData(format: .analyticalCSV)
+        let rows = try parseCSV(XCTUnwrap(String(data: csv.data, encoding: .utf8)))
+        let expected = "schema_version,measurement_id,session_key,recorded_at_epoch_seconds,date_time_utc,athlete_id,athlete_name_current,protocol_key,side,drop_height_cm,metric_key,metric_value,metric_unit,metric_ordinal,analysis_source,analysis_version,source_frame_count,source_origin_us,temporal_state,movement_start_frame,movement_start_pts_us,initial_contact_frame,initial_contact_pts_us,takeoff_frame,takeoff_pts_us,landing_frame,landing_pts_us,notes"
+        XCTAssertEqual(rows[0], expected.components(separatedBy: ","))
+        XCTAssertEqual(rows[0].count, 28)
+        var sourcesByID: [String: String] = [:]
+        var countsByID: [String: Int] = [:]
+        for row in rows.dropFirst() {
+            XCTAssertEqual(row.count, 28)
+            sourcesByID[row[1]] = row[14]
+            countsByID[row[1], default: 0] += 1
+        }
+        XCTAssertEqual(sourcesByID[photosSaved.id.uuidString], "PHOTOS")
+        XCTAssertEqual(sourcesByID[filesSaved.id.uuidString], "FILES")
+        XCTAssertEqual(sourcesByID[cameraSaved.id.uuidString], "CAMERA")
+        XCTAssertEqual(sourcesByID[legacySaved.id.uuidString], "")
+        XCTAssertEqual(countsByID.values.sorted(), [1, 5, 5, 5])
     }
 }

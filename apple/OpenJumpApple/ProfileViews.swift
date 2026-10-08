@@ -21,10 +21,18 @@ struct ProfilesView: View {
         // database migration or ownership rewrite.
         return athlete.name.range(of: trimmed, options: [.caseInsensitive, .diacriticInsensitive]) != nil
     }
-    private func profileRowAccessibilityLabel(for athlete: Athlete) -> String {
-        let status = athlete.archivedAt == nil
-            ? AppText.string("profiles.active", language: language)
-            : AppText.string("profiles.archived", language: language)
+    private func isProfileSelected(_ athlete: Athlete) -> Bool {
+        athlete.archivedAt == nil && state.preferences.selectedAthleteID == athlete.id
+    }
+    private func profileRowAccessibilityLabel(for athlete: Athlete, isSelected: Bool) -> String {
+        let status: String
+        if athlete.archivedAt != nil {
+            status = AppText.string("profiles.archived", language: language)
+        } else if isSelected {
+            status = AppText.string("profiles.active", language: language) + " · " + AppText.string("profiles.selected", language: language)
+        } else {
+            status = AppText.string("profiles.active", language: language)
+        }
         return athlete.name + ", " + status
     }
     var body: some View {
@@ -56,7 +64,12 @@ struct ProfilesView: View {
                             if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                                 Button(AppText.string("profiles.add", language: language)) { creating = true }
                                     .buttonStyle(.borderedProminent).tint(.openJumpGreen)
-                                    .frame(minHeight: 44)
+                                    .frame(minHeight: 48)
+                            } else {
+                                Button(AppText.string("common.clearSearch", language: language)) { query = "" }
+                                    .buttonStyle(.bordered)
+                                    .frame(minHeight: 48)
+                                    .accessibilityIdentifier("profiles.clearSearch")
                             }
                         }
                     } else {
@@ -70,14 +83,22 @@ struct ProfilesView: View {
                                             Text(athlete.name)
                                                 .font(.headline)
                                                 .lineLimit(2)
-                                            Text(athlete.archivedAt == nil
-                                                ? AppText.string("profiles.active", language: language)
-                                                : AppText.string("profiles.archived", language: language))
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
+                                            if athlete.archivedAt != nil {
+                                                Text(AppText.string("profiles.archived", language: language))
+                                                    .font(.caption)
+                                                    .foregroundStyle(.secondary)
+                                            } else if isProfileSelected(athlete) {
+                                                Text(AppText.string("profiles.active", language: language) + " · " + AppText.string("profiles.selected", language: language))
+                                                    .font(.caption)
+                                                    .foregroundStyle(.secondary)
+                                            } else {
+                                                Text(AppText.string("profiles.active", language: language))
+                                                    .font(.caption)
+                                                    .foregroundStyle(.secondary)
+                                            }
                                         }
                                         Spacer()
-                                        if state.preferences.selectedAthleteID == athlete.id {
+                                        if isProfileSelected(athlete) {
                                             Image(systemName: "checkmark.circle.fill")
                                                 .foregroundStyle(Color.openJumpGreen)
                                                 .accessibilityLabel(AppText.string("profiles.selected", language: language))
@@ -88,7 +109,8 @@ struct ProfilesView: View {
                                 }
                                 .buttonStyle(.plain)
                                 .accessibilityIdentifier("profile.row.\(athlete.id.uuidString)")
-                                .accessibilityLabel(profileRowAccessibilityLabel(for: athlete))
+                                .accessibilityLabel(profileRowAccessibilityLabel(for: athlete, isSelected: isProfileSelected(athlete)))
+                                .accessibilityAddTraits(isProfileSelected(athlete) ? .isSelected : [])
                                 .swipeActions {
                                     Button(AppText.string("profiles.edit", language: language)) { editor = athlete }
                                         .tint(.openJumpGreen)
@@ -106,6 +128,7 @@ struct ProfilesView: View {
                         ? AppText.string("profiles.active", language: language)
                         : AppText.string("profiles.archived", language: language)) { showArchived.toggle() }
                         .frame(minHeight: 44)
+                        .accessibilityIdentifier("profiles.scope")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { creating = true } label: {
@@ -507,7 +530,10 @@ private struct AthleteDetail: View {
     let athlete: Athlete
     let edit: () -> Void
     let changed: () -> Void
-    @State private var count = 0
+    @State private var count: Int? = nil
+    @State private var countLoading = true
+    @State private var countError: String?
+    @State private var countRequest = 0
     @State private var busy = false
     @State private var error: String?
     @State private var confirm = false
@@ -533,14 +559,52 @@ private struct AthleteDetail: View {
                             .accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(athlete.name).font(.headline).lineLimit(3)
-                            Text(isArchived
-                                ? AppText.string("profiles.archived", language: language)
-                                : AppText.string("profiles.active", language: language))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                            if isArchived {
+                                Text(AppText.string("profiles.archived", language: language))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            } else if state.preferences.selectedAthleteID == athlete.id {
+                                Text(AppText.string("profiles.active", language: language) + " · " + AppText.string("profiles.selected", language: language))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                Text(AppText.string("profiles.active", language: language))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                     }
                     .padding(.vertical, 4)
+                }
+                Section(AppText.string("profiles.historyCount", language: language)) {
+                    LabeledContent(AppText.string("profiles.historyCount", language: language)) {
+                        if countLoading {
+                            ProgressView()
+                                .accessibilityIdentifier("profile.historyCount.loading")
+                                .accessibilityLabel(AppText.string("app.loading", language: language))
+                        } else if let count {
+                            Text(count.formatted(.number.locale(state.preferences.effectiveLocale)))
+                        } else {
+                            // No zero placeholder: missing/error states surface below via countError.
+                            Text(verbatim: "—")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .accessibilityIdentifier("profile.historyCount")
+                    if let countError {
+                        Text(verbatim: countError)
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                            .accessibilityIdentifier("profile.historyCount.error")
+                        Button(AppText.string("common.retry", language: language)) { Task { await loadCount() } }
+                            .frame(minHeight: 48)
+                            .accessibilityIdentifier("profile.historyCount.retry")
+                            .disabled(countLoading)
+                    }
+                    Button(AppText.string("profiles.history", language: language)) { showHistory = true }
+                        .frame(minHeight: 48)
+                        .accessibilityIdentifier("profile.history")
+                        .disabled(busy)
                 }
                 if athlete.weightKg != nil || athlete.heightCm != nil {
                     Section(AppText.string("profiles.physical", language: language)) {
@@ -562,16 +626,6 @@ private struct AthleteDetail: View {
                     Section(AppText.string("profiles.notes", language: language)) {
                         Text(notes)
                     }
-                }
-                Section(AppText.string("profiles.historyCount", language: language)) {
-                    LabeledContent(
-                        AppText.string("profiles.historyCount", language: language),
-                        value: "\(count)"
-                    )
-                    Button(AppText.string("profiles.history", language: language)) { showHistory = true }
-                        .frame(minHeight: 48)
-                        .accessibilityIdentifier("profile.history")
-                        .disabled(busy)
                 }
                 Section {
                     if !isArchived {
@@ -618,7 +672,7 @@ private struct AthleteDetail: View {
                 ) { Task { await toggleArchive() } }
                 Button(AppText.string("common.cancel", language: language), role: .cancel) {}
             }
-            .task { await loadCount() }
+            .task(id: state.historyRevision) { await loadCount() }
             .sheet(isPresented: $showHistory) {
                 // Fixed history owner: this detail athlete, never follows the
                 // globally selected athlete.
@@ -627,11 +681,28 @@ private struct AthleteDetail: View {
         }
     }
     private func loadCount() async {
-        guard let store = state.store else { return }
+        guard !Task.isCancelled else { return }
+        countRequest += 1
+        let request = countRequest
+        countLoading = true
+        count = nil
+        countError = nil
+        guard let store = state.store else {
+            if request == countRequest {
+                countError = AppText.string("error.database", language: language)
+                countLoading = false
+            }
+            return
+        }
         do {
-            count = try await store.measurementCount(ownerID: athlete.id)
+            let value = try await store.measurementCount(ownerID: athlete.id)
+            guard !Task.isCancelled, request == countRequest else { return }
+            count = value
+            countLoading = false
         } catch {
-            self.error = displayError(error, language: language)
+            guard !Task.isCancelled, request == countRequest else { return }
+            countError = displayError(error, language: language)
+            countLoading = false
         }
     }
     private func toggleArchive() async {

@@ -28,7 +28,7 @@ route after uninstalling it.
 
 ## JSON data copy
 
-- Contract `openjump-apple-backup`, format version 1, source SQLite schema 3.
+- Contract `openjump-apple-backup`, format version 1, source SQLite schema 4.
 - `dateEncoding: "unix-seconds"`, `canonicalUnits: true`.
 - `mediaIncluded`, `preferencesIncluded`, `restorationSupported`, and
   `androidCompatible` are all false.
@@ -41,7 +41,8 @@ route after uninstalling it.
 - `measurements`: stored IDs, session keys, owners (including unowned legacy
   records), protocol/context/date/notes, ordered canonical metrics, and optional
   temporal analysis. Raw UUID spelling/text is not normalized for output.
-- A present analysis includes source kind, compressed-source frame count and
+- A present analysis includes source kind (current origins: PHOTOS, FILES,
+  CAMERA), compressed-source frame count and
   origin, real-time declaration, analysis version 1, and ordered event marks:
   kind, ordinal, source frame index, exact microsecond PTS and optional neighboring
   PTS. Missing analysis is explicit null only when no event rows exist.
@@ -52,6 +53,20 @@ route after uninstalling it.
 This is a creation-only logical data snapshot, not a SQLite binary file. A future
 restore feature would require its own strict incoming-data validation and atomic
 conflict policy; it is not inferred from the current JSON structure.
+
+## Provenance migration 3 → 4 (source-only, no capture UI)
+
+Schema 4 admits one new truthful provenance value, `CAMERA`, and nothing else.
+The narrow migration rebuilds only `assessment_analysis` to widen its
+`source_kind` CHECK from `PHOTOS,FILES` to `PHOTOS,FILES,CAMERA`, preserving
+every row, raw value, ID, column, sibling table, index, session key, owner,
+note and constraint. Historical PHOTOS/FILES rows keep their stored values;
+legacy rows without a graph still export explicit null and gain no fabricated
+graph. No video bytes, file URLs, media/path/FPS/URI columns, physics factors
+or owner policies change, and unknown source values are still rejected. A
+failed migration rolls back to schema 3 without a partial schema 4 or reset.
+This slice is storage and export provenance only: it does not implement camera
+capture, permissions, preview, buttons, or any capture UI.
 
 ## Analytical CSV
 

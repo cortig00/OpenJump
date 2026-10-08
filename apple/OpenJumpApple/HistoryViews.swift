@@ -2,6 +2,7 @@ import SwiftUI
 
 struct HistoryView: View {
     @ObservedObject var state: AppState
+    @Environment(\.dismiss) private var dismiss
     let fixedOwnerID: UUID?
     @State private var rows: [SavedMeasurement] = []
     @State private var cursor: (date: Date, id: UUID)?
@@ -16,9 +17,12 @@ struct HistoryView: View {
     @State private var selected: SavedMeasurement?
     @State private var generation = 0
     @State private var searchGeneration = 0
-    @State private var loadingPage = false
+    @State private var loadingPage = true
     @State private var loadingRequest: Int?
     private var language: AppLanguage { state.preferences.language }
+    private var hasRemovableFilters: Bool {
+        HistoryFilters.hasRemovableFilters(protocolKey: selectedProtocol, selectedOwnerID: selectedOwner, fixedOwnerID: fixedOwnerID, period: selectedPeriod, query: query)
+    }
     init(state: AppState, ownerID: UUID? = nil) {
         self.state = state
         self.fixedOwnerID = ownerID
@@ -71,12 +75,29 @@ struct HistoryView: View {
     }
     var body: some View {
         NavigationStack {
-            VStack(spacing: 8) {
+            VStack(spacing: OpenJumpSpacing.sm) {
+                if let fixedOwnerID {
+                    // Fixed profile context: read-only, never switchable.
+                    // The fixed owner always wins; reset/query/preset never clear it.
+                    LabeledContent(AppText.string("history.athlete", language: language)) {
+                        if let owner = state.athletes.first(where: { $0.id == fixedOwnerID }) {
+                            if owner.archivedAt == nil {
+                                Text(verbatim: owner.name)
+                            } else {
+                                Text(verbatim: "\(owner.name) · \(AppText.string("profiles.archived", language: language))")
+                            }
+                        } else {
+                            Text(AppText.string("history.unassigned", language: language))
+                        }
+                    }
+                    .accessibilityIdentifier("history.ownerContext")
+                    .padding(.horizontal, 16)
+                }
                 // Adaptable native filter layouts: side-by-side when the
                 // locale/Dynamic Type fits, stacked otherwise, so long
                 // German/Turkish labels never clip (iOS 16 ViewThatFits).
                 ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 8) {
+                    HStack(spacing: OpenJumpSpacing.sm) {
                         protocolPicker
                         if fixedOwnerID == nil { ownerPicker }
                     }
@@ -88,7 +109,7 @@ struct HistoryView: View {
                 .pickerStyle(.menu)
                 .padding(.horizontal, 16)
                 ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 8) {
+                    HStack(spacing: OpenJumpSpacing.sm) {
                         periodPicker
                         Spacer()
                         resetButton
@@ -126,7 +147,13 @@ struct HistoryView: View {
                 if loadingPage && rows.isEmpty && error == nil {
                     ProgressView()
                 } else if rows.isEmpty && error == nil {
-                    OpenJumpEmptyState(title: AppText.string("history.emptyTitle", language: language), systemImage: "clock", description: Text(AppText.string("history.emptyBody", language: language)))
+                    if hasRemovableFilters {
+                        OpenJumpEmptyState(title: AppText.string("history.noResults", language: language), systemImage: "clock", description: Text(AppText.string("history.noResultsBody", language: language)))
+                            .accessibilityIdentifier("history.noResults")
+                    } else {
+                        OpenJumpEmptyState(title: AppText.string("history.emptyTitle", language: language), systemImage: "clock", description: Text(AppText.string("history.emptyBody", language: language)))
+                            .accessibilityIdentifier("history.empty")
+                    }
                 } else {
                     List {
                         ForEach(rows) { measurement in
@@ -151,6 +178,15 @@ struct HistoryView: View {
                 }
             }
             .navigationTitle(AppText.string("tab.history", language: language))
+            .toolbar {
+                if fixedOwnerID != nil {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button(AppText.string("common.close", language: language)) { dismiss() }
+                            .frame(minHeight: 48)
+                            .accessibilityIdentifier("history.close")
+                    }
+                }
+            }
             .task { await reset() }
             .onChange(of: query) { _ in
                 searchGeneration += 1
@@ -180,12 +216,20 @@ struct HistoryView: View {
             query = ""
             Task { await reset() }
         }
-        .frame(minHeight: 44)
+        .frame(minHeight: 48)
         .accessibilityIdentifier("history.resetFilters")
+        .disabled(!hasRemovableFilters)
     }
-    private func reset() async { generation += 1; loadingRequest = nil; loadingPage = false; rows = []; cursor = nil; hasMore = false; error = nil; await loadNext(generation) }
+    private func reset() async { generation += 1; loadingRequest = nil; loadingPage = true; rows = []; cursor = nil; hasMore = false; error = nil; await loadNext(generation) }
     private func loadNext(_ request: Int) async {
-        guard loadingRequest == nil, request == generation, let store = state.store else { return }
+        guard loadingRequest == nil, request == generation else { return }
+        guard let store = state.store else {
+            if request == generation {
+                self.error = AppText.string("error.database", language: language)
+                loadingPage = false
+            }
+            return
+        }
         // Capture the full filter snapshot before the actor await so a
         // concurrent preset/owner/protocol/search change starts a newer
         // generation instead of mixing bounds into this page. The fixed
@@ -207,6 +251,7 @@ struct HistoryView: View {
         } catch {
             if request == generation {
                 self.error = AppText.string((error as? HistoryFilterError)?.localizationKey ?? "history.invalidRange", language: language)
+                loadingPage = false
             }
             return
         }

@@ -136,6 +136,121 @@ final class JumpVideoImportTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: original.path))
     }
 
+    func testCapturedCopyTruthUsesCameraSourceAndPreservesRawUntilBorrowersDrained() async throws {
+        let (captureDirectory, captureURL) = try JumpVideoCapturePaths.makeOwnedCaptureDirectory()
+        var sweptByLease = false
+        defer {
+            if !sweptByLease { try? FileManager.default.removeItem(at: captureDirectory) }
+        }
+        let rawBytes = Data("captured camera bytes".utf8)
+        try rawBytes.write(to: captureURL)
+        let lease = JumpVideoCaptureLease(ownedDirectory: captureDirectory, fileURL: captureURL)
+        lease.markWriterFinalized()
+        guard let workerBorrower = lease.acquireBorrower() else {
+            XCTFail("finalized lease must vend a transferable borrower")
+            return
+        }
+        guard let previewBorrower = lease.acquireBorrower() else {
+            XCTFail("finalized lease must vend a second borrower for preview")
+            return
+        }
+        let imported = try await JumpVideoImporter.importCapturedFile(workerBorrower)
+        let stagedData = try Data(contentsOf: imported.url)
+        let rawData = try Data(contentsOf: captureURL)
+        XCTAssertEqual(imported.source, .camera)
+        XCTAssertEqual(imported.source.rawValue, "CAMERA")
+        XCTAssertNotEqual(imported.url, captureURL)
+        XCTAssertEqual(stagedData, rawBytes)
+        XCTAssertEqual(stagedData, rawData)
+        let stagedBackup = try imported.url.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup
+        XCTAssertEqual(stagedBackup, true)
+        let stagedParentBackup = try imported.url.deletingLastPathComponent().resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup
+        XCTAssertEqual(stagedParentBackup, true)
+        let stagedURL = imported.url
+        imported.dispose()
+        imported.dispose()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: stagedURL.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: captureURL.path))
+        let stillRaw = try Data(contentsOf: captureURL)
+        XCTAssertEqual(stillRaw, rawBytes)
+        lease.markDiscard()
+        XCTAssertTrue(FileManager.default.fileExists(atPath: captureURL.path))
+        workerBorrower.release()
+        XCTAssertTrue(FileManager.default.fileExists(atPath: captureURL.path))
+        previewBorrower.release()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: captureURL.path))
+        sweptByLease = true
+    }
+
+    func testCapturedBlockedCancelRetainsPinUntilRealWorkerExit() async throws {
+        let (captureDirectory, captureURL) = try JumpVideoCapturePaths.makeOwnedCaptureDirectory()
+        var sweptByLease = false
+        defer {
+            if !sweptByLease { try? FileManager.default.removeItem(at: captureDirectory) }
+        }
+        try Data("source".utf8).write(to: captureURL)
+        let lease = JumpVideoCaptureLease(ownedDirectory: captureDirectory, fileURL: captureURL)
+        lease.markWriterFinalized()
+        guard let workerBorrower = lease.acquireBorrower() else {
+            XCTFail("finalized lease must vend a transferable borrower")
+            return
+        }
+        defer { workerBorrower.release() }
+        let stagingRoot = try FileManager.default.url(for: .cachesDirectory, in: .userDomainMask,
+                                                      appropriateFor: nil, create: true)
+            .appendingPathComponent("OpenJumpImportedVideos", isDirectory: true)
+        let beforeStaging = try directoryEntries(at: stagingRoot)
+        let enteredCoordinator = expectation(description: "captured native coordination entered")
+        let cancellationRequested = expectation(description: "captured native cancellation requested")
+        let workerExited = expectation(description: "captured blocked worker actually exited")
+        let releaseCoordinator = DispatchSemaphore(value: 0)
+        JumpVideoImporter.workerExitForTesting = { workerExited.fulfill() }
+        JumpVideoImporter.coordinationDriverForTesting = { url, accessor, registerCancellation in
+            registerCancellation { cancellationRequested.fulfill() }
+            enteredCoordinator.fulfill()
+            releaseCoordinator.wait()
+            accessor(url)
+        }
+        defer {
+            releaseCoordinator.signal()
+            JumpVideoImporter.coordinationDriverForTesting = nil
+            JumpVideoImporter.workerExitForTesting = nil
+        }
+        let (ordinaryURL, ordinaryDirectory) = try makeSource(contents: Data("ordinary".utf8))
+        defer { try? FileManager.default.removeItem(at: ordinaryDirectory) }
+        let importTask = Task { try await JumpVideoImporter.importCapturedFile(workerBorrower) }
+        await fulfillment(of: [enteredCoordinator], timeout: 2)
+        importTask.cancel()
+        do {
+            _ = try await importTask.value
+            XCTFail("caller cancellation must return without waiting for blocked captured worker")
+        } catch is CancellationError { }
+        await fulfillment(of: [cancellationRequested], timeout: 1)
+        let captureExistsWhileBlocked = FileManager.default.fileExists(atPath: captureURL.path)
+        XCTAssertTrue(captureExistsWhileBlocked)
+        let pinWhileBlocked = workerBorrower.fileURL
+        XCTAssertNotNil(pinWhileBlocked)
+        let stagedCountWhileBlocked = try directoryEntries(at: stagingRoot).count
+        let beforeCount = beforeStaging.count
+        XCTAssertEqual(stagedCountWhileBlocked, beforeCount + 1)
+        do {
+            _ = try await JumpVideoImporter.importFile(ordinaryURL)
+            XCTFail("second worker must not be admitted while captured worker still blocked")
+        } catch let error as JumpVideoImportError {
+            XCTAssertEqual(error, .unableToCopy)
+        } catch {
+            XCTFail("Unexpected second import error: \(error)")
+        }
+        releaseCoordinator.signal()
+        await fulfillment(of: [workerExited], timeout: 2)
+        let afterStaging = try directoryEntries(at: stagingRoot)
+        XCTAssertEqual(afterStaging, beforeStaging)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: captureURL.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: ordinaryURL.path))
+        lease.markDiscard()
+        sweptByLease = false
+    }
+
     private func makeSource(contents: Data) throws -> (URL, URL) {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("OpenJumpImportTest-\(UUID().uuidString)", isDirectory: true)

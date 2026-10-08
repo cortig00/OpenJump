@@ -71,7 +71,7 @@ final class ProductUITests: XCTestCase {
     func testProfileAvatarConfirmThenCancelAndSaveSurvivesRelaunch() {
         let id = UUID()
         var app = launch(id: id)
-        XCTAssertTrue(element("jumps.import.files", in: app).waitForExistence(timeout: 10))
+        XCTAssertTrue(element("jumps.catalog.cmj", in: app).waitForExistence(timeout: 10))
         screenshot(app, named: "openjump-product-jumps")
         app.tabBars.buttons["Profiles"].tap()
         tap("profiles.add", in: app)
@@ -198,5 +198,81 @@ final class ProductUITests: XCTestCase {
         let persistedTheme = element("settings.theme", in: app)
         XCTAssertTrue(persistedTheme.waitForExistence(timeout: 10))
         XCTAssertTrue((persistedTheme.label + " " + (persistedTheme.value as? String ?? "")).contains("Dark"))
+    }
+
+    func testProfileHistoryFixedOwnerFiltersRecoverAndClose() {
+        let app = launch(id: UUID())
+        app.tabBars.buttons["Profiles"].tap()
+        let row = profile("UI Test Athlete", in: app)
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "Missing fixture profile row")
+        XCTAssertTrue(row.label.contains("Selected athlete"), "Selected state must be VoiceOver-visible on the fixture row")
+        row.tap()
+        let historyLink = element("profile.history", in: app)
+        XCTAssertTrue(historyLink.waitForExistence(timeout: 10), "Missing athlete history link")
+        let countRow = element("profile.historyCount", in: app)
+        XCTAssertTrue(countRow.waitForExistence(timeout: 10), "Missing history count row")
+        // Async count settles to the single isolated measurement without arbitrary sleep.
+        let settled = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS %@", "1"), object: countRow)
+        XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 10), .completed, "Expected isolated count 1 after settlement")
+        XCTAssertFalse(element("profile.historyCount.error", in: app).exists)
+        historyLink.tap()
+        let ownerContext = element("history.ownerContext", in: app)
+        XCTAssertTrue(ownerContext.waitForExistence(timeout: 10), "Missing fixed-owner context")
+        XCTAssertTrue(ownerContext.label.contains("UI Test Athlete"), "Owner context must name the fixed fixture athlete")
+        XCTAssertTrue(element("history.close", in: app).waitForExistence(timeout: 10), "Missing fixed-owner Close")
+        let search = element("history.search", in: app)
+        XCTAssertTrue(search.waitForExistence(timeout: 10))
+        search.tap()
+        search.typeText("zzz-no-such-session-xyz")
+        let noResults = element("history.noResults", in: app)
+        XCTAssertTrue(noResults.waitForExistence(timeout: 10), "Filtered-empty must use the no-results copy")
+        if app.buttons["Done"].exists { app.buttons["Done"].tap() }
+        let reset = element("history.resetFilters", in: app)
+        reveal(reset, in: app)
+        XCTAssertTrue(reset.isEnabled, "Reset must be enabled while removable filters are active")
+        reset.tap()
+        XCTAssertTrue(ownerContext.waitForExistence(timeout: 10))
+        XCTAssertTrue(ownerContext.label.contains("UI Test Athlete"), "Fixed owner must survive filter reset")
+        let restoredRow = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "history.row.")).firstMatch
+        XCTAssertTrue(restoredRow.waitForExistence(timeout: 10), "Isolated assessment must return after clearing filters")
+        let close = element("history.close", in: app)
+        reveal(close, in: app)
+        close.tap()
+        XCTAssertTrue(element("profile.history", in: app).waitForExistence(timeout: 10), "Close must return to the athlete detail, not the global tab")
+    }
+
+    func testStagedFlowCatalogPrepareObtainBackPreservesSetupAcrossTabs() {
+        let id = UUID()
+        let app = launch(id: id)
+        // The initial stage is the illustrated catalog; import lives behind
+        // Prepare → Continue → Obtain video.
+        XCTAssertTrue(element("jumps.catalog.cmj", in: app).waitForExistence(timeout: 10))
+        waitUntilGone(element("jumps.import.files", in: app))
+        tap("jumps.catalog.cmj", in: app)
+        XCTAssertTrue(element("jumps.protocol", in: app).waitForExistence(timeout: 10))
+        tap("jumps.flow.continue", in: app)
+        XCTAssertTrue(element("jumps.import.photos", in: app).waitForExistence(timeout: 10))
+        XCTAssertTrue(element("jumps.import.files", in: app).waitForExistence(timeout: 10))
+        waitUntilGone(element("jumps.protocol", in: app))
+        // Deterministic native Back: exclude the trailing Cancel so the
+        // chevron is never confused with `jumps.cancel`. Assert a single
+        // candidate in the current Obtain navigation bar before tapping.
+        let navBar = app.navigationBars["Obtain video"]
+        XCTAssertTrue(navBar.waitForExistence(timeout: 10), "Missing Obtain navigation bar before Back")
+        // Native Back may use the previous title ("Prepare"), not "Back".
+        // This stage has only Back and the identified trailing Cancel.
+        let backQuery = navBar.buttons.matching(NSPredicate(format: "identifier != %@", "jumps.cancel"))
+        XCTAssertTrue(backQuery.firstMatch.waitForExistence(timeout: 10), "Missing deterministic native Back in Obtain navigation bar")
+        XCTAssertEqual(backQuery.count, 1, "Expected exactly one native Back candidate excluding jumps.cancel")
+        let backButton = backQuery.firstMatch
+        XCTAssertNotEqual(backButton.identifier, "jumps.cancel", "Native Back must never resolve to the trailing Cancel")
+        backButton.tap()
+        XCTAssertTrue(element("jumps.protocol", in: app).waitForExistence(timeout: 10))
+        XCTAssertTrue(element("jumps.owner", in: app).waitForExistence(timeout: 10), "Prepare setup owner must survive native Back")
+        app.tabBars.buttons["Profiles"].tap()
+        XCTAssertTrue(element("profiles.add", in: app).waitForExistence(timeout: 10))
+        app.tabBars.buttons["Jumps"].tap()
+        XCTAssertTrue(element("jumps.protocol", in: app).waitForExistence(timeout: 10))
+        XCTAssertTrue(element("jumps.owner", in: app).waitForExistence(timeout: 10), "Prepare setup owner must survive tab round-trip")
     }
 }

@@ -143,3 +143,201 @@ extension JumpWorkflowPresentation {
         }
     }
 }
+
+// MARK: - Staged flow routes (value-only navigation)
+
+/// Native staged route for Prepare → Obtain video → Analyse → Result.
+///
+/// Pure value type only: the single `JumpWorkflowState` stays at the
+/// `JumpHomeView` root and the `NavigationStack` path owns nothing but
+/// these values. No strings, state, physics, or persistence here; stage
+/// titles resolve through the existing `jumps.flow.*` locale keys.
+enum JumpFlowRoute: Hashable, CaseIterable {
+    case prepare
+    case obtainVideo
+    case analyse
+    case result
+}
+
+extension JumpWorkflowPresentation {
+    /// Most useful valid route for existing workflow content, without
+    /// clearing or inventing data. Priority: confirmed/calculated result
+    /// first, then indexed analysis, then pending import/video, else
+    /// preparation (including notes without a clip). Never returns
+    /// `.result` without `hasResult`.
+    static func resumeRoute(
+        hasResult: Bool,
+        hasManifest: Bool,
+        hasVideoOrImportActivity: Bool
+    ) -> JumpFlowRoute {
+        if hasResult { return .result }
+        if hasManifest { return .analyse }
+        if hasVideoOrImportActivity { return .obtainVideo }
+        return .prepare
+    }
+
+    /// Full native prefix chain to a target stage, so Back steps through
+    /// each earlier stage instead of jumping to the catalog.
+    static func path(to route: JumpFlowRoute) -> [JumpFlowRoute] {
+        switch route {
+        case .prepare: return [.prepare]
+        case .obtainVideo: return [.prepare, .obtainVideo]
+        case .analyse: return [.prepare, .obtainVideo, .analyse]
+        case .result: return [.prepare, .obtainVideo, .analyse, .result]
+        }
+    }
+}
+
+// MARK: - Flow visibility gates (pure decisions for hidden-tab safety)
+
+extension JumpWorkflowPresentation {
+    /// Automatic Obtain video → Analyse advance is allowed only when the
+    /// Jumps root is actually appeared, the scene is active, Obtain video is
+    /// the visible route, and an indexed manifest is available. Hidden or
+    /// inactive tabs, wrong stages, and missing content all fail closed, so
+    /// hidden completions surface via explicit Continue/Resume instead of an
+    /// automatic yank. The caller passes `scenePhase == .active` as
+    /// `isActiveScene`; no UIKit/SwiftUI scene types enter pure code.
+    static func shouldAutoAdvanceToAnalyse(
+        isVisible: Bool,
+        isActiveScene: Bool,
+        visibleRoute: JumpFlowRoute?,
+        manifestAvailable: Bool
+    ) -> Bool {
+        guard isVisible, isActiveScene, manifestAvailable else { return false }
+        return visibleRoute == .obtainVideo
+    }
+
+    /// Automatic Analyse → Result advance under the same visibility gates,
+    /// with Analyse as the expected visible route and calculated metrics as
+    /// the content gate. Hidden/inactive/wrong-stage/missing results fail
+    /// closed, leaving explicit Review result instead of an automatic push.
+    static func shouldAutoAdvanceToResult(
+        isVisible: Bool,
+        isActiveScene: Bool,
+        visibleRoute: JumpFlowRoute?,
+        resultAvailable: Bool
+    ) -> Bool {
+        guard isVisible, isActiveScene, resultAvailable else { return false }
+        return visibleRoute == .analyse
+    }
+
+    /// Viewer attaches only when the Jumps root is actually appeared, the
+    /// scene is active, and Analyse is the visible route. Every other
+    /// combination pauses without discarding artifacts. The caller passes
+    /// `scenePhase == .active` as `isActiveScene`.
+    static func shouldActivateViewer(
+        isVisible: Bool,
+        isActiveScene: Bool,
+        visibleRoute: JumpFlowRoute?
+    ) -> Bool {
+        guard isVisible, isActiveScene else { return false }
+        return visibleRoute == .analyse
+    }
+
+    /// Unit seam for the View confirm decision: an accepted pending catalog
+    /// protocol routes to Prepare regardless of retained clip. Rejected
+    /// (nil) or mismatched protocols yield nil so the caller trims instead.
+    /// Clip emptiness is intentionally not consulted here; State owns
+    /// acceptance and this maps acceptance to navigation only.
+    static func routeForConfirmedCatalogProtocol(
+        pending: SavedProtocol?,
+        confirmed: SavedProtocol?
+    ) -> JumpFlowRoute? {
+        guard let pending, let confirmed, pending == confirmed else { return nil }
+        return .prepare
+    }
+}
+
+// MARK: - Camera entry + controls policy (C2b pure gates for unit tests + view)
+
+/// Value-only camera control matrix for one capture phase. The Obtain-video
+/// camera section renders from this; unit tests pin it. No borrowers,
+/// players, URLs, or recording side effects live here — the facade/engine
+/// own all capture behavior, and the C2a state entries own the Use commit.
+struct JumpCameraControls: Equatable, Sendable {
+    /// Record affordance (permission prepare on first need, then explicit
+    /// start only when the facade reports ready). Never auto-records.
+    var showsRecord: Bool
+    /// Stop row visibility (live take, including the finalizing wait).
+    var showsStop: Bool
+    /// Stop enabled only while the take is live (starting/recording).
+    /// Finalizing shows a disabled Stop: the delegate owns completion and a
+    /// second stop is rejected by policy.
+    var stopEnabled: Bool
+    /// Use affordance: finalized recorded candidate only, never finalizing.
+    var canUse: Bool
+    /// Repeat / new-recording affordance: ready, recorded, or failed only.
+    var canRepeat: Bool
+    /// Retry affordance for denied/unavailable/failed (explicit prepare).
+    var showsRetry: Bool
+    /// Cancel affordance: clears the camera attempt, never the old analysis.
+    var showsCancel: Bool
+    /// Live capture preview host visibility (session render, not review).
+    var showsLivePreview: Bool
+    /// Finalized-candidate review player visibility.
+    var showsReview: Bool
+}
+
+extension JumpCameraControls {
+    /// Additive C2b control labels (8 locales). Status/error text reuses the
+    /// existing `jumps.camera.*` keys; these four are the only new keys.
+    static let recordKey = "jumps.camera.record"
+    static let stopKey = "jumps.camera.stop"
+    static let useRecordingKey = "jumps.camera.useRecording"
+    static let repeatKey = "jumps.camera.repeat"
+    /// Exact additive key surface C2b introduces. Unit tests pin this set so
+    /// no mic/gallery/InfoPlist key can slip in through the camera slice.
+    static var newControlKeys: [String] {
+        [recordKey, stopKey, useRecordingKey, repeatKey]
+    }
+}
+
+extension JumpWorkflowPresentation {
+    /// Camera-section eligibility: the Jumps root must actually be appeared,
+    /// the scene active, and Obtain video the visible route. Hidden tabs,
+    /// inactive scenes, wrong routes, and background all fail closed, so the
+    /// preview host and the facade lifecycle never activate implicitly and
+    /// recording always starts from an explicit Record tap. The caller passes
+    /// `scenePhase == .active` as `isActiveScene`; no UIKit/SwiftUI scene
+    /// types enter pure code.
+    static func isCameraEligible(
+        isVisible: Bool,
+        isActiveScene: Bool,
+        visibleRoute: JumpFlowRoute?
+    ) -> Bool {
+        guard isVisible, isActiveScene else { return false }
+        return visibleRoute == .obtainVideo
+    }
+
+    /// Pure phase → control matrix for the camera section. Mirrors the
+    /// facade/engine policy exactly:
+    /// - idle/ready: Record (prepare on first need, start only when ready).
+    /// - starting/recording: Stop enabled, never Use.
+    /// - finalizing: disabled Stop + wait text, never Use, never Repeat.
+    /// - recorded: review + Use (fresh borrower per tap) + Repeat + Cancel.
+    /// - denied/unavailable/failed: Retry + Cancel only (plus Repeat from
+    ///   failed, which re-prepares only when the graph is live).
+    /// Error phases expose no analysis-destructive action: Cancel preserves
+    /// the old analysis (C2a guarantee) and Retry only re-prepares.
+    static func cameraControls(for phase: JumpVideoCapturePhase) -> JumpCameraControls {
+        switch phase {
+        case .idle:
+            return JumpCameraControls(showsRecord: true, showsStop: false, stopEnabled: false, canUse: false, canRepeat: false, showsRetry: false, showsCancel: false, showsLivePreview: true, showsReview: false)
+        case .requestingPermission, .preparing:
+            return JumpCameraControls(showsRecord: false, showsStop: false, stopEnabled: false, canUse: false, canRepeat: false, showsRetry: false, showsCancel: false, showsLivePreview: true, showsReview: false)
+        case .ready:
+            return JumpCameraControls(showsRecord: true, showsStop: false, stopEnabled: false, canUse: false, canRepeat: true, showsRetry: false, showsCancel: false, showsLivePreview: true, showsReview: false)
+        case .starting, .recording:
+            return JumpCameraControls(showsRecord: false, showsStop: true, stopEnabled: true, canUse: false, canRepeat: false, showsRetry: false, showsCancel: false, showsLivePreview: true, showsReview: false)
+        case .finalizing:
+            return JumpCameraControls(showsRecord: false, showsStop: true, stopEnabled: false, canUse: false, canRepeat: false, showsRetry: false, showsCancel: false, showsLivePreview: true, showsReview: false)
+        case .recorded:
+            return JumpCameraControls(showsRecord: false, showsStop: false, stopEnabled: false, canUse: true, canRepeat: true, showsRetry: false, showsCancel: true, showsLivePreview: false, showsReview: true)
+        case .denied, .unavailable:
+            return JumpCameraControls(showsRecord: false, showsStop: false, stopEnabled: false, canUse: false, canRepeat: false, showsRetry: true, showsCancel: true, showsLivePreview: false, showsReview: false)
+        case .failed:
+            return JumpCameraControls(showsRecord: false, showsStop: false, stopEnabled: false, canUse: false, canRepeat: true, showsRetry: true, showsCancel: true, showsLivePreview: false, showsReview: false)
+        }
+    }
+}
