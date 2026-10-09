@@ -1,32 +1,52 @@
 # iPhone device testing with the unsigned IPA (practical stages)
 
-## Current manual-camera candidate — 2026-10-09
+## Current permission-lifetime repair candidate — 2026-10-09
 
-The user requested a NEW IPA to test on their iPhone. Use the standalone
-`apple-device-experimental.yml` route on `dev/apple`, not the disabled `device`
-job below. No TestFlight/App Store publication, signing credentials, or physical
-automation is authorized. The historical build-3 IPA stays unchanged.
+The user confirmed their usual device is **iPhone XR with iOS 16** and reported
+that the camera permission dialog appeared but the camera did not open. Do not
+ask them for the device model/base OS again. iOS **16.0 remains the minimum**,
+not a hardware allowlist or a claim that SDK-26 builds prove iOS-16 behaviour.
+The user explicitly approved the bounded correction and a NEW manual-test IPA.
+Use the standalone `apple-device-experimental.yml` route on `dev/apple`, not the
+disabled `device` job below. No TestFlight/App Store publication, signing
+credentials, physical automation, uninstall, data clear, or permission reset.
+Both previously delivered IPAs remain unchanged.
 
-- Current source includes camera capture, transactional Use, and SQLite 3→4
-  preservation. No video/URI persistence, microphone recording, or gallery save.
-- Prior source `51b56f6`: 190/190 unit PASS, 6/7 UI PASS. Final source `b929e1d`
-  changes Save-button grouping; it compiles, but simulator boot prevented XCTest.
-  The new IPA is for manual testing, NOT a fully qualified release.
+- Functional repair source `e56dd7f`: transient foreground `.inactive` no longer
+  invalidates the originating camera permission ticket; actual background,
+  route exit, and tab hiding still invalidate. Camera preparation and recording
+  are separate explicit taps: **Open camera → preview ready → Record**. Grant,
+  resume, or ready must never start recording automatically.
+- Engine, leases, analysis/PTS/formulas, transactional Use, SQLite schema,
+  deployment target, version, and identity are unchanged. No video/URI
+  persistence, microphone recording, or gallery save.
+- Three additive regressions bring authored XCTest to **200 (193 unit + 7 UI)**.
+  The device-only route does NOT execute XCTest. Native suite qualification is
+  tracked separately; do not infer test PASS from a green device package job.
+  Prior `51b56f6` had 190 unit PASS and 6/7 UI PASS; later Save-row compilation
+  passed but simulator readiness prevented execution. This IPA is experimental,
+  not a qualified release; physical acceptance of this repair is still pending.
 - Version/build remain **0.0.3 (3)** and App ID `org.openjump.apple`; distinguish
-  this new candidate using its manifest source SHA and SHA256, not version alone.
-  Save it in a new run-specific directory; never overwrite the previous IPA.
-- CI builds ARM64 for iOS 16+ and packages an **unsigned** IPA. Install using the
-  user's own trusted signing/sideload setup and the same account/App ID as before,
-  updating without uninstalling if possible. Data retention is not guaranteed
-  if the signing tool rewrites app identity. No passwords/keys are requested.
+  this candidate using manifest source SHA, run and SHA256, not version alone.
+  Save it in a new run-specific directory; never overwrite previous IPAs.
+- CI builds ARM64 with minimum iOS 16.0 and packages an **unsigned** IPA. Install
+  using the user's own trusted signing/sideload setup and the same account/App ID
+  as before, updating without uninstalling if possible. Data retention is not
+  guaranteed if the resigner rewrites identity. No passwords/keys are requested.
 - Back up the iPhone; use a disposable profile and non-sensitive clip. Do not
   delete existing data. JSON export is NOT a supported restoration mechanism.
-- Manual checks: record→Stop→review→Use→exact frame marks→calculate→Save→History;
-  Repeat and Cancel; interrupt/background during recording and finalizing;
-  preserve old analysis when a new capture is cancelled or fails; verify Settings
-  export preview counts and that Save is reachable. Do not transmit private media.
-- Return model/iOS, manifest source SHA, IPA hash, and individual PASS/FAIL/SKIP.
-  Physical smoke does not replace pending simulator gates or establish accuracy.
+- First check: **Open camera**; if a permission dialog appears, accept only if
+  desired and expect the live preview/ready state. Existing authorization should
+  also open directly. Then explicitly **Record → Stop → review → Use → exact
+  frame marks → calculate → Save → History**. No reinstall/reset is needed to
+  force a fresh permission dialog; denial must show a recoverable status.
+- Check Repeat/Cancel and preservation of the old analysis on cancellation or
+  error; real background/tab/back must stop/park safely without automatic record
+  on return. Check Settings JSON preview counts and reachable Save. Interruption,
+  VoiceOver/iPad and hardware/codec details remain separate pending checks.
+- Return candidate run/hash and per-step PASS/FAIL/SKIP; a screenshot of the
+  status text is sufficient for an opening failure. Do not send private media.
+  Physical smoke does not replace simulator gates or establish accuracy.
 
 The sections below describe the historical route/snapshot, not current coverage.
 
