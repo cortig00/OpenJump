@@ -141,6 +141,29 @@ final class MediaProbeTests: XCTestCase {
         } catch is CancellationError { }
     }
 
+    func testCallbackDeadlineReleasesResultPayloadAfterDelivery() async throws {
+        // Regression for the 60s inspect retention: a cancelled timer is still
+        // held by its queue until the deadline, so State must not retain the
+        // delivered payload via `result` after the continuation resumes.
+        final class Payload: @unchecked Sendable {}
+        weak var weakPayload: Payload?
+        do {
+            let strong = Payload()
+            weakPayload = strong
+            XCTAssertNotNil(weakPayload)
+            let returned: Payload = try await CallbackDeadline.run(timeout: .seconds(60), cancel: {}) { (complete: @escaping (Result<Payload, Error>) -> Void) in
+                complete(.success(strong))
+            }
+            XCTAssertTrue(returned === strong)
+        }
+        var remaining = 40
+        while weakPayload != nil, remaining > 0 {
+            try? await Task.sleep(nanoseconds: 50_000_000)
+            remaining -= 1
+        }
+        XCTAssertNil(weakPayload, "Delivered CallbackDeadline payload must be released promptly, not held until the 60s timer deadline")
+    }
+
     private func makeFixture(_ cadence: MediaFixtureFactory.Cadence) async throws -> (URL, URL) {
         let url = try await MediaFixtureFactory.make(cadence: cadence)
         return (url, url.deletingLastPathComponent())

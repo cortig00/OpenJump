@@ -78,15 +78,27 @@ struct AppleDataExportView: View {
                         .font(.headline)
                     if snapshot.format == .jsonBackup {
                         LabeledContent {
-                            Text(verbatim: String(snapshot.profileCount)).accessibilityIdentifier("export.preview.profiles")
+                            Text(verbatim: String(snapshot.profileCount))
                         } label: { Text(AppText.string("export.profiles", language: language)) }
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(Text(AppText.string("export.profiles", language: language)))
+                        .accessibilityValue(Text(verbatim: String(snapshot.profileCount)))
+                        .accessibilityIdentifier("export.preview.profiles")
                     }
                     LabeledContent {
-                        Text(verbatim: String(snapshot.measurementCount)).accessibilityIdentifier("export.preview.measurements")
+                        Text(verbatim: String(snapshot.measurementCount))
                     } label: { Text(AppText.string("export.measurements", language: language)) }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(Text(AppText.string("export.measurements", language: language)))
+                    .accessibilityValue(Text(verbatim: String(snapshot.measurementCount)))
+                    .accessibilityIdentifier("export.preview.measurements")
                     LabeledContent {
-                        Text(verbatim: String(snapshot.metricCount)).accessibilityIdentifier("export.preview.metrics")
+                        Text(verbatim: String(snapshot.metricCount))
                     } label: { Text(AppText.string("export.metrics", language: language)) }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(Text(AppText.string("export.metrics", language: language)))
+                    .accessibilityValue(Text(verbatim: String(snapshot.metricCount)))
+                    .accessibilityIdentifier("export.preview.metrics")
                     Button(AppText.string("export.save", language: language)) {
                         document = AppleExportDocument(data: snapshot.data, format: snapshot.format)
                         showingExporter = true
@@ -95,6 +107,7 @@ struct AppleDataExportView: View {
                     .disabled(preparing || showingExporter)
                     .accessibilityIdentifier("export.save")
                 }
+                .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("export.preview")
             }
             if let messageKey {

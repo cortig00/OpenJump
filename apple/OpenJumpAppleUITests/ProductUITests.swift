@@ -155,11 +155,12 @@ final class ProductUITests: XCTestCase {
         // error message before the preview labels are meaningful.
         waitUntilGone(element("export.preparing", in: app))
         XCTAssertFalse(element("export.message", in: app).exists, "Export preparation reported an error for the synthetic fixture")
-        for (identifier, expected) in [("export.preview.profiles", "2"), ("export.preview.measurements", "1"), ("export.preview.metrics", "5")] {
+        for (identifier, title, expected) in [("export.preview.profiles", "Profiles", "2"), ("export.preview.measurements", "Measurements", "1"), ("export.preview.metrics", "Metrics", "5")] {
             let count = element(identifier, in: app)
             reveal(count, in: app)
             XCTAssertTrue(count.waitForExistence(timeout: 10), "Missing preview count: \(identifier)")
-            XCTAssertEqual(count.label, expected, "Preview count label mismatch for \(identifier)")
+            XCTAssertEqual(count.value as? String, expected, "Preview count value mismatch for \(identifier)")
+            XCTAssertEqual(count.label, title, "Preview row must keep its localized label for \(identifier)")
         }
         let save = element("export.save", in: app)
         reveal(save, in: app)

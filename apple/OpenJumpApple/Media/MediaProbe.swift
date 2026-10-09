@@ -10,6 +10,13 @@ struct CallbackDeadline {
         private var continuation: CheckedContinuation<Value, Error>?
         private var result: Result<Value, Error>?
         private var timer: DispatchWorkItem?
+        // Separate completion flag: the result payload is released promptly
+        // after delivery, while this flag preserves idempotence for
+        // startIfPending/setTimer/re-entrant resolve. A cancelled timer is
+        // still held by the queue until its deadline, so retaining the
+        // payload in `result` would retain inspected manifests (and their
+        // owned videos) for the full timeout.
+        private var resolved = false
         private let cancelOperation: () -> Void
 
         init(cancelOperation: @escaping () -> Void) {
@@ -18,28 +25,38 @@ struct CallbackDeadline {
 
         func install(_ continuation: CheckedContinuation<Value, Error>) {
             lock.lock()
-            let result = self.result
-            if result == nil { self.continuation = continuation }
+            if resolved {
+                let pending = self.result
+                lock.unlock()
+                guard let pending else { return }
+                continuation.resume(with: pending)
+                lock.lock()
+                self.result = nil
+                lock.unlock()
+                return
+            }
+            self.continuation = continuation
             lock.unlock()
-            if let result { continuation.resume(with: result) }
         }
 
         func setTimer(_ timer: DispatchWorkItem) {
             lock.lock()
-            if result == nil { self.timer = timer; lock.unlock() }
-            else { lock.unlock(); timer.cancel() }
+            if resolved { lock.unlock(); timer.cancel(); return }
+            self.timer = timer
+            lock.unlock()
         }
 
         func startIfPending(_ start: () -> Void) {
             lock.lock()
             defer { lock.unlock() }
-            guard result == nil else { return }
+            guard !resolved else { return }
             start()
         }
 
         func resolve(_ result: Result<Value, Error>, cancel: Bool) {
             lock.lock()
-            guard self.result == nil else { lock.unlock(); return }
+            guard !resolved else { lock.unlock(); return }
+            resolved = true
             self.result = result
             let continuation = self.continuation
             self.continuation = nil
@@ -48,7 +65,11 @@ struct CallbackDeadline {
             lock.unlock()
             timer?.cancel()
             if cancel { cancelOperation() }
-            continuation?.resume(with: result)
+            guard let continuation else { return }
+            continuation.resume(with: result)
+            lock.lock()
+            self.result = nil
+            lock.unlock()
         }
     }
 
