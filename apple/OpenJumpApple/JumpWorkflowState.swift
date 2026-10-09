@@ -848,7 +848,13 @@ final class JumpWorkflowState: ObservableObject {
                 switch action {
                 case .file(let url, _, _): candidate = try await JumpVideoImporter.importFile(url)
                 case .photos(let item, _, _): candidate = try await JumpVideoImporter.importPhotos(item)
-                default: return
+                default:
+                    // Unreachable Files/Photos-only entry, but fail closed on the
+                    // owned generation so a completed handle never lingers.
+                    if request == sourceGeneration {
+                        isImporting = false; isIndexing = false; importTask = nil
+                    }
+                    return
                 }
                 guard !Task.isCancelled, request == sourceGeneration, let candidate else {
                     candidate?.dispose(); return
@@ -869,13 +875,18 @@ final class JumpWorkflowState: ObservableObject {
                 scrubRequestedIndex = 0
                 selectedEvent = TemporalJumpDraft.requiredEvents(for: setup.protocolKey).first
                 isIndexing = false
+                // Completed Files/Photos handle cleanup, gated strictly by
+                // sourceGeneration ownership so a stale completion never
+                // clobbers a newer import. No live-worker inference: cancelled
+                // or superseded generations return above without clearing.
+                if request == sourceGeneration { importTask = nil }
                 sessionKey = UUID().uuidString
                 if isViewerActive { ensurePlaybackAttached() }
                 requestFrameInternal(0)
             } catch {
                 candidate?.dispose()
                 guard request == sourceGeneration, !Task.isCancelled else { return }
-                isImporting = false; isIndexing = false; errorKey = "jumps.error.video"
+                isImporting = false; isIndexing = false; importTask = nil; errorKey = "jumps.error.video"
             }
         }
     }

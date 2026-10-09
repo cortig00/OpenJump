@@ -92,14 +92,14 @@ jobs:
           python3 apple/ci/run_command.py --timeout 120 -- python3 apple/ci/select_simulator.py "$GITHUB_OUTPUT" --create-owned --receipt "$RUNNER_TEMP/apple-owned-simulator.json"
       - name: Boot owned ephemeral iPhone simulator
         id: boot
-        timeout-minutes: 7
+        timeout-minutes: 11
         env:
           DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer
         run: |
           set -euo pipefail
           DEVICE='${{ steps.simulator.outputs.udid }}'
           python3 apple/ci/run_command.py --timeout 120 -- xcrun simctl boot "$DEVICE"
-          python3 apple/ci/run_command.py --timeout 240 -- xcrun simctl bootstatus "$DEVICE" -b
+          python3 apple/ci/run_command.py --timeout 480 -- xcrun simctl bootstatus "$DEVICE" -b
       - name: Collect bounded read-only simulator readiness evidence
         id: simulator_diagnostics
         if: always() && steps.boot.conclusion == 'failure'
@@ -186,7 +186,7 @@ jobs:
             echo "| Kotlin framework/lipo | ${FRAMEWORK:-not-run} |"
             echo "| Swift consumer/test bundle build-for-testing (not runtime tests) | ${BUILD:-not-run} |"
             echo "| Owned ephemeral simulator creation (iPhone 17 Pro / iOS 26.0) | ${DISCOVERY:-not-run} |"
-            echo "| Bounded simulator boot/readiness (created UUID only; boot 120s + bootstatus 240s) | ${BOOT:-not-run} |"
+            echo "| Bounded simulator boot/readiness (created UUID only; boot 120s + bootstatus 480s) | ${BOOT:-not-run} |"
             echo "| Read-only readiness diagnostics (collection outcome, not health PASS) | ${DIAGNOSTICS:-not-run} |"
             echo "| Swift bridge/UI runtime tests | ${TESTS:-not-run} |"
             echo "| XCTest screenshot export | ${EXPORT:-not-run} |"
@@ -216,7 +216,9 @@ jobs:
 
   device:
     needs: prototype
-    if: github.repository == 'cortig00/OpenJump' && github.ref == 'refs/heads/dev/apple'
+    # Validation-only iteration: creating/uploading a new IPA is not authorized.
+    # Keep the historical packaging job unreachable until separately approved.
+    if: ${{ false }}
     runs-on: macos-15
     timeout-minutes: 25
     steps:

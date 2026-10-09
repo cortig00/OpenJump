@@ -386,6 +386,10 @@ final class JumpWorkflowStateTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: url) }
         let store = try SQLiteStore(databaseURL: url)
         let athlete = try await store.createAthlete(name: "Flow Prep")
+        // Archiving the sole active athlete throws lastActiveAthlete; keep a
+        // second active row so the archived-gate transition is exercisable
+        // while the isolated roster still resolves the first athlete.
+        _ = try await store.createAthlete(name: "Flow Prep Second")
         let (app, defaults, suite) = try isolatedApp(store: store, athletes: [athlete])
         defer { defaults.removePersistentDomain(forName: suite) }
         let workflow = JumpWorkflowState()
@@ -606,14 +610,29 @@ final class JumpWorkflowStateTests: XCTestCase {
         XCTAssertEqual(oldPTS, [0, 100_000, 200_000, 400_000, 700_000, 800_000])
         let frameReady = await waitFor(timeoutNanoseconds: 30_000_000_000, condition: { workflow.presentedFrame != nil })
         XCTAssertTrue(frameReady)
-        workflow.selectEvent(.movementStart)
-        workflow.requestFrame(0)
-        let shown0 = await waitFor(timeoutNanoseconds: 30_000_000_000, condition: {
-            guard let presented = workflow.presentedFrame else { return false }
-            return presented.sourceID == videoID && presented.index == 0
-        })
-        XCTAssertTrue(shown0)
-        workflow.markSelectedEvent()
+        // CMJ requires all three marks before the shared engine can
+        // calculate; a single movementStart alone leaves canCalculate false
+        // and metrics nil. Mark the full temporalReference triple.
+        let stagingTargets = [0, 2, 4]
+        let stagingExpectedPTS: [Int64] = [0, 200_000, 700_000]
+        let stagingKinds = workflow.requiredEvents
+        XCTAssertEqual(stagingKinds, [.movementStart, .takeoff, .landing])
+        for (position, kind) in stagingKinds.enumerated() {
+            let target = stagingTargets[position]
+            let expected = stagingExpectedPTS[position]
+            workflow.selectEvent(kind)
+            workflow.requestFrame(target)
+            let stagingShown = await waitFor(timeoutNanoseconds: 30_000_000_000, condition: {
+                guard let presented = workflow.presentedFrame else { return false }
+                return presented.sourceID == videoID && presented.index == target && presented.ptsUs == manifest.frames[target].ptsUs
+            })
+            XCTAssertTrue(stagingShown, "exact frame must match source identity before marking")
+            XCTAssertEqual(workflow.presentedFrame?.ptsUs, expected)
+            workflow.markSelectedEvent()
+            let recorded = workflow.event(for: kind)
+            XCTAssertEqual(recorded?.frameIndex, target)
+            XCTAssertEqual(recorded?.ptsUs, expected)
+        }
         workflow.setRealtimeDeclared(true)
         workflow.setNotes("old note")
         XCTAssertTrue(workflow.hasUnsavedMarks)
@@ -644,7 +663,7 @@ final class JumpWorkflowStateTests: XCTestCase {
         XCTAssertFalse(workflow.showDiscardConfirmation)
         XCTAssertEqual(workflow.video?.id, videoID)
         XCTAssertEqual(workflow.manifest?.frames.map(\.ptsUs), oldPTS)
-        XCTAssertEqual(workflow.events.count, 1)
+        XCTAssertEqual(workflow.events.count, 3)
         XCTAssertEqual(workflow.notes, "old note")
         XCTAssertTrue(workflow.realtimeDeclared)
         XCTAssertEqual(workflow.metrics?.count, 5)
@@ -684,7 +703,7 @@ final class JumpWorkflowStateTests: XCTestCase {
         XCTAssertFalse(workflow.isIndexing)
         XCTAssertEqual(workflow.video?.id, videoID)
         XCTAssertEqual(workflow.manifest?.sourceID, videoID)
-        XCTAssertEqual(workflow.events.count, 1)
+        XCTAssertEqual(workflow.events.count, 3)
         XCTAssertEqual(workflow.notes, "old note")
         gate.signal()
         await fulfillment(of: [workerExited], timeout: 2)
@@ -799,10 +818,13 @@ final class JumpWorkflowStateTests: XCTestCase {
         workflow.requestFile(oldFixtureURL, app: app)
         let oldReady = await waitFor(timeoutNanoseconds: 60_000_000_000, condition: { workflow.manifest != nil })
         XCTAssertTrue(oldReady)
-        let oldVideo = try XCTUnwrap(workflow.video)
-        let oldManifest = try XCTUnwrap(workflow.manifest)
-        let oldVideoID = oldVideo.id
-        let oldPath = oldVideo.url.path
+        // Lifetime-scoped old source: manifest retains its video, so both must
+        // be released before the post-commit sweep can observe deletion. Keep
+        // plain vars (no extra retained copies) and nil them before waiting.
+        var oldVideo: ImportedJumpVideo? = try XCTUnwrap(workflow.video)
+        var oldManifest: JumpVideoManifest? = try XCTUnwrap(workflow.manifest)
+        let oldVideoID = try XCTUnwrap(oldVideo).id
+        let oldPath = try XCTUnwrap(oldVideo).url.path
         XCTAssertTrue(FileManager.default.fileExists(atPath: oldPath))
         let oldFrameReady = await waitFor(timeoutNanoseconds: 30_000_000_000, condition: { workflow.presentedFrame != nil })
         XCTAssertTrue(oldFrameReady)
@@ -833,8 +855,6 @@ final class JumpWorkflowStateTests: XCTestCase {
             XCTFail("finalized lease must vend borrower")
             return
         }
-        var retainedOldVideo: ImportedJumpVideo? = oldVideo
-        var retainedOldManifest: JumpVideoManifest? = oldManifest
         workflow.requestCapturedFile(borrower: borrower, app: app)
         XCTAssertTrue(workflow.showDiscardConfirmation)
         XCTAssertEqual(workflow.video?.id, oldVideoID)
@@ -903,10 +923,10 @@ final class JumpWorkflowStateTests: XCTestCase {
         XCTAssertEqual(analysis.source, .camera)
         XCTAssertEqual(analysis.sourceFrameCount, 6)
         XCTAssertEqual(analysis.sourceOriginUs, 0)
-        XCTAssertEqual(retainedOldVideo?.id, oldVideoID)
-        XCTAssertEqual(retainedOldManifest?.sourceID, oldVideoID)
-        retainedOldManifest = nil
-        retainedOldVideo = nil
+        XCTAssertEqual(oldVideo?.id, oldVideoID)
+        XCTAssertEqual(oldManifest?.sourceID, oldVideoID)
+        oldManifest = nil
+        oldVideo = nil
         let oldSwept = await waitFor(timeoutNanoseconds: 5_000_000_000, condition: { !FileManager.default.fileExists(atPath: oldPath) })
         XCTAssertTrue(oldSwept)
         lease.markDiscard()

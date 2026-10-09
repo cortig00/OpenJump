@@ -862,6 +862,22 @@ class OwnedCliStrictTests(unittest.TestCase):
                     select_simulator.create_owned_record(name=name)
                 command.assert_not_called()
 
+    def test_validation_only_workflow_keeps_runtime_gate_and_blocks_ipa(self):
+        workflow = (ROOT.parent.parent / ".github/workflows/apple-prototype.yml").read_text(
+            encoding="utf-8")
+        boot = workflow.split("        id: boot\n", 1)[1].split("      - name:", 1)[0]
+        self.assertIn('DEVICE=\'${{ steps.simulator.outputs.udid }}\'', boot)
+        self.assertIn('--timeout 480 -- xcrun simctl bootstatus "$DEVICE" -b', boot)
+        self.assertNotIn("continue-on-error", boot)
+        tests = workflow.split("        id: native_tests\n", 1)[1].split("      - name:", 1)[0]
+        self.assertIn("if: success() && steps.boot.conclusion == 'success'", tests)
+        self.assertIn('--timeout 1100 -- xcodebuild test-without-building', tests)
+        self.assertIn('id=${{ steps.simulator.outputs.udid }}', tests)
+        self.assertNotIn("continue-on-error", tests)
+        device = workflow.split("\n  device:\n", 1)[1]
+        self.assertIn("    if: ${{ false }}\n", device)
+        self.assertIn("    needs: prototype\n", device)
+
     def test_workflow_cleanup_requires_this_job_owned_output(self):
         # Independent literal contract, not an oracle built from the helper.
         # A stale receipt or failed GITHUB_OUTPUT must not authorize deletion.

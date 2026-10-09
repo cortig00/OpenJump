@@ -573,24 +573,46 @@ final class PresentationTests: XCTestCase {
                 continue
             }
             let stringsURL = URL(fileURLWithPath: lproj).appendingPathComponent("Localizable.strings")
-            let text = try String(contentsOf: stringsURL, encoding: .utf8)
-            let lines = text.components(separatedBy: .newlines)
-            let keyLines = lines.filter { $0.hasPrefix("\"") }
+            let data = try Data(contentsOf: stringsURL)
+            // Xcode compiles bundled .strings to binary plist; source checkouts
+            // keep UTF8 text. PropertyListSerialization handles both natively.
+            let plistObject: Any
+            do {
+                plistObject = try PropertyListSerialization.propertyList(from: data, options: [], format: nil)
+            } catch {
+                XCTFail("unreadable Localizable.strings for \(locale): \(error)")
+                continue
+            }
+            guard let strings = plistObject as? [String: String] else {
+                XCTFail("Localizable.strings for \(locale) is not a string dictionary")
+                continue
+            }
             // Old 324 keys plus exactly the 4 additive camera control keys.
-            XCTAssertEqual(keyLines.count, 328, "key count for \(locale)")
+            XCTAssertEqual(strings.count, 328, "key count for \(locale)")
             for key in expectedKeys {
-                let matches = keyLines.filter { $0.hasPrefix("\"\(key)\" = \"") }
-                XCTAssertEqual(matches.count, 1, "single entry for \(key) in \(locale)")
-                guard let line = matches.first else { continue }
-                let prefix = "\"\(key)\" = \""
-                let remainder = String(line.dropFirst(prefix.count))
-                XCTAssertTrue(remainder.hasSuffix("\";"), "value terminator for \(key) in \(locale)")
-                let value = String(remainder.dropLast(2))
+                guard let value = strings[key] else {
+                    XCTFail("missing entry for \(key) in \(locale)")
+                    continue
+                }
                 XCTAssertFalse(value.isEmpty, "nonempty value for \(key) in \(locale)")
                 XCTAssertNotEqual(value, key, "localized (not placeholder) value for \(key) in \(locale)")
             }
             for old in oldSentinels {
-                XCTAssertEqual(keyLines.filter { $0.hasPrefix("\"\(old)\" = \"") }.count, 1, "preserved old key \(old) in \(locale)")
+                XCTAssertNotNil(strings[old], "preserved old key \(old) in \(locale)")
+                XCTAssertFalse(strings[old]?.isEmpty ?? true, "nonempty old key \(old) in \(locale)")
+            }
+            // When the on-disk form is still source UTF8 text, also pin the
+            // single-line contract so duplicate keys cannot hide behind the
+            // dictionary collapse. Binary plists skip this by design.
+            if let text = String(data: data, encoding: .utf8), text.contains("\"jumps.camera.record\" = \"") {
+                let keyLines = text.components(separatedBy: .newlines).filter { $0.hasPrefix("\"") }
+                XCTAssertEqual(keyLines.count, 328, "source key count for \(locale)")
+                for key in expectedKeys {
+                    XCTAssertEqual(keyLines.filter { $0.hasPrefix("\"\(key)\" = \"") }.count, 1, "single source entry for \(key) in \(locale)")
+                }
+                for old in oldSentinels {
+                    XCTAssertEqual(keyLines.filter { $0.hasPrefix("\"\(old)\" = \"") }.count, 1, "preserved old source key \(old) in \(locale)")
+                }
             }
         }
         // No new InfoPlist/mic/gallery surface through this slice: the camera

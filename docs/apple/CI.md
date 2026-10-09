@@ -54,6 +54,27 @@ Tras publicar: registrar commit y URL/runID, esperar conclusión y leer logs/sum
 
 **Conclusión:** hay host CI macOS para los siguientes spikes de la app iPhone sin depender del Mac antiguo para compilar. P0 completo/G0 y el siguiente cambio de app siguen sujetos a sus gates; disponibilidad de simuladores no equivale a un test de app PASS.
 
+## Iteración de validación nativa — 2026-10-09
+
+- Fuente de cámara subida en `806efa3`; llave final de la clase de tests reparada
+  en `cdba369`. Swift `build-for-testing` pasó en CI: compilar no implica runtime PASS.
+- Run `37782059728`, intento 2: boot PASS; **189 unit tests ejecutados, 23 fallos
+  (2 unexpected)**, concentrados en seis métodos de tests de flujo/localización.
+  UI comenzó, pero el comando agotó 420 s; no hay resultado completo de la suite.
+  El timeout no era el único fallo. Las correcciones siguientes requieren otra CI.
+- `d403441` amplió XCTest a 1100 s / step 20 min y job 45 min sin quitar tests.
+  Run `37785315148`, intentos 1–2: bootstatus agotó 240 s, XCTest no ejecutado.
+- Nueva iteración: bootstatus acotado a 480 s (boot 120 s, step 11 min), mismo
+  UUID propio y mismo `bootstatus -b` obligatorio. No aceptar estado `Booted`
+  como readiness ni usar fallback de dispositivo/toolchain. Causa del timeout
+  desconocida; ampliación de presupuesto no acredita éxito.
+- Job `device` explícitamente deshabilitado: su ruta histórica empaqueta/sube
+  IPA tras un prototype PASS y esta autorización es solo validación, **sin IPA**.
+  Restaurar esa ruta requiere permiso aparte. IPA experimental build 3 intacta.
+- Diagnósticos/logs añadidos accidentalmente en `d403441` retirados de Git en la
+  corrección siguiente, preservando sus copias locales. Usar staging por rutas
+  explícitas; no incorporar archivos de observación.
+
 ## Rollback
 
 1. Cancelar runs propios activos y, si procede, deshabilitar el workflow registrado.
