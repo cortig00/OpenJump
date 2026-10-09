@@ -99,6 +99,10 @@ struct AppleDataExportView: View {
                     .accessibilityLabel(Text(AppText.string("export.metrics", language: language)))
                     .accessibilityValue(Text(verbatim: String(snapshot.metricCount)))
                     .accessibilityIdentifier("export.preview.metrics")
+                }
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("export.preview")
+                Section {
                     Button(AppText.string("export.save", language: language)) {
                         document = AppleExportDocument(data: snapshot.data, format: snapshot.format)
                         showingExporter = true
@@ -107,8 +111,6 @@ struct AppleDataExportView: View {
                     .disabled(preparing || showingExporter)
                     .accessibilityIdentifier("export.save")
                 }
-                .accessibilityElement(children: .contain)
-                .accessibilityIdentifier("export.preview")
             }
             if let messageKey {
                 Section {
