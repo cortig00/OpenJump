@@ -2,7 +2,8 @@ name: Apple experimental device build
 
 # Experimental manual device candidate only. Standalone device-only route;
 # does NOT trigger normal CI and does NOT qualify native tests/physical runs.
-# Trigger revision (iteration 1, build 3): minimal SwiftUI compilation unblock;
+# Trigger revision (2026-10-09): user-requested camera/manual iPhone candidate;
+# keep historical IPA immutable; no version/App ID change or release promotion.
 # runs only for pushes to dev/apple touching this file with
 # '[apple-device-experimental]' in the head commit message; the normal
 # prototype/simulator gates opt out of such pushes.
@@ -91,7 +92,10 @@ jobs:
           cat > "$OUT/EXPERIMENTAL.txt" <<'EOF'
           EXPERIMENTAL MANUAL-TEST CANDIDATE ONLY — NOT A VALIDATED RELEASE.
           CANDIDATO EXPERIMENTAL PARA PRUEBA MANUAL — NO ES UNA RELEASE VALIDADA.
-          The XCTest suite (140 authored tests) was NOT RUN in this workflow; native qualification is PENDING.
+          The XCTest suite (197 authored tests: 190 unit + 7 UI) is NOT RUN in this device-only workflow.
+          Prior simulator source 51b56f6 executed 190 unit PASS and 6/7 UI PASS; this candidate's final Save-row change remains runtime-unverified.
+          Simulator boot blocked runtime at source b929e1d. Physical testing is user-performed and PENDING, not a replacement for XCTest.
+          Visible app version/build remain 0.0.3 (3); identify this NEW candidate by manifest source SHA and IPA SHA256, not by version alone.
           Job green means only build plus binary-structure validation passed (ARM64, iOS platform, minimum 16.0, unsigned checks).
           Unsigned artifact: NOT installable as-is; requires the downloader's own local signing (for example AltStore Classic with the user's own Apple account via AltServer).
           Keep the same Apple account and App ID and update without uninstalling when possible; there is NO guarantee the system keeps app identity/data if the resigner rewrites it.

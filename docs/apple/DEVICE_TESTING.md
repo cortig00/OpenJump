@@ -1,5 +1,35 @@
 # iPhone device testing with the unsigned IPA (practical stages)
 
+## Current manual-camera candidate — 2026-10-09
+
+The user requested a NEW IPA to test on their iPhone. Use the standalone
+`apple-device-experimental.yml` route on `dev/apple`, not the disabled `device`
+job below. No TestFlight/App Store publication, signing credentials, or physical
+automation is authorized. The historical build-3 IPA stays unchanged.
+
+- Current source includes camera capture, transactional Use, and SQLite 3→4
+  preservation. No video/URI persistence, microphone recording, or gallery save.
+- Prior source `51b56f6`: 190/190 unit PASS, 6/7 UI PASS. Final source `b929e1d`
+  changes Save-button grouping; it compiles, but simulator boot prevented XCTest.
+  The new IPA is for manual testing, NOT a fully qualified release.
+- Version/build remain **0.0.3 (3)** and App ID `org.openjump.apple`; distinguish
+  this new candidate using its manifest source SHA and SHA256, not version alone.
+  Save it in a new run-specific directory; never overwrite the previous IPA.
+- CI builds ARM64 for iOS 16+ and packages an **unsigned** IPA. Install using the
+  user's own trusted signing/sideload setup and the same account/App ID as before,
+  updating without uninstalling if possible. Data retention is not guaranteed
+  if the signing tool rewrites app identity. No passwords/keys are requested.
+- Back up the iPhone; use a disposable profile and non-sensitive clip. Do not
+  delete existing data. JSON export is NOT a supported restoration mechanism.
+- Manual checks: record→Stop→review→Use→exact frame marks→calculate→Save→History;
+  Repeat and Cancel; interrupt/background during recording and finalizing;
+  preserve old analysis when a new capture is cancelled or fails; verify Settings
+  export preview counts and that Save is reachable. Do not transmit private media.
+- Return model/iOS, manifest source SHA, IPA hash, and individual PASS/FAIL/SKIP.
+  Physical smoke does not replace pending simulator gates or establish accuracy.
+
+The sections below describe the historical route/snapshot, not current coverage.
+
 Scope: this note covers only the unsigned developer artifact produced by the
 `device` job in `.github/workflows/apple-prototype.yml`. It is not a signed
 release, not a TestFlight upload, not an App Store qualification, and not a
