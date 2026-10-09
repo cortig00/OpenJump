@@ -551,16 +551,17 @@ final class PresentationTests: XCTestCase {
         // are stateless and deterministic, so one Use can never implicitly
         // reuse another attempt's handle at this level.
         XCTAssertEqual(JumpWorkflowPresentation.cameraControls(for: .recorded), JumpWorkflowPresentation.cameraControls(for: .recorded))
-        XCTAssertEqual(Set(JumpCameraControls.newControlKeys).count, 4)
+        XCTAssertEqual(Set(JumpCameraControls.newControlKeys).count, 5)
     }
 
     func testCameraControlKeysExistInAllLocalesWithoutNewPlistOrGalleryKeys() throws {
-        // The camera slice adds EXACTLY these four control labels; status and
-        // error text reuse the existing jumps.camera.* keys. Values must be
-        // honest per-locale strings (never the raw key, never empty).
-        let expectedKeys = ["jumps.camera.record", "jumps.camera.stop", "jumps.camera.useRecording", "jumps.camera.repeat"]
+        // The camera slice adds EXACTLY these five control labels (four C2b
+        // + the one bounded open-camera repair key); status and error text
+        // reuse the existing jumps.camera.* keys. Values must be honest
+        // per-locale strings (never the raw key, never empty).
+        let expectedKeys = ["jumps.camera.open", "jumps.camera.record", "jumps.camera.stop", "jumps.camera.useRecording", "jumps.camera.repeat"]
         XCTAssertEqual(JumpCameraControls.newControlKeys, expectedKeys)
-        XCTAssertEqual(Set(JumpCameraControls.newControlKeys).count, 4)
+        XCTAssertEqual(Set(JumpCameraControls.newControlKeys).count, 5)
         for key in expectedKeys {
             XCTAssertFalse(key.isEmpty)
             XCTAssertTrue(key.hasPrefix("jumps.camera."))
@@ -587,8 +588,9 @@ final class PresentationTests: XCTestCase {
                 XCTFail("Localizable.strings for \(locale) is not a string dictionary")
                 continue
             }
-            // Old 324 keys plus exactly the 4 additive camera control keys.
-            XCTAssertEqual(strings.count, 328, "key count for \(locale)")
+            // Old 324 keys plus exactly the 5 additive camera control keys
+            // (four C2b + one bounded open-camera repair key).
+            XCTAssertEqual(strings.count, 329, "key count for \(locale)")
             for key in expectedKeys {
                 guard let value = strings[key] else {
                     XCTFail("missing entry for \(key) in \(locale)")
@@ -606,7 +608,7 @@ final class PresentationTests: XCTestCase {
             // dictionary collapse. Binary plists skip this by design.
             if let text = String(data: data, encoding: .utf8), text.contains("\"jumps.camera.record\" = \"") {
                 let keyLines = text.components(separatedBy: .newlines).filter { $0.hasPrefix("\"") }
-                XCTAssertEqual(keyLines.count, 328, "source key count for \(locale)")
+                XCTAssertEqual(keyLines.count, 329, "source key count for \(locale)")
                 for key in expectedKeys {
                     XCTAssertEqual(keyLines.filter { $0.hasPrefix("\"\(key)\" = \"") }.count, 1, "single source entry for \(key) in \(locale)")
                 }
@@ -621,5 +623,92 @@ final class PresentationTests: XCTestCase {
         XCTAssertNil(Bundle.main.object(forInfoDictionaryKey: "NSMicrophoneUsageDescription"))
         XCTAssertNil(Bundle.main.object(forInfoDictionaryKey: "NSPhotoLibraryAddUsageDescription"))
         XCTAssertNil(Bundle.main.object(forInfoDictionaryKey: "NSPhotoLibraryUsageDescription"))
+    }
+
+    // MARK: - iOS16-XR permission-alert repair (bounded, 2026-10-09)
+    //
+    // Host lifecycle (preview + facade viewAppeared/viewDisappeared) runs on
+    // FOREGROUND (active OR inactive) while explicit user actions stay
+    // ACTIVE-only. The transient inactive permission alert keeps lifetime so
+    // the originating ticket survives; true background, hidden tabs, and
+    // wrong routes invalidate. Expectations below are hardcoded literals;
+    // the ACTUAL helpers consumed by the host are exercised, never an
+    // oracle that defines its own expectation.
+    func testCameraLifetimeSurvivesInactiveAlertWhileActionsStayActiveOnly() {
+        // Active Obtain visible: lifetime + actions both true.
+        XCTAssertTrue(JumpWorkflowPresentation.isCameraLifetimeVisible(isVisible: true, isForegroundScene: true, visibleRoute: .obtainVideo))
+        XCTAssertTrue(JumpWorkflowPresentation.isCameraEligible(isVisible: true, isActiveScene: true, visibleRoute: .obtainVideo))
+        // Transient inactive permission alert (still OS foreground):
+        // lifetime TRUE (preserve ticket), NEW taps NOT eligible.
+        // Host maps scenePhase active->(foreground true, active true),
+        // inactive->(foreground true, active false), background->(foreground
+        // false, active false); the pure layer takes the mapped bools.
+        XCTAssertTrue(JumpWorkflowPresentation.isCameraLifetimeVisible(isVisible: true, isForegroundScene: true, visibleRoute: .obtainVideo))
+        XCTAssertFalse(JumpWorkflowPresentation.isCameraEligible(isVisible: true, isActiveScene: false, visibleRoute: .obtainVideo))
+        // True background: both fail closed and MUST invalidate.
+        XCTAssertFalse(JumpWorkflowPresentation.isCameraLifetimeVisible(isVisible: true, isForegroundScene: false, visibleRoute: .obtainVideo))
+        XCTAssertFalse(JumpWorkflowPresentation.isCameraEligible(isVisible: true, isActiveScene: false, visibleRoute: .obtainVideo))
+        // Hidden tab (root disappeared) fails closed even when foreground.
+        XCTAssertFalse(JumpWorkflowPresentation.isCameraLifetimeVisible(isVisible: false, isForegroundScene: true, visibleRoute: .obtainVideo))
+        XCTAssertFalse(JumpWorkflowPresentation.isCameraEligible(isVisible: false, isActiveScene: true, visibleRoute: .obtainVideo))
+        XCTAssertFalse(JumpWorkflowPresentation.isCameraLifetimeVisible(isVisible: false, isForegroundScene: false, visibleRoute: .obtainVideo))
+        XCTAssertFalse(JumpWorkflowPresentation.isCameraEligible(isVisible: false, isActiveScene: false, visibleRoute: .obtainVideo))
+        // Wrong routes fail closed for BOTH gates (no inert early-return
+        // keeps the camera visible on route exit; no phase-based broad
+        // eligibility).
+        XCTAssertFalse(JumpWorkflowPresentation.isCameraLifetimeVisible(isVisible: true, isForegroundScene: true, visibleRoute: .prepare))
+        XCTAssertFalse(JumpWorkflowPresentation.isCameraLifetimeVisible(isVisible: true, isForegroundScene: true, visibleRoute: .analyse))
+        XCTAssertFalse(JumpWorkflowPresentation.isCameraLifetimeVisible(isVisible: true, isForegroundScene: true, visibleRoute: .result))
+        XCTAssertFalse(JumpWorkflowPresentation.isCameraLifetimeVisible(isVisible: true, isForegroundScene: true, visibleRoute: nil))
+        XCTAssertFalse(JumpWorkflowPresentation.isCameraEligible(isVisible: true, isActiveScene: true, visibleRoute: .prepare))
+        XCTAssertFalse(JumpWorkflowPresentation.isCameraEligible(isVisible: true, isActiveScene: true, visibleRoute: .analyse))
+        XCTAssertFalse(JumpWorkflowPresentation.isCameraEligible(isVisible: true, isActiveScene: true, visibleRoute: .result))
+        XCTAssertFalse(JumpWorkflowPresentation.isCameraEligible(isVisible: true, isActiveScene: true, visibleRoute: nil))
+        // Background + wrong route / hidden + wrong route stay closed.
+        XCTAssertFalse(JumpWorkflowPresentation.isCameraLifetimeVisible(isVisible: true, isForegroundScene: false, visibleRoute: .analyse))
+        XCTAssertFalse(JumpWorkflowPresentation.isCameraLifetimeVisible(isVisible: false, isForegroundScene: true, visibleRoute: .analyse))
+        XCTAssertFalse(JumpWorkflowPresentation.isCameraLifetimeVisible(isVisible: false, isForegroundScene: false, visibleRoute: nil))
+        XCTAssertFalse(JumpWorkflowPresentation.isCameraEligible(isVisible: false, isActiveScene: false, visibleRoute: nil))
+        // Viewer gate unchanged: Analyse active-only, never broadened by the
+        // camera lifetime split.
+        XCTAssertTrue(JumpWorkflowPresentation.shouldActivateViewer(isVisible: true, isActiveScene: true, visibleRoute: .analyse))
+        XCTAssertFalse(JumpWorkflowPresentation.shouldActivateViewer(isVisible: true, isActiveScene: false, visibleRoute: .analyse))
+    }
+
+    func testCameraFirstTapSplitsOpenVsRecordWithoutAutoRecord() {
+        // Pure first-action decision pinned: idle prepares ONLY, ready
+        // records ONLY, everything else has no first action. No phase
+        // auto-records on grant/ready/resume; the host switches on this.
+        XCTAssertEqual(JumpWorkflowPresentation.cameraFirstAction(for: .idle), .openCamera)
+        XCTAssertEqual(JumpWorkflowPresentation.cameraFirstAction(for: .ready), .record)
+        XCTAssertNil(JumpWorkflowPresentation.cameraFirstAction(for: .requestingPermission))
+        XCTAssertNil(JumpWorkflowPresentation.cameraFirstAction(for: .preparing))
+        XCTAssertNil(JumpWorkflowPresentation.cameraFirstAction(for: .starting))
+        XCTAssertNil(JumpWorkflowPresentation.cameraFirstAction(for: .recording))
+        XCTAssertNil(JumpWorkflowPresentation.cameraFirstAction(for: .finalizing))
+        XCTAssertNil(JumpWorkflowPresentation.cameraFirstAction(for: .recorded))
+        XCTAssertNil(JumpWorkflowPresentation.cameraFirstAction(for: .denied))
+        XCTAssertNil(JumpWorkflowPresentation.cameraFirstAction(for: .unavailable))
+        XCTAssertNil(JumpWorkflowPresentation.cameraFirstAction(for: .failed))
+        // Explicit button labels: initial idle shows the NEW open key,
+        // ready keeps the existing record key, non-record phases hide.
+        XCTAssertEqual(JumpWorkflowPresentation.recordButtonKey(for: .idle), "jumps.camera.open")
+        XCTAssertEqual(JumpWorkflowPresentation.recordButtonKey(for: .idle), JumpCameraControls.openKey)
+        XCTAssertEqual(JumpWorkflowPresentation.recordButtonKey(for: .ready), "jumps.camera.record")
+        XCTAssertEqual(JumpWorkflowPresentation.recordButtonKey(for: .ready), JumpCameraControls.recordKey)
+        XCTAssertNil(JumpWorkflowPresentation.recordButtonKey(for: .requestingPermission))
+        XCTAssertNil(JumpWorkflowPresentation.recordButtonKey(for: .preparing))
+        XCTAssertNil(JumpWorkflowPresentation.recordButtonKey(for: .starting))
+        XCTAssertNil(JumpWorkflowPresentation.recordButtonKey(for: .recording))
+        XCTAssertNil(JumpWorkflowPresentation.recordButtonKey(for: .finalizing))
+        XCTAssertNil(JumpWorkflowPresentation.recordButtonKey(for: .recorded))
+        XCTAssertNil(JumpWorkflowPresentation.recordButtonKey(for: .denied))
+        XCTAssertNil(JumpWorkflowPresentation.recordButtonKey(for: .unavailable))
+        XCTAssertNil(JumpWorkflowPresentation.recordButtonKey(for: .failed))
+        // Recording still starts ONLY from ready via policy; idle open never
+        // records by itself and finalizing never offers Use.
+        XCTAssertTrue(JumpVideoCapturePolicy.canStartRecording(phase: .ready))
+        XCTAssertFalse(JumpVideoCapturePolicy.canStartRecording(phase: .idle))
+        XCTAssertFalse(JumpWorkflowPresentation.cameraControls(for: .finalizing).canUse)
     }
 }

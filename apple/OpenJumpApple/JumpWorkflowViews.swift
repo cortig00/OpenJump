@@ -753,19 +753,21 @@ struct JumpHomeView: View {
     }
 
     /// Direct-record camera entry (C2b). Lives ONLY inside the Obtain-video
-    /// stage and activates ONLY while the Jumps root is actually appeared,
-    /// the scene is active, and Obtain video is the visible route (same gate
-    /// shape as the viewer). The single `camera` facade above survives route
-    /// changes; it is never re-created per appearance or per route.
-    /// Recording always starts from an explicit Record tap — background, tab
-    /// switches, and hidden reappears never record. Back/tab/background
-    /// preserve the workflow draft; finalizing persists until the real
-    /// engine delegate lands.
+    /// stage. Lifetime (preview + facade viewAppeared/viewDisappeared) runs
+    /// while the Jumps root is appeared, the scene is foreground
+    /// (active OR inactive), and Obtain video is the visible route, so a
+    /// transient inactive permission alert preserves the originating ticket.
+    /// Explicit user actions (open/record/retry) stay active-only via
+    /// `cameraEligible`. True background, hidden tabs, and wrong routes
+    /// fail closed and invalidate. Recording always starts from an explicit
+    /// tap — background, tab switches, and hidden reappears never record.
+    /// Back/tab/background preserve the workflow draft; finalizing persists
+    /// until the real engine delegate lands.
     private var cameraSection: some View {
         let controls = JumpWorkflowPresentation.cameraControls(for: camera.phase)
         return OpenJumpSection(title: AppText.string("jumps.source.CAMERA", language: language)) {
             VStack(alignment: .leading, spacing: 10) {
-                if cameraEligible && controls.showsLivePreview {
+                if cameraLifetimeVisible && controls.showsLivePreview {
                     CameraPreviewHost(session: camera.previewSessionForFutureHost)
                         .frame(maxWidth: .infinity)
                         .frame(height: JumpWorkflowPresentation.placeholderHeight)
@@ -781,7 +783,7 @@ struct JumpHomeView: View {
                     Button {
                         recordTapped()
                     } label: {
-                        Label(AppText.string(JumpCameraControls.recordKey, language: language), systemImage: "video.badge.plus")
+                        Label(AppText.string(JumpWorkflowPresentation.recordButtonKey(for: camera.phase) ?? JumpCameraControls.recordKey, language: language), systemImage: "video.badge.plus")
                             .frame(maxWidth: .infinity, minHeight: 48)
                     }
                     .buttonStyle(.borderedProminent).tint(.openJumpGreen)
@@ -849,8 +851,8 @@ struct JumpHomeView: View {
         }
         .onAppear { cameraSectionAppeared() }
         .onDisappear { cameraSectionDisappeared() }
-        .onChange(of: cameraEligible) { eligible in
-            if eligible { camera.viewAppeared() }
+        .onChange(of: cameraLifetimeVisible) { visible in
+            if visible { camera.viewAppeared() }
             else { cameraSectionDisappeared() }
         }
         .onChange(of: camera.phase) { phase in
@@ -911,20 +913,37 @@ struct JumpHomeView: View {
         workflow.isImporting || workflow.isIndexing
     }
 
-    /// Same visibility gate as the viewer, pointed at Obtain video: camera
-    /// preview + facade lifecycle run only here. Background, hidden tabs, and
-    /// wrong routes all fail closed.
+    /// Explicit user-action gate (active-only): Record/Retry taps run only
+    /// while the Jumps root is appeared, the scene is ACTIVE, and Obtain
+    /// video is the visible route. A transient inactive permission alert is
+    /// not eligible for a NEW tap; the in-flight request keeps its lifetime.
+    /// Viewer gate unchanged.
     private var cameraEligible: Bool {
         JumpWorkflowPresentation.isCameraEligible(isVisible: isJumpsVisible, isActiveScene: scenePhase == .active, visibleRoute: visibleRoute)
     }
 
-    /// Explicit Record tap: prepare on first need, then start only when the
-    /// facade reports ready. Both entries are policy-gated (prepare no-ops
-    /// outside idle/denied/failed; start no-ops unless ready), and nothing
-    /// here runs without the tap — never auto-record.
+    /// Foreground lifetime gate (preview + facade lifecycle): appeared root
+    /// + scene foreground (active OR inactive, i.e. `scenePhase !=
+    /// .background`) + Obtain video route. Survives the transient inactive
+    /// permission alert; true background, hidden tabs, and wrong routes fail
+    /// closed and invalidate via `cameraSectionDisappeared`.
+    private var cameraLifetimeVisible: Bool {
+        JumpWorkflowPresentation.isCameraLifetimeVisible(isVisible: isJumpsVisible, isForegroundScene: scenePhase != .background, visibleRoute: visibleRoute)
+    }
+
+    /// Explicit camera button: idle opens the camera (prepare ONLY), ready
+    /// records (start ONLY). Active-only and phase-gated; nothing here runs
+    /// without the tap — never auto-record on grant/ready/resume.
     private func recordTapped() {
-        camera.requestPermissionAndPrepare(isActive: cameraEligible)
-        camera.startRecording()
+        guard cameraEligible else { return }
+        switch JumpWorkflowPresentation.cameraFirstAction(for: camera.phase) {
+        case .openCamera:
+            camera.requestPermissionAndPrepare(isActive: cameraEligible)
+        case .record:
+            camera.startRecording()
+        case .none:
+            break
+        }
     }
 
     /// Explicit Use tap: mints a FRESH borrower per action (never the preview
@@ -968,18 +987,20 @@ struct JumpHomeView: View {
         }
     }
 
-    /// Route became visible while eligible: mark view visible so the engine
-    /// may restart a suspended READY preview. Never starts recording.
+    /// Route became visible while lifetime holds: mark view visible so the
+    /// engine may restart a suspended READY preview. Never starts recording.
     private func cameraSectionAppeared() {
         if camera.phase == .recorded { attachReviewPlayback() }
-        guard cameraEligible else { return }
+        guard cameraLifetimeVisible else { return }
         camera.viewAppeared()
     }
 
-    /// Route hidden, tab hidden, or scene inactive: detach the review player
-    /// BEFORE releasing its borrower, then park the session. A recording in
-    /// flight auto-stops and still finalizes through the delegate; the
-    /// workflow draft is preserved and nothing yanks the route.
+    /// True background, route exit, tab hide, or structural disappear:
+    /// detach the review player BEFORE releasing its borrower, then park the
+    /// session. A transient inactive permission alert never reaches here
+    /// (lifetime stays foreground). A recording in flight auto-stops and
+    /// still finalizes through the delegate; the workflow draft is preserved
+    /// and nothing yanks the route.
     private func cameraSectionDisappeared() {
         teardownReviewPlayback()
         camera.viewDisappeared()

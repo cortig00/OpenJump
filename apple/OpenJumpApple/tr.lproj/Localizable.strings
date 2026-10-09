@@ -336,3 +336,4 @@
 "jumps.camera.stop" = "Durdur";
 "jumps.camera.useRecording" = "Kaydı kullan";
 "jumps.camera.repeat" = "Tekrar kaydet";
+"jumps.camera.open" = "Kamerayı aç";

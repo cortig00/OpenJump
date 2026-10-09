@@ -850,4 +850,86 @@ final class JumpVideoCaptureTests: XCTestCase {
         XCTAssertFalse(gate.canBeginNativeStart(ticket: take.originatingTicket))
         XCTAssertFalse(gate.isTicketLive(take.originatingTicket))
     }
+
+    // MARK: - iOS16-XR host lifecycle replay (bounded, 2026-10-09)
+    //
+    // Cross-layer replay of the ACTUAL host decision consumed by
+    // JumpWorkflowViews (isCameraLifetimeVisible for viewAppeared/
+    // viewDisappeared + isCameraEligible for explicit taps + cameraFirstAction
+    // for the open/record split) against the ACTUAL locked event gate. No
+    // AVCaptureSession is created. Expectations are hardcoded literals.
+    func testHostLifecycleReplayPreservesAlertTicketAndInvalidatesTrueExits() {
+        // Facade init: allocated but hidden (viewVisible false, foreground
+        // true). Host lifetime with hidden tab fails closed.
+        let gate = JumpVideoCaptureEventGate()
+        gate.setViewVisible(false)
+        gate.setForegroundActive(true)
+        XCTAssertFalse(JumpWorkflowPresentation.isCameraLifetimeVisible(isVisible: false, isForegroundScene: true, visibleRoute: .obtainVideo))
+        XCTAssertFalse(gate.isForegroundActive())
+        // Obtain visible foreground active: host appears (viewVisible true).
+        // Lifetime + actions both true; the originating ticket is live.
+        XCTAssertTrue(JumpWorkflowPresentation.isCameraLifetimeVisible(isVisible: true, isForegroundScene: true, visibleRoute: .obtainVideo))
+        XCTAssertTrue(JumpWorkflowPresentation.isCameraEligible(isVisible: true, isActiveScene: true, visibleRoute: .obtainVideo))
+        gate.setViewVisible(true)
+        XCTAssertTrue(gate.isForegroundActive())
+        let alertTicket = gate.issueTicket()
+        XCTAssertTrue(gate.isTicketLive(alertTicket))
+        XCTAssertTrue(gate.canBeginNativeStart(ticket: alertTicket))
+        // First-tap split at this point: idle opens (prepare only), never
+        // records by itself.
+        XCTAssertEqual(JumpWorkflowPresentation.cameraFirstAction(for: .idle), .openCamera)
+        XCTAssertEqual(JumpWorkflowPresentation.recordButtonKey(for: .idle), "jumps.camera.open")
+        XCTAssertFalse(JumpVideoCapturePolicy.canStartRecording(phase: .idle))
+        // Transient inactive permission alert (still OS foreground): host
+        // lifetime TRUE so it takes NO disappear/invalidate; NEW taps stay
+        // active-only false. The originating ticket MUST survive.
+        XCTAssertTrue(JumpWorkflowPresentation.isCameraLifetimeVisible(isVisible: true, isForegroundScene: true, visibleRoute: .obtainVideo))
+        XCTAssertFalse(JumpWorkflowPresentation.isCameraEligible(isVisible: true, isActiveScene: false, visibleRoute: .obtainVideo))
+        // No gate touch here by host contract (permission alerts never call
+        // setForegroundActive/setViewVisible/invalidate).
+        XCTAssertTrue(gate.isTicketLive(alertTicket), "inactive alert must preserve originating ticket")
+        XCTAssertTrue(gate.canBeginNativeStart(ticket: alertTicket), "inactive alert must preserve native-start eligibility")
+        XCTAssertTrue(gate.isForegroundActive())
+        // Ready explicit record still requires the live ticket + foreground.
+        XCTAssertEqual(JumpWorkflowPresentation.cameraFirstAction(for: .ready), .record)
+        XCTAssertEqual(JumpWorkflowPresentation.recordButtonKey(for: .ready), "jumps.camera.record")
+        XCTAssertTrue(JumpVideoCapturePolicy.canStartRecording(phase: .ready))
+        // True background: host lifetime FALSE so it MUST disappear +
+        // invalidate (view hidden + generation bump). Old ticket stale.
+        XCTAssertFalse(JumpWorkflowPresentation.isCameraLifetimeVisible(isVisible: true, isForegroundScene: false, visibleRoute: .obtainVideo))
+        gate.setViewVisible(false)
+        gate.invalidate()
+        gate.setForegroundActive(false)
+        XCTAssertFalse(gate.isTicketLive(alertTicket), "true background must invalidate originating ticket")
+        XCTAssertFalse(gate.canBeginNativeStart(ticket: alertTicket))
+        XCTAssertFalse(gate.isForegroundActive())
+        // Foreground return + explicit re-appear issues a FRESH live ticket
+        // (never resurrects the old one).
+        gate.setForegroundActive(true)
+        gate.setViewVisible(true)
+        XCTAssertTrue(JumpWorkflowPresentation.isCameraLifetimeVisible(isVisible: true, isForegroundScene: true, visibleRoute: .obtainVideo))
+        let routeTicket = gate.issueTicket()
+        XCTAssertTrue(gate.isTicketLive(routeTicket))
+        XCTAssertTrue(gate.canBeginNativeStart(ticket: routeTicket))
+        XCTAssertFalse(gate.isTicketLive(alertTicket))
+        // Route exit (Obtain -> Prepare) while foreground active: lifetime
+        // FALSE, MUST invalidate (no inert early-return keeps it visible).
+        XCTAssertFalse(JumpWorkflowPresentation.isCameraLifetimeVisible(isVisible: true, isForegroundScene: true, visibleRoute: .prepare))
+        XCTAssertFalse(JumpWorkflowPresentation.isCameraEligible(isVisible: true, isActiveScene: true, visibleRoute: .prepare))
+        gate.setViewVisible(false)
+        gate.invalidate()
+        XCTAssertFalse(gate.isTicketLive(routeTicket), "route exit must invalidate")
+        XCTAssertFalse(gate.canBeginNativeStart(ticket: routeTicket))
+        // Re-appear on Obtain, then hidden tab: MUST invalidate as well.
+        gate.setViewVisible(true)
+        let tabTicket = gate.issueTicket()
+        XCTAssertTrue(JumpWorkflowPresentation.isCameraLifetimeVisible(isVisible: true, isForegroundScene: true, visibleRoute: .obtainVideo))
+        XCTAssertTrue(gate.isTicketLive(tabTicket))
+        XCTAssertFalse(JumpWorkflowPresentation.isCameraLifetimeVisible(isVisible: false, isForegroundScene: true, visibleRoute: .obtainVideo))
+        XCTAssertFalse(JumpWorkflowPresentation.isCameraEligible(isVisible: false, isActiveScene: true, visibleRoute: .obtainVideo))
+        gate.setViewVisible(false)
+        gate.invalidate()
+        XCTAssertFalse(gate.isTicketLive(tabTicket), "hidden tab must invalidate")
+        XCTAssertFalse(gate.canBeginNativeStart(ticket: tabTicket))
+    }
 }

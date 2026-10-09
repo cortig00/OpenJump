@@ -338,3 +338,4 @@
 "jumps.camera.stop" = "Stop";
 "jumps.camera.useRecording" = "Use recording";
 "jumps.camera.repeat" = "Re-record";
+"jumps.camera.open" = "Open camera";

@@ -336,3 +336,4 @@
 "jumps.camera.stop" = "Arrêter";
 "jumps.camera.useRecording" = "Utiliser l’enregistrement";
 "jumps.camera.repeat" = "Réenregistrer";
+"jumps.camera.open" = "Ouvrir la caméra";

@@ -279,28 +279,40 @@ struct JumpCameraControls: Equatable, Sendable {
     var showsReview: Bool
 }
 
+/// Explicit first-tap intent for the camera record row. `.openCamera`
+/// prepares only (idle), `.record` starts only (ready). Pure value so the
+/// host split and unit tests agree; never auto-records.
+enum JumpCameraFirstAction: Equatable, Sendable {
+    case openCamera
+    case record
+}
+
 extension JumpCameraControls {
-    /// Additive C2b control labels (8 locales). Status/error text reuses the
-    /// existing `jumps.camera.*` keys; these four are the only new keys.
+    /// Additive C2b control labels (8 locales) plus the bounded iOS16-XR
+    /// repair split: idle shows the explicit open label, ready shows the
+    /// explicit record label. Status/error text reuses the existing
+    /// `jumps.camera.*` keys; these five are the only new keys.
+    static let openKey = "jumps.camera.open"
     static let recordKey = "jumps.camera.record"
     static let stopKey = "jumps.camera.stop"
     static let useRecordingKey = "jumps.camera.useRecording"
     static let repeatKey = "jumps.camera.repeat"
-    /// Exact additive key surface C2b introduces. Unit tests pin this set so
-    /// no mic/gallery/InfoPlist key can slip in through the camera slice.
+    /// Exact additive key surface C2b introduces plus the one bounded
+    /// open-camera repair key. Unit tests pin this set so no
+    /// mic/gallery/InfoPlist key can slip in through the camera slice.
     static var newControlKeys: [String] {
-        [recordKey, stopKey, useRecordingKey, repeatKey]
+        [openKey, recordKey, stopKey, useRecordingKey, repeatKey]
     }
 }
 
 extension JumpWorkflowPresentation {
-    /// Camera-section eligibility: the Jumps root must actually be appeared,
-    /// the scene active, and Obtain video the visible route. Hidden tabs,
-    /// inactive scenes, wrong routes, and background all fail closed, so the
-    /// preview host and the facade lifecycle never activate implicitly and
-    /// recording always starts from an explicit Record tap. The caller passes
+    /// Camera-section eligibility for explicit user actions (Record/Retry
+    /// taps): the Jumps root must actually be appeared, the scene ACTIVE,
+    /// and Obtain video the visible route. A transient inactive permission
+    /// alert is NOT eligible for a NEW tap; hidden tabs, wrong routes, and
+    /// background all fail closed. The caller passes
     /// `scenePhase == .active` as `isActiveScene`; no UIKit/SwiftUI scene
-    /// types enter pure code.
+    /// types enter pure code. Viewer gate unchanged.
     static func isCameraEligible(
         isVisible: Bool,
         isActiveScene: Bool,
@@ -308,6 +320,58 @@ extension JumpWorkflowPresentation {
     ) -> Bool {
         guard isVisible, isActiveScene else { return false }
         return visibleRoute == .obtainVideo
+    }
+
+    /// Camera lifetime for preview + facade viewAppeared/viewDisappeared:
+    /// the Jumps root appeared, true OS foreground (active OR inactive),
+    /// and Obtain video the visible route. A transient inactive native
+    /// permission alert KEEPS lifetime (still foreground) so the
+    /// originating request ticket survives the grant callback; true
+    /// background, hidden tabs, and wrong routes fail closed and MUST
+    /// invalidate. The caller passes `scenePhase != .background` as
+    /// `isForegroundScene`; no UIKit/SwiftUI scene types enter pure code.
+    /// Explicit user actions stay active-only via `isCameraEligible`.
+    static func isCameraLifetimeVisible(
+        isVisible: Bool,
+        isForegroundScene: Bool,
+        visibleRoute: JumpFlowRoute?
+    ) -> Bool {
+        guard isVisible, isForegroundScene else { return false }
+        return visibleRoute == .obtainVideo
+    }
+
+    /// First-tap decision for the explicit camera button: idle opens the
+    /// camera (prepare ONLY), ready records (start ONLY). Every other
+    /// phase has no first action; nothing here auto-records on grant,
+    /// ready, or resume. The host switches on this (never a fused
+    /// prepare+start), and both branches remain explicit-tap + policy
+    /// gated at the engine.
+    static func cameraFirstAction(for phase: JumpVideoCapturePhase) -> JumpCameraFirstAction? {
+        switch phase {
+        case .idle:
+            return .openCamera
+        case .ready:
+            return .record
+        case .requestingPermission, .preparing, .starting, .recording,
+             .finalizing, .recorded, .denied, .unavailable, .failed:
+            return nil
+        }
+    }
+
+    /// Explicit button label for the record row: idle shows the new open
+    /// key, ready shows the existing record key. Non-record phases have no
+    /// label (the row is hidden by the control matrix). The host renders
+    /// from this so unit tests pin the exact split.
+    static func recordButtonKey(for phase: JumpVideoCapturePhase) -> String? {
+        switch phase {
+        case .idle:
+            return JumpCameraControls.openKey
+        case .ready:
+            return JumpCameraControls.recordKey
+        case .requestingPermission, .preparing, .starting, .recording,
+             .finalizing, .recorded, .denied, .unavailable, .failed:
+            return nil
+        }
     }
 
     /// Pure phase → control matrix for the camera section. Mirrors the
