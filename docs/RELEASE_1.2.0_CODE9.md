@@ -5,8 +5,8 @@
 - Application ID: `com.openjump.app`
 - Version: `1.2.0` / `versionCode 9`
 - Development source commit: `f37f0ff5714ce696f323988036b497c3ac9ddc56`
-- Public annotated tag: `v1.2.0` (the curated public source commit; same
-  `app/`, `fvp/` and `fvp-lab/` trees as the development commit)
+- Public release commit / annotated tag: `42e59af662cf9fbc59c9b593c72425a605553281`
+  / `v1.2.0` (same `app/`, `fvp/` and `fvp-lab/` trees)
 - Public source: <https://github.com/cortig00/OpenJump>
 - F-Droid recipe: <https://gitlab.com/fdroid/fdroiddata/-/blob/master/metadata/com.openjump.app.yml>
 
@@ -46,13 +46,23 @@ The full evidence summary, test counts, AVD runs and artifact hashes are in
 - Version policy, license check, `git diff --check`, bundletool validation and
   16 KiB zip alignment pass.
 
+## Artifacts
+
+- AAB (unsigned): 19,307,400 bytes, SHA-256
+  `0d5ac2c8b1aa1ba499018ffbc86479843f3b2755230d94365cbd46615eb456a2`
+- APK (unsigned): 13,702,620 bytes, SHA-256
+  `b963ede86d37ea8c16f396f8b25e35080c66a7e6d0a41cd06e1565ca705f3f0d`
+- F-Droid's fresh build from the published tag produced the same APK hash.
+
 ## Publication status
 
 - **Google Play:** prepared, **not uploaded**. The upload keystore and Play
   API/Fastlane credentials are not present on this machine, so no signed AAB
   could be produced. The release AAB is unsigned and must not be uploaded.
-- **F-Droid:** source/tag preparation only. The official recipe is already in
-  `fdroiddata` master and will detect the stable tag automatically. F-Droid's
-  own build/signing/publication are independent.
-- No existing tag was moved, no force-push was used and no signing identity was
-  changed or generated.
+- **F-Droid:** annotated tag published; the official `fdroiddata` updater
+  detected 1.2.0 / code 9 and generated the build block automatically. A local
+  official build, lint and scanner pass. F-Droid's own signing and publication
+  are independent and still pending.
+- The historical `v1.0` tag and the recipe's pinned `8cd1fea` commit were kept.
+- No existing historical tag was moved and no signing identity was changed or
+  generated.

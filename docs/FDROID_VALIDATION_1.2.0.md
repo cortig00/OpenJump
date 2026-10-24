@@ -10,11 +10,10 @@ F-Droid approval or a claim that F-Droid has already built or published 1.2.0.
   this update. `AutoUpdateMode: Version`, `UpdateCheckMode: Tags` and
   `UpdateCheckData` already cover stable `v1.2.0`.
 - The historical build block (`1.0` / `7`, commit `8cd1fea`) is preserved.
-- Development source commit: `f37f0ff5714ce696f323988036b497c3ac9ddc56`.
-  The public repository publishes the same `app/`, `fvp/` and `fvp-lab/` trees
-  at the annotated `v1.2.0` tag.
-- Annotated tag: `v1.2.0` (published separately; it must dereference to the
-  release source commit).
+- Development source commit: `f37f0ff5714ce696f323988036b497c3ac9ddc56`
+  (same `app/`, `fvp/` and `fvp-lab/` trees).
+- Public release commit / annotated tag: `42e59af662cf9fbc59c9b593c72425a605553281`
+  / `v1.2.0`. The tag dereferences to `42e59af`.
 - `version.properties`: `VERSION_CODE=9`, `VERSION_NAME=1.2.0`.
 - Same application ID `com.openjump.app`, single release variant, minSdk 26,
   target/compileSdk 36. No F-Droid flavor, no proprietary dependency added.
@@ -50,36 +49,32 @@ Instrumented checks executed on the authorized `OpenJump_API35` AVD
 The release build hides the F-V-P entry and does not create its ViewModel. The
 debug build keeps it enabled for the existing instrumented F-V-P suites.
 
-## Artifacts
+## Artifacts (public tag build)
 
 Unsigned release AAB (no upload key on this machine):
 
 - `app/build/outputs/bundle/release/app-release.aab`
 - 19,307,400 bytes
-- SHA-256 `b78167d9977bac23cdcad85c8110aa553af2cfa7f416fb604c9361822ed52968`
+- SHA-256 `0d5ac2c8b1aa1ba499018ffbc86479843f3b2755230d94365cbd46615eb456a2`
+- Embedded version-control revision: `42e59af662cf9fbc59c9b593c72425a605553281`
 
 Unsigned release APK (validation only):
 
 - `app/build/outputs/apk/release/app-release-unsigned.apk`
 - 13,702,620 bytes
-- SHA-256 `ea62b58a13e8100fa0b5e99a15ad11236b49d9c4af99d25e46df569d1760a941`
+- SHA-256 `b963ede86d37ea8c16f396f8b25e35080c66a7e6d0a41cd06e1565ca705f3f0d`
 
-Companion APK signed with the local Android debug key, only for AVD smoke
-(never for Play or F-Droid):
-
-- `artifacts/release-1.2.0-code9/OpenJump-1.2.0-code9-debug-signed-test.apk`
-- 13,771,583 bytes
-- SHA-256 `e93538ca0f210ad71d538e8f3c172fad3af2764201b6f2c861438e1c02790411`
+The official fdroiddata auto-updater generated the 1.2.0 build block from the
+published tag. A fresh `fdroid build` of commit `42e59af` from GitHub produced
+the same unsigned APK hash (`b963ede…`), and `fdroid lint` / `fdroid scanner`
+exited 0 with no warnings or errors. F-Droid's own signing and publication
+remain external.
 
 ## Pending external gates
 
 - The Play upload key and Google Play API/Fastlane credentials are not available
   on this machine; the AAB is unsigned and has not been uploaded.
-- A full `fdroid lint`/`fdroid build` against the published tag remains to be
-  run with fdroidserver/fdroiddata. The recipe itself is unchanged and the
-  stable updater is expected to generate the 1.2.0 build block.
-- F-Droid's own signing, build and publication timing are outside this
-  repository.
+- F-Droid's own signing and publication timing are outside this repository.
 
 See [the F-Droid preparation guide](FDROID.md) and the
 [release record](RELEASE_1.2.0_CODE9.md).
