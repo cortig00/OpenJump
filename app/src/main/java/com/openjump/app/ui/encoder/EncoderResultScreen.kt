@@ -66,6 +66,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.openjump.app.R
 import com.openjump.app.encoder.EncoderAnalysis
+import com.openjump.app.encoder.EncoderAnalysisWarnings
 import com.openjump.app.encoder.EncoderMetric
 import com.openjump.app.encoder.EncoderMetricKey
 import com.openjump.app.encoder.EncoderMetricUnit
@@ -90,6 +91,7 @@ import com.openjump.app.video.EncoderPlaybackCoordinator
 import com.openjump.app.ui.titleResource
 import com.openjump.app.ui.result.ResultNoteDialog
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -339,6 +341,7 @@ fun EncoderResultContent(
     var analysisSeriesKind by rememberSaveable { mutableStateOf(EncoderSeriesKind.POSITION) }
     var notesExpanded by rememberSaveable { mutableStateOf(false) }
     var warningsExpanded by rememberSaveable { mutableStateOf(false) }
+    var technicalExpanded by rememberSaveable { mutableStateOf(false) }
     var contextExpanded by rememberSaveable { mutableStateOf(false) }
     var showSaveErrorDetails by remember { mutableStateOf(false) }
     var confirmation by remember { mutableStateOf<EncoderConfirmation?>(null) }
@@ -347,6 +350,7 @@ fun EncoderResultContent(
         analysis.repetitions.firstOrNull { it.ordinal == ordinal }
     }
     val hasNoValidRepetitions = analysis.validRepetitions.isEmpty()
+    val remainingWarnings = analysis.warnings.filterNot(::isCriticalEncoderWarning)
     val showSaveAction = onSave != null && !saved
     var videoVisit by remember(analysis) { mutableIntStateOf(0) }
     val playbackCoordinator = remember(analysis, videoVisit) { EncoderPlaybackCoordinator() }
@@ -528,40 +532,94 @@ fun EncoderResultContent(
         ) {
             when (uiState.view) {
                 EncoderResultView.SUMMARY -> {
-                    item { EncoderResultHeading(analysis) }
-                    item { EncoderSetSummary(analysis) }
-                    if (analysis.repetitions.isNotEmpty()) {
-                        item { EncoderMcvChart(analysis, modifier = Modifier.testTag("encoder-summary-mcv-chart")) }
+                    item {
+                        EncoderResultHeading(
+                            analysis = analysis,
+                            onHelp = { showMetricsHelp = true },
+                            helpDescription = helpDescription,
+                        )
                     }
-                    val criticalTimelineWarning = !analysis.timingDecision.isReliable
+                    item { EncoderSetSummary(analysis) }
                     if (hasNoValidRepetitions) {
                         item {
                             EncoderInfoNote(
                                 stringResource(R.string.encoder_correct_no_valid_title),
                                 stringResource(R.string.encoder_warning_no_valid_repetitions),
+                                modifier = Modifier.testTag("encoder-critical-no-valid"),
                                 warning = true,
                             )
                         }
                     }
-                    if (criticalTimelineWarning) {
+                    if (!analysis.timingDecision.isReliable) {
                         item {
                             EncoderInfoNote(
                                 stringResource(R.string.encoder_review_session),
                                 stringResource(R.string.encoder_warning_unreliable_timeline),
+                                modifier = Modifier.testTag("encoder-critical-timeline"),
                                 warning = true,
                             )
                         }
                     }
-                    if (analysis.warnings.isNotEmpty()) {
+                    if (analysis.warnings.any { it == EncoderAnalysisWarnings.TRACKING_LOST }) {
+                        item {
+                            EncoderInfoNote(
+                                stringResource(R.string.encoder_review_session),
+                                stringResource(R.string.encoder_warning_tracking_lost),
+                                modifier = Modifier.testTag("encoder-critical-tracking-lost"),
+                                warning = true,
+                            )
+                        }
+                    }
+                    if (analysis.warnings.any { it == EncoderAnalysisWarnings.NO_REPETITIONS }) {
+                        item {
+                            EncoderInfoNote(
+                                stringResource(R.string.encoder_review_session),
+                                stringResource(R.string.encoder_warning_no_repetitions),
+                                modifier = Modifier.testTag("encoder-critical-no-repetitions"),
+                                warning = true,
+                            )
+                        }
+                    }
+                    if (hasNoValidRepetitions && onCorrect != null) {
+                        item {
+                            Column(
+                                modifier = Modifier.testTag("encoder-correct-before-chart"),
+                                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+                            ) {
+                                Button(onClick = onCorrect, modifier = Modifier.fillMaxWidth()) {
+                                    Text(stringResource(R.string.encoder_correct_results))
+                                }
+                                if (onDiscard != null) {
+                                    TextButton(
+                                        onClick = {
+                                            confirmation = EncoderConfirmation.DISCARD { onDiscard.invoke() }
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                    ) { Text(stringResource(R.string.encoder_discard_and_return)) }
+                                }
+                            }
+                        }
+                    }
+                    if (analysis.repetitions.isNotEmpty()) {
+                        item { EncoderMcvChart(analysis, modifier = Modifier.testTag("encoder-summary-mcv-chart")) }
+                    }
+                    item {
+                        EncoderTechnicalDetails(
+                            analysis = analysis,
+                            expanded = technicalExpanded,
+                            onToggle = { technicalExpanded = !technicalExpanded },
+                        )
+                    }
+                    if (remainingWarnings.isNotEmpty()) {
                         item {
                             EncoderDisclosure(
-                                title = stringResource(R.string.encoder_result_warnings, analysis.warnings.size),
+                                title = stringResource(R.string.encoder_result_warnings, remainingWarnings.size),
                                 expanded = warningsExpanded,
                                 onToggle = { warningsExpanded = !warningsExpanded },
                                 testTag = "encoder-disclosure-warnings",
                             ) {
                                 Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                                    analysis.warnings.forEach { warning ->
+                                    remainingWarnings.forEach { warning ->
                                         EncoderInfoNote(
                                             stringResource(R.string.encoder_review_session),
                                             localizedEncoderWarning(warning),
@@ -599,23 +657,6 @@ fun EncoderResultContent(
                             ) { PersistedEncoderContextCard(context) }
                         }
                     }
-                    if (hasNoValidRepetitions && onCorrect != null) {
-                        item {
-                            Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                                Button(onClick = onCorrect, modifier = Modifier.fillMaxWidth()) {
-                                    Text(stringResource(R.string.encoder_correct_results))
-                                }
-                                if (onDiscard != null) {
-                                    TextButton(
-                                        onClick = {
-                                            confirmation = EncoderConfirmation.DISCARD { onDiscard.invoke() }
-                                        },
-                                        modifier = Modifier.fillMaxWidth(),
-                                    ) { Text(stringResource(R.string.encoder_discard_and_return)) }
-                                }
-                            }
-                        }
-                    }
                     if (onHome != null) {
                         item {
                             OutlinedButton(onClick = onHome, modifier = Modifier.fillMaxWidth()) {
@@ -642,9 +683,9 @@ fun EncoderResultContent(
                                 )
                                 IconButton(
                                     onClick = { showMetricsHelp = true },
-                                    modifier = Modifier.heightIn(min = 48.dp).semantics {
+                                    modifier = Modifier.widthIn(min = 48.dp).heightIn(min = 48.dp).semantics {
                                         contentDescription = helpDescription
-                                    },
+                                    }.testTag("encoder-repetitions-help"),
                                 ) { Icon(painterResource(R.drawable.ic_info), contentDescription = null) }
                             }
                         }
@@ -671,6 +712,25 @@ fun EncoderResultContent(
 
                 EncoderResultView.ANALYSIS -> {
                     if (selected == null) {
+                        item {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    stringResource(R.string.encoder_result_tab_analysis),
+                                    modifier = Modifier.weight(1f).semantics { heading() },
+                                    style = OpenJumpTypes.SectionTitle,
+                                )
+                                IconButton(
+                                    onClick = { showMetricsHelp = true },
+                                    modifier = Modifier.widthIn(min = 48.dp).heightIn(min = 48.dp).semantics {
+                                        contentDescription = helpDescription
+                                    }.testTag("encoder-analysis-help"),
+                                ) { Icon(painterResource(R.drawable.ic_info), contentDescription = null) }
+                            }
+                        }
                         item { Text(stringResource(R.string.encoder_warning_no_repetitions)) }
                         item { EncoderTrajectoryChart(analysis, null) }
                     } else {
@@ -679,6 +739,8 @@ fun EncoderResultContent(
                             SelectedRepetitionAnalysisHeader(
                                 repetition = repetition,
                                 isBest = isCanonicalBestMcv(repetition, analysis.bestMcv),
+                                onHelp = { showMetricsHelp = true },
+                                helpDescription = helpDescription,
                             )
                         }
                         item(key = "time-series-${repetition.ordinal}") {
@@ -837,7 +899,11 @@ fun EncoderResultContent(
 }
 
 @Composable
-private fun EncoderResultHeading(analysis: EncoderAnalysis) {
+private fun EncoderResultHeading(
+    analysis: EncoderAnalysis,
+    onHelp: () -> Unit,
+    helpDescription: String,
+) {
     val load = MeasurementFormatting.format(
         analysis.setup.loadKg,
         MeasurementQuantity.MASS_KG,
@@ -845,20 +911,112 @@ private fun EncoderResultHeading(analysis: EncoderAnalysis) {
         currentAppLocale(),
     )
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                stringResource(analysis.setup.exercise.titleResource()),
+                modifier = Modifier.weight(1f).semantics { heading() },
+                style = OpenJumpTypes.ScreenTitle,
+            )
+            IconButton(
+                onClick = onHelp,
+                modifier = Modifier.widthIn(min = 48.dp).heightIn(min = 48.dp).semantics {
+                    contentDescription = helpDescription
+                }.testTag("encoder-summary-help"),
+            ) { Icon(painterResource(R.drawable.ic_info), contentDescription = null) }
+        }
         Text(
-            stringResource(analysis.setup.exercise.titleResource()),
-            modifier = Modifier.semantics { heading() },
-            style = OpenJumpTypes.ScreenTitle,
-        )
-        Text(
-            if (analysis.effectiveFps == null) {
-                stringResource(R.string.encoder_load_unreliable_time, load)
-            } else {
-                stringResource(R.string.encoder_load_fps, load, analysis.effectiveFps)
-            },
+            stringResource(R.string.encoder_result_load, load),
             style = OpenJumpTypes.Secondary,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        Text(
+            stringResource(R.string.encoder_help_metrics_intro),
+            modifier = Modifier.testTag("encoder-summary-metrics-intro"),
+            style = OpenJumpTypes.Secondary,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun EncoderTechnicalDetails(
+    analysis: EncoderAnalysis,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+) {
+    val load = MeasurementFormatting.format(
+        analysis.setup.loadKg,
+        MeasurementQuantity.MASS_KG,
+        LocalUnitSystem.current,
+        currentAppLocale(),
+    )
+    EncoderDisclosure(
+        title = stringResource(R.string.encoder_result_technical_details),
+        expanded = expanded,
+        onToggle = onToggle,
+        testTag = "encoder-disclosure-technical",
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+            Text(
+                if (analysis.effectiveFps == null) {
+                    stringResource(R.string.encoder_load_unreliable_time, load)
+                } else {
+                    stringResource(R.string.encoder_load_fps, load, analysis.effectiveFps)
+                },
+                modifier = Modifier.testTag("encoder-technical-fps"),
+                style = OpenJumpTypes.Secondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            // F010/F037: real analysis version, never invented. Collapsed with FPS/load.
+            Text(
+                stringResource(R.string.encoder_technical_version, technicalAnalysisVersion(analysis)),
+                modifier = Modifier.testTag("encoder-technical-version"),
+                style = OpenJumpTypes.Secondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            // Measured QualityReason aggregates: one count per non-valid rep, once per
+            // distinct reason in its set. Counts can overlap; labels reuse grounded
+            // QualityReason titles. Empty means no classified reasons, not a diagnosis.
+            val reasonCounts = remember(analysis.repetitions) {
+                aggregateNonValidReasonCounts(analysis.repetitions)
+            }
+            if (reasonCounts.isEmpty()) {
+                Text(
+                    stringResource(R.string.encoder_technical_no_reasons),
+                    modifier = Modifier.testTag("encoder-technical-no-reasons"),
+                    style = OpenJumpTypes.Secondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                Text(
+                    stringResource(R.string.encoder_technical_reasons_header),
+                    modifier = Modifier.testTag("encoder-technical-reasons-header"),
+                    style = OpenJumpTypes.Secondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                reasonCounts.toSortedMap(compareBy { it.name }).forEach { (reason, count) ->
+                    Text(
+                        stringResource(
+                            R.string.encoder_technical_reason_count,
+                            stringResource(reason.titleResource()),
+                            count,
+                        ),
+                        modifier = Modifier.testTag("encoder-technical-reason-${reason.name.lowercase(Locale.ROOT)}"),
+                        style = OpenJumpTypes.Secondary,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Text(
+                    stringResource(R.string.encoder_technical_reasons_overlap),
+                    modifier = Modifier.testTag("encoder-technical-reasons-note"),
+                    style = OpenJumpTypes.Secondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }
 
@@ -933,6 +1091,8 @@ private fun EncoderAnalysisRepetitionSelector(
 private fun SelectedRepetitionAnalysisHeader(
     repetition: EncoderRepetition,
     isBest: Boolean,
+    onHelp: () -> Unit,
+    helpDescription: String,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth().testTag("encoder-analysis-header"),
@@ -958,6 +1118,12 @@ private fun SelectedRepetitionAnalysisHeader(
                 )
             }
             QualityPill(repetition.quality)
+            IconButton(
+                onClick = onHelp,
+                modifier = Modifier.widthIn(min = 48.dp).heightIn(min = 48.dp).semantics {
+                    contentDescription = helpDescription
+                }.testTag("encoder-analysis-help"),
+            ) { Icon(painterResource(R.drawable.ic_info), contentDescription = null) }
         }
         if (repetition.reasons.isNotEmpty()) {
             Text(
@@ -1086,7 +1252,8 @@ private fun EncoderSetSummary(analysis: EncoderAnalysis) {
     val locale = currentAppLocale()
     val speedUnit = MeasurementFormatting.unit(MeasurementQuantity.SPEED_MPS, unitSystem)
     val valid = analysis.repetitions.count { it.quality == RepetitionQuality.VALID }
-    val uncertain = analysis.repetitions.count { it.quality == RepetitionQuality.UNCERTAIN }
+    val uncertainNumbers = uncertainRepetitionNumbers(analysis.repetitions)
+    val uncertain = uncertainNumbers.size
     val invalid = analysis.repetitions.count { it.quality == RepetitionQuality.INVALID }
     Surface(
         modifier = Modifier.fillMaxWidth().testTag("encoder-result-summary-hero"),
@@ -1103,18 +1270,26 @@ private fun EncoderSetSummary(analysis: EncoderAnalysis) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             val publishedBestMcv = publishedBestMcv(analysis)
-            MetricValueWithUnit(
-                value = publishedBestMcv?.let {
-                    MeasurementFormatting.formatValue(
-                        it,
+            if (publishedBestMcv == null) {
+                // Sin repeticiones válidas no se pinta un guion gigante que compita con
+                // las cifras: un único estado vacío en texto secundario. Ver F-019.
+                Text(
+                    stringResource(R.string.common_no_valid_reps),
+                    style = OpenJumpTypes.Body,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                MetricValueWithUnit(
+                    value = MeasurementFormatting.formatValue(
+                        publishedBestMcv,
                         MeasurementQuantity.SPEED_MPS,
                         unitSystem,
                         locale,
-                    )
-                } ?: "—",
-                unit = publishedBestMcv?.let { speedUnit.symbol },
-                hero = true,
-            )
+                    ),
+                    unit = speedUnit.symbol,
+                    hero = true,
+                )
+            }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1153,6 +1328,18 @@ private fun EncoderSetSummary(analysis: EncoderAnalysis) {
                 style = OpenJumpTypes.Secondary,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            if (uncertainNumbers.isNotEmpty()) {
+                Text(
+                    stringResource(
+                        if (uncertainNumbers.size == 1) R.string.encoder_uncertain_repetition_notice
+                        else R.string.encoder_uncertain_repetitions_notice,
+                        uncertainNumbers.joinToString(", ") { String.format(locale, "%d", it) },
+                    ),
+                    modifier = Modifier.testTag("encoder-uncertain-repetitions-notice"),
+                    style = OpenJumpTypes.Secondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
@@ -1344,9 +1531,10 @@ private fun CompactMetric(
     contentColor: Color,
 ) {
     val formatted = formatMetricParts(metric)
-    val confidenceDescription = if (formatted.lowConfidence) {
+    val lowConfidenceText = if (formatted.lowConfidence) {
         stringResource(R.string.encoder_low_confidence_suffix).trim(' ', '·')
     } else null
+    val confidenceDescription = lowConfidenceText
     val metricDescription = listOfNotNull(
         fullLabel,
         formatted.value,
@@ -1375,6 +1563,13 @@ private fun CompactMetric(
             },
         )
         formatted.unit?.let {
+            Text(
+                it,
+                style = OpenJumpTypes.MetricUnit,
+                color = contentColor.copy(alpha = 0.72f),
+            )
+        }
+        lowConfidenceText?.let {
             Text(
                 it,
                 style = OpenJumpTypes.MetricUnit,
@@ -1427,9 +1622,10 @@ private fun SelectedRepetitionDetails(repetition: EncoderRepetition) {
 private fun MetricDetailRow(metric: EncoderMetric) {
     val formatted = formatMetricParts(metric)
     val label = stringResource(metric.key.titleResource())
-    val confidenceDescription = if (formatted.lowConfidence) {
+    val lowConfidenceText = if (formatted.lowConfidence) {
         stringResource(R.string.encoder_low_confidence_suffix).trim(' ', '·')
     } else null
+    val confidenceDescription = lowConfidenceText
     val description = listOfNotNull(
         label,
         formatted.value,
@@ -1464,6 +1660,13 @@ private fun MetricDetailRow(metric: EncoderMetric) {
                 },
             )
             formatted.unit?.let {
+                Text(
+                    it,
+                    style = OpenJumpTypes.MetricUnit,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            lowConfidenceText?.let {
                 Text(
                     it,
                     style = OpenJumpTypes.MetricUnit,
@@ -1530,15 +1733,20 @@ private fun formatMetricParts(metric: EncoderMetric?): FormattedMetric {
 @Composable
 private fun localizedEncoderWarning(warning: String): String = stringResource(
     when (warning) {
-        "La cronología física no está confirmada; no se calculan velocidades ni repeticiones." ->
+        EncoderAnalysisWarnings.UNRELIABLE_TIMELINE ->
             R.string.encoder_warning_unreliable_timeline
-        "El tracking se perdió antes de terminar el vídeo." -> R.string.encoder_warning_tracking_lost
-        "No se detectaron repeticiones completas." -> R.string.encoder_warning_no_repetitions
-        "No hay repeticiones válidas para el resumen de la serie." ->
+        EncoderAnalysisWarnings.TRACKING_LOST -> R.string.encoder_warning_tracking_lost
+        EncoderAnalysisWarnings.NO_REPETITIONS -> R.string.encoder_warning_no_repetitions
+        EncoderAnalysisWarnings.NO_VALID_REPETITIONS ->
             R.string.encoder_warning_no_valid_repetitions
         else -> R.string.encoder_warning_generic
     },
 )
+
+private fun isCriticalEncoderWarning(warning: String): Boolean = warning == EncoderAnalysisWarnings.UNRELIABLE_TIMELINE ||
+    warning == EncoderAnalysisWarnings.TRACKING_LOST ||
+    warning == EncoderAnalysisWarnings.NO_REPETITIONS ||
+    warning == EncoderAnalysisWarnings.NO_VALID_REPETITIONS
 
 @Composable
 private fun Loading(modifier: Modifier = Modifier) {

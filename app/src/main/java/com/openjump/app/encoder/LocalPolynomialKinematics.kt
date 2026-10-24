@@ -29,12 +29,32 @@ object LocalPolynomialKinematics {
 
     fun estimateAll(observations: List<Observation>, windowSize: Int): List<Estimate?> {
         if (windowSize < 5 || windowSize % 2 == 0) return List(observations.size) { null }
+        // Group once per call, keeping original indices ascending even for interleaved block IDs.
+        val indicesByBlock = HashMap<Int, MutableList<Int>>()
+        val positionInBlock = IntArray(observations.size)
+        observations.forEachIndexed { index, observation ->
+            val indices = indicesByBlock.getOrPut(observation.block) { ArrayList() }
+            positionInBlock[index] = indices.size
+            indices.add(index)
+        }
         return observations.indices.map { center ->
-            val sameBlock = observations.indices.filter { observations[it].block == observations[center].block }
-            val selected = sameBlock.sortedBy { abs(it - center) }
-                .take(windowSize)
-                .sorted()
-            estimate(observations, center, selected)
+            val sameBlock = indicesByBlock.getValue(observations[center].block)
+            val position = positionInBlock[center]
+            var left = position - 1
+            var right = position + 1
+            val count = minOf(windowSize, sameBlock.size)
+            // The nearest indices form a contiguous slice within this sorted block. On equal
+            // distances choose the lower original index, matching the old stable distance sort.
+            repeat(count - 1) {
+                if (left >= 0 && (right == sameBlock.size ||
+                        center - sameBlock[left] <= sameBlock[right] - center)) {
+                    left -= 1
+                } else {
+                    right += 1
+                }
+            }
+            // Already ascending: preserve the numerical accumulation order in estimate verbatim.
+            estimate(observations, center, sameBlock.subList(left + 1, right))
         }
     }
 

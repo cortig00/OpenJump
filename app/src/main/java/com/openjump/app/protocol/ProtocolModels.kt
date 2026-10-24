@@ -165,7 +165,23 @@ data class ProtocolDefinition(
     val category: ProtocolCategory,
     val availability: ProtocolAvailability,
     val requiredSetup: Set<SetupField>,
+    /**
+     * Canonical order of every event the protocol can carry, optional ones included. Persistence,
+     * ordering of historical marks and temporal sensitivity always follow this order.
+     */
     val requiredEvents: List<EventType>,
     val primaryMetric: MetricKey,
     val includesRsiMod: Boolean = false,
-)
+    /** Subset of [requiredEvents] that may be marked but is never required to complete a measurement. */
+    val optionalEvents: List<EventType> = emptyList(),
+) {
+    init {
+        require(requiredEvents.containsAll(optionalEvents)) {
+            "Los eventos opcionales de $id deben pertenecer a la lista canónica."
+        }
+    }
+
+    /** Events the data itself must always carry, in canonical order. */
+    val mandatoryEvents: List<EventType>
+        get() = requiredEvents.filterNot { it in optionalEvents }
+}

@@ -27,7 +27,6 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.openjump.app.R
@@ -151,7 +150,9 @@ private fun MetricGrid(metrics: List<MetricValue>) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = ShapeTokens.large,
-        color = MaterialTheme.colorScheme.surfaceContainer,
+        // Shared neutral with context/notes sections so the result keeps at most
+        // two main surfaces (primary hero + neutral low). See F-022.
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         Column(Modifier.padding(Spacing.lg)) {
             metrics.chunked(2).forEachIndexed { index, rowMetrics ->
@@ -436,10 +437,11 @@ private fun DetailRow(label: String, value: String) {
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(label, style = MaterialTheme.typography.bodyMedium)
+        // Sans tabular figures per the F-013 numeric token; monospace stays
+        // reserved for documented legal/code blocks only.
         Text(
             value,
-            style = MaterialTheme.typography.bodyMedium,
-            fontFamily = FontFamily.Monospace,
+            style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
             fontWeight = FontWeight.SemiBold,
         )
     }

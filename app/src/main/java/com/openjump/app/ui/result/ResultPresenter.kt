@@ -256,11 +256,15 @@ object ResultPresenter {
             .filter { it.ordinal == 0 }
             .associateBy { it.type }
         val specification = when (protocolId) {
-            ProtocolId.CMJ, ProtocolId.ABALAKOV, ProtocolId.UNILATERAL -> listOf(
-                EventType.MOVEMENT_START to TimelineSegmentKind.PREPARATION,
-                EventType.TAKEOFF to TimelineSegmentKind.FLIGHT,
-                EventType.LANDING to null,
-            )
+            ProtocolId.CMJ, ProtocolId.ABALAKOV, ProtocolId.UNILATERAL -> buildList<Pair<EventType, TimelineSegmentKind?>> {
+                // The preparation phase only exists when a real start was marked. Two-event measurements
+                // keep a pure flight segment instead of a missing-events warning.
+                if (points[EventType.MOVEMENT_START] != null) {
+                    add(EventType.MOVEMENT_START to TimelineSegmentKind.PREPARATION)
+                }
+                add(EventType.TAKEOFF to TimelineSegmentKind.FLIGHT)
+                add(EventType.LANDING to null)
+            }
             ProtocolId.SJ -> listOf(
                 EventType.TAKEOFF to TimelineSegmentKind.FLIGHT,
                 EventType.LANDING to null,

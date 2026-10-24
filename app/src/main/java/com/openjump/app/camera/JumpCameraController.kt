@@ -13,8 +13,6 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.video.FileOutputOptions
 import androidx.camera.video.HighSpeedVideoSessionConfig
 import androidx.camera.video.PendingRecording
-import androidx.camera.video.Quality
-import androidx.camera.video.QualitySelector
 import androidx.camera.video.Recorder
 import androidx.camera.video.Recording
 import androidx.camera.video.VideoCapture
@@ -92,7 +90,11 @@ class JumpCameraController(
         const val PREVIEW_START_TIMEOUT_MILLIS = 1_500L
     }
 
-    fun configure(owner: LifecycleOwner, preferredFps: Int) {
+    fun configure(
+        owner: LifecycleOwner,
+        preferredFps: Int,
+        resolution: CameraResolutionPreference = CameraResolutionPreference.AUTO,
+    ) {
         if (disposed || machine.state in setOf(
                 JumpCameraState.STARTING,
                 JumpCameraState.RECORDING,
@@ -126,15 +128,22 @@ class JumpCameraController(
             }
             val qualified = qualifyProfiles(found)
             discovery = found.copy(profiles = qualified)
-            listener.onProfilesChanged(qualified)
+            // Emit the filtered usable snapshot so the UI never retains a stale profile
+            // rejected in this process session. The full qualified catalog stays in
+            // discovery for future recalculation; unavailableFps remains global per FPS.
+            listener.onProfilesChanged(CameraPreviewIncompatibilityCache.filter(qualified))
             listener.onUnavailableFpsChanged(CameraPreviewIncompatibilityCache.unavailableFps(qualified))
-            val candidates = candidateOrder(qualified, preferredFps)
+            val candidates = candidateOrder(qualified, preferredFps, resolution)
             readinessGeneration = readiness.begin(candidates)
             awaitPreviewIdleThenBind(token, readinessGeneration, candidates, 0)
         }, mainExecutor)
     }
 
-    fun retry(owner: LifecycleOwner, preferredFps: Int) = configure(owner, preferredFps)
+    fun retry(
+        owner: LifecycleOwner,
+        preferredFps: Int,
+        resolution: CameraResolutionPreference = CameraResolutionPreference.AUTO,
+    ) = configure(owner, preferredFps, resolution)
 
     fun startRecording() {
         if (disposed || machine.state != JumpCameraState.READY || finalizing) return
@@ -338,7 +347,11 @@ class JumpCameraController(
         notifyState(JumpCameraState.BLOCKED)
     }
 
-    fun resume(owner: LifecycleOwner, preferredFps: Int) = configure(owner, preferredFps)
+    fun resume(
+        owner: LifecycleOwner,
+        preferredFps: Int,
+        resolution: CameraResolutionPreference = CameraResolutionPreference.AUTO,
+    ) = configure(owner, preferredFps, resolution)
 
     fun dispose() {
         if (disposed) return
@@ -382,9 +395,11 @@ class JumpCameraController(
     private fun candidateOrder(
         profiles: List<CameraProductProfile>,
         preferredFps: Int,
+        resolution: CameraResolutionPreference = CameraResolutionPreference.AUTO,
     ): List<CameraProductProfile> = CameraProfilePolicy.candidates(
         CameraPreviewIncompatibilityCache.filter(profiles),
         preferredFps,
+        resolution,
     )
 
     private fun bindFirstSupported(
@@ -410,14 +425,14 @@ class JumpCameraController(
         }.getOrDefault(false)
         if (!graphSupported) {
             if (!readiness.skipCandidate(readinessGeneration, index)) {
-                fail(token, context.getString(R.string.camera_preview_error, context.getString(R.string.camera_backend_camerax)))
+                fail(token, context.getString(R.string.camera_backend_camerax))
                 return
             }
             bindFirstSupported(token, candidates, index + 1)
             return
         }
         val candidateToken = readiness.bindCandidate(readinessGeneration, index) ?: run {
-            fail(token, context.getString(R.string.camera_preview_error, context.getString(R.string.camera_backend_camerax)))
+            fail(token, context.getString(R.string.camera_backend_camerax))
             return
         }
         val bound = runCatching {
@@ -434,7 +449,7 @@ class JumpCameraController(
             activeProfile = null
             listener.onProfileChanged(null)
             if (decision is PreviewReadinessCoordinator.Decision.Ignored) {
-                fail(token, context.getString(R.string.camera_preview_error, context.getString(R.string.camera_backend_camerax)))
+                fail(token, context.getString(R.string.camera_backend_camerax))
             } else {
                 advanceAfterPreviewFailure(token, candidates, decision)
             }
@@ -453,7 +468,7 @@ class JumpCameraController(
             currentVideoCapture = null
             activeProfile = null
             listener.onProfileChanged(null)
-            fail(token, context.getString(R.string.camera_preview_error, context.getString(R.string.camera_backend_camerax)))
+            fail(token, context.getString(R.string.camera_backend_camerax))
         }
     }
 
@@ -465,7 +480,7 @@ class JumpCameraController(
     ) {
         if (!machine.isCurrent(machineToken)) return
         if (!readiness.requireIdle(generation)) {
-            fail(machineToken, context.getString(R.string.camera_preview_error, context.getString(R.string.camera_backend_camerax)))
+            fail(machineToken, context.getString(R.string.camera_backend_camerax))
             return
         }
         lateinit var observer: Observer<PreviewView.StreamState>
@@ -476,13 +491,10 @@ class JumpCameraController(
             if (decision is PreviewReadinessCoordinator.Decision.Error) {
                 fail(
                     machineToken,
-                    context.getString(
-                        R.string.camera_preview_error,
-                        context.getString(R.string.camera_backend_camerax),
-                    ),
+                    context.getString(R.string.camera_backend_camerax),
                 )
             } else if (decision is PreviewReadinessCoordinator.Decision.Ignored) {
-                fail(machineToken, context.getString(R.string.camera_preview_error, context.getString(R.string.camera_backend_camerax)))
+                fail(machineToken, context.getString(R.string.camera_backend_camerax))
             }
         }
         observer = Observer { streamState ->
@@ -490,7 +502,7 @@ class JumpCameraController(
             if (streamState != PreviewView.StreamState.IDLE) return@Observer
             if (!readiness.onIdle(generation)) {
                 clearPreviewReadiness()
-                fail(machineToken, context.getString(R.string.camera_preview_error, context.getString(R.string.camera_backend_camerax)))
+                fail(machineToken, context.getString(R.string.camera_backend_camerax))
                 return@Observer
             }
             clearPreviewReadiness()
@@ -517,7 +529,11 @@ class JumpCameraController(
             if (decision !is PreviewReadinessCoordinator.Decision.Ignored &&
                 CameraPreviewIncompatibilityCache.reject(profile)
             ) {
+                // Refresh the usable snapshot even when the global per-FPS set stays
+                // empty (another resolution at the same FPS is still valid). Emitting the
+                // filtered profiles forces recomposition of the scoped selectors.
                 discovery?.profiles?.let {
+                    listener.onProfilesChanged(CameraPreviewIncompatibilityCache.filter(it))
                     listener.onUnavailableFpsChanged(CameraPreviewIncompatibilityCache.unavailableFps(it))
                 }
             }
@@ -528,7 +544,7 @@ class JumpCameraController(
             activeProfile = null
             listener.onProfileChanged(null)
             if (decision is PreviewReadinessCoordinator.Decision.Ignored) {
-                fail(machineToken, context.getString(R.string.camera_preview_error, context.getString(R.string.camera_backend_camerax)))
+                fail(machineToken, context.getString(R.string.camera_backend_camerax))
             } else {
                 advanceAfterPreviewFailure(machineToken, candidates, decision)
             }
@@ -543,14 +559,14 @@ class JumpCameraController(
                 currentVideoCapture = null
                 activeProfile = null
                 listener.onProfileChanged(null)
-                fail(machineToken, context.getString(R.string.camera_preview_error, context.getString(R.string.camera_backend_camerax)))
+                fail(machineToken, context.getString(R.string.camera_backend_camerax))
                 return@Observer
             }
             clearPreviewReadiness()
             if (machine.streaming(machineToken)) {
                 notifyState(JumpCameraState.READY)
             } else {
-                fail(machineToken, context.getString(R.string.camera_preview_error, context.getString(R.string.camera_backend_camerax)))
+                fail(machineToken, context.getString(R.string.camera_backend_camerax))
             }
         }
         previewTimeout = timeout
@@ -577,17 +593,11 @@ class JumpCameraController(
             )
             PreviewReadinessCoordinator.Decision.Error -> fail(
                 machineToken,
-                context.getString(
-                    R.string.camera_preview_error,
-                    context.getString(R.string.camera_backend_camerax),
-                ),
+                context.getString(R.string.camera_backend_camerax),
             )
             PreviewReadinessCoordinator.Decision.Ignored -> fail(
                 machineToken,
-                context.getString(
-                    R.string.camera_preview_error,
-                    context.getString(R.string.camera_backend_camerax),
-                ),
+                context.getString(R.string.camera_backend_camerax),
             )
         }
     }
@@ -620,17 +630,12 @@ class JumpCameraController(
             CameraSessionKind.HIGH_SPEED -> buildHighSpeedGraph(profile)
         }
 
-    private fun buildRecorder(profile: CameraProductProfile): Recorder {
-        val quality = when (profile.quality) {
-            "HD" -> Quality.HD
-            "FHD" -> Quality.FHD
-            else -> throw IllegalArgumentException()
-        }
-        return Recorder.Builder()
-            .setQualitySelector(QualitySelector.from(quality))
-            .setExecutor(mainExecutor)
-            .build()
-    }
+    private fun buildRecorder(profile: CameraProductProfile): Recorder =
+        // No setExecutor: background encode/mux work stays on the CameraX IO executor
+        // instead of the main thread. Event callbacks still use mainExecutor at start().
+        // No setVideoCapabilitiesSource: the CAMCORDER_PROFILE default matches the
+        // discovery source shared in CameraXRecorderConfig.
+        CameraXRecorderConfig.newRecorder(profile.quality)
 
     /** Normal sessions keep the requested preview size; their only FPS constraint is SessionConfig. */
     @SuppressLint("RestrictedApi")
@@ -939,7 +944,7 @@ class JumpCameraController(
         // A rejected transition is still surfaced explicitly unless this terminal
         // error was already reported by an earlier callback.
         notifyState(JumpCameraState.ERROR)
-        listener.onError(context.getString(R.string.camera_preview_error, context.getString(R.string.camera_backend_camerax)))
+        listener.onError(context.getString(R.string.camera_backend_camerax))
     }
 
     private fun cancelRecording(deleteFile: Boolean) {

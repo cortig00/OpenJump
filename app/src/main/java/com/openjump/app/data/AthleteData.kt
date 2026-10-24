@@ -101,7 +101,7 @@ interface AthleteDao {
     suspend fun firstArchived(): AthleteEntity?
 
     /** Legacy measurement roots count as existing installation state even when v4 had no athletes. */
-    @Query("SELECT (SELECT COUNT(*) FROM athletes) + (SELECT COUNT(*) FROM assessments) + (SELECT COUNT(*) FROM encoder_sessions)")
+    @Query("SELECT (SELECT COUNT(*) FROM athletes) + (SELECT COUNT(*) FROM assessments) + (SELECT COUNT(*) FROM encoder_sessions) + (SELECT COUNT(*) FROM fvp_assessments)")
     suspend fun persistedRootCount(): Int
 
     @Query("SELECT * FROM athletes WHERE id = :id AND archivedAt IS NULL LIMIT 1")
@@ -124,6 +124,9 @@ interface AthleteDao {
 
     @Query("DELETE FROM assessments WHERE athleteId = :athleteId")
     suspend fun deleteAssessmentsForAthlete(athleteId: Long)
+
+    @Query("DELETE FROM fvp_assessments WHERE athleteId = :athleteId")
+    suspend fun deleteFvpAssessmentsForAthlete(athleteId: Long)
 
     @Query("DELETE FROM encoder_sessions WHERE athleteId = :athleteId")
     suspend fun deleteEncoderSessionsForAthlete(athleteId: Long)
@@ -172,6 +175,7 @@ interface AthleteDao {
         }
         val testingSessionIds = testingSessionIdsForAthlete(id)
         deleteAssessmentsForAthlete(id)
+        deleteFvpAssessmentsForAthlete(id)
         deleteEncoderSessionsForAthlete(id)
         deleteTestingParticipantsForAthlete(id)
         if (testingSessionIds.isNotEmpty()) {

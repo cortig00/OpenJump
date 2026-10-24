@@ -18,6 +18,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -52,23 +53,37 @@ fun BilateralLiveResultScreen(
     completionFeedback: Boolean = false,
     onSaved: (List<PersonalRecord>) -> Unit,
     onDiscard: () -> Unit,
+    // F-004: when present, the final save forwards the persisted Room id through
+    // this callback instead of the records-only one. Null keeps legacy behavior.
+    onBilateralSaved: ((Long, List<PersonalRecord>) -> Unit)? = null,
     viewModel: BilateralResultViewModel = viewModel(factory = BilateralResultViewModel.Factory),
 ) {
     val model = remember(comparison) { BilateralResultPresenter.presentLive(comparison) }
     var confirmDiscard by remember { mutableStateOf(false) }
+    val liveSaveState = viewModel.saveState.collectAsState().value
+    // F-004 robustness: Discard/toolbar/system-Back never own the exit while a
+    // save is in flight or already committed. Idle/Error keep the existing
+    // confirmation dialog and retry semantics.
+    val discardEnabled = liveSaveState != BilateralSaveState.Saving && liveSaveState != BilateralSaveState.Saved
     BilateralResultContent(
         model = model,
         completionFeedback = completionFeedback,
-        saveState = viewModel.saveState.collectAsState().value,
+        saveState = liveSaveState,
         onNoteChange = {
             AppSession.updateBilateralNote(it)
             viewModel.clearError()
         },
-        onSave = { viewModel.save(AppSession.bilateralComparison() ?: comparison, onSaved) },
-        onDiscard = { confirmDiscard = true },
+        onSave = {
+            val current = AppSession.bilateralComparison() ?: comparison
+            val finalSave = onBilateralSaved
+            if (finalSave != null) viewModel.save(current, finalSave)
+            else viewModel.save(current, onSaved)
+        },
+        onDiscard = { if (discardEnabled) confirmDiscard = true },
+        discardEnabled = discardEnabled,
         navigationContentDescription = stringResource(R.string.bilateral_discard_navigation),
     )
-    if (confirmDiscard) {
+    if (confirmDiscard && discardEnabled) {
         AlertDialog(
             onDismissRequest = { confirmDiscard = false },
             title = { Text(stringResource(R.string.bilateral_discard_title)) },
@@ -128,7 +143,11 @@ private fun BilateralResultContent(
     navigationContentDescription: String? = null,
     onDelete: (() -> Unit)? = null,
     deleting: Boolean = false,
+    discardEnabled: Boolean = true,
 ) {
+    // System Back never wins over an in-flight or committed save: consuming it
+    // here mirrors the disabled toolbar/Discard below. Idle/Error keep normal Back.
+    BackHandler(enabled = !discardEnabled) { }
     var aggregation by remember { mutableStateOf(BilateralAggregation.BEST) }
     val navDescription = navigationContentDescription ?: stringResource(R.string.common_back)
     val summary = if (aggregation == BilateralAggregation.BEST) model.best else model.mean
@@ -140,7 +159,7 @@ private fun BilateralResultContent(
             subtitle = model.attempts.firstOrNull()?.let {
                 stringResource(R.string.result_subtitle, stringResource(it.method.titleResource()))
             },
-            onNavigationClick = { if (noteEnabled) onDiscard() },
+            onNavigationClick = { if (noteEnabled && discardEnabled) onDiscard() },
             navigationContentDescription = navDescription,
             actions = {
                 onDelete?.let { delete ->
@@ -237,7 +256,7 @@ private fun BilateralResultContent(
                     enabled = saveState == BilateralSaveState.Idle || saveState is BilateralSaveState.Error,
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text(stringResource(if (saveState is BilateralSaveState.Error) R.string.common_retry else R.string.result_save_measurement)) }
-                OutlinedButton(onClick = onDiscard, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.common_discard)) }
+                OutlinedButton(onClick = onDiscard, enabled = discardEnabled, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.common_discard)) }
             }
         }
     }

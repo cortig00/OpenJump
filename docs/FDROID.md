@@ -1,10 +1,12 @@
 # Official F-Droid preparation
 
 OpenJump uses a **single application and release variant**, not an `fdroid` flavor.
-Its identity stays `com.openjump.app`, **1.0 / versionCode 7**. The Google Play AAB
-and upload key are not modified or rebuilt by this work. See the measured
-[validation results](FDROID_VALIDATION.md) and [submission package](FDROID_SUBMISSION.md).
-Local validation is complete; official F-Droid inclusion and GitLab CI remain pending.
+Its identity stays `com.openjump.app`. Initial F-Droid inclusion is the historical
+**1.0 / versionCode 7** build (MR !51299, merged into `fdroiddata` master); the
+current release is **1.2.0 / versionCode 9**, detected automatically from the
+annotated `v1.2.0` tag. The Google Play AAB and upload key are not modified or
+rebuilt by this work. See the measured [validation results](FDROID_VALIDATION.md)
+and [submission package](FDROID_SUBMISSION.md).
 
 ## Audited eligibility
 
@@ -82,6 +84,12 @@ Do not use `--force`, `--skip-scan` or `novcheck` to hide failures.
 
 ## Version provenance and first inclusion
 
+The current automatic update is `1.2.0` / code `9`. It keeps the same application
+ID, the same source tree and a single release variant. The `v1.2.0` tag must point
+to the exact published source commit; the recipe's pin for the 1.0 build stays
+immutable. No manual `fdroiddata` MR is needed for this stable version because the
+existing `AutoUpdateMode`/`UpdateCheckMode`/`UpdateCheckData` already cover it.
+
 The stable `v1.0` tag identifies the original public Play source snapshot
 `5c47e887dc06b294f9b9a1f6458df6b670f854aa` (1.0 / code7). The original Play binary
 stays immutable. The first F-Droid recipe pins the later preparation source commit
@@ -131,10 +139,10 @@ planning; independent signing is a deliberate first-release decision.
 
 ## Future simultaneous releases
 
-1. Merge this preparation into the main development/publication base; keep one
+1. Publish the curated release source on the public `main` branch; keep one
    release variant and the license/metadata files. Preserve the recipe's pinned
-   source commit when merging (fast-forward/history-preserving merge, not an
-   orphaning squash-and-delete); don't leave future releases based on the old tree.
+   source commit (`8cd1fea`) and `v1.0` when advancing the public branch; do not
+   squash or orphan the inclusion commit.
 2. Increase `VERSION_CODE` monotonically, update `VERSION_NAME` and add
    `changelogs/<new-code>.txt` in all eight locales. Stable names after 1.0 currently
    follow the existing MAJOR.MINOR.PATCH validation. Choose a name/tag not already

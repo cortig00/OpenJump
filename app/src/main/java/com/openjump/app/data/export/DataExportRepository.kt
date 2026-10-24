@@ -71,8 +71,51 @@ class DataExportRepository private constructor(
                 cursorKind = last.kind ?: if (last.protocolId == null) "encoder" else "jump"
                 cursorId = last.idText
             }
+            // Familia F-V-P: cursor propio, emitida después de jump/encoder (no comparte forma).
+            var fvpDate: Long? = null
+            var fvpId = ""
+            while (true) {
+                currentCoroutineContext().ensureActive()
+                val roots = dao.fvpPage(fvpDate, fvpId, DATA_EXPORT_PAGE_SIZE)
+                if (roots.isEmpty()) break
+                val models = fvpAssessments(roots, fvpDetailsForPage(roots.map { it.id })).associateBy { it.id }
+                roots.forEach { root ->
+                    currentCoroutineContext().ensureActive()
+                    stream.fvp(models.getValue(root.idText))
+                }
+                val last = roots.last()
+                fvpDate = last.dateTime
+                fvpId = last.idText
+            }
             stream.finish()
         }
+    }
+
+    /** Detalles de una página de raíces F-V-P, por cursor keyset (sin un SELECT por raíz). */
+    private suspend fun fvpDetailsForPage(parentIds: List<Long>): List<ExportFvpDetailRow> {
+        val details = mutableListOf<ExportFvpDetailRow>()
+        var afterDate: Long? = null
+        var afterIdText = ""
+        var afterConditionOrdinal = -1
+        var afterConditionId = -1L
+        var afterAttemptOrdinal = -1
+        var afterAttemptId = -1L
+        while (true) {
+            val page = dao.fvpDetailPage(
+                parentIds, afterDate, afterIdText, afterConditionOrdinal, afterConditionId,
+                afterAttemptOrdinal, afterAttemptId, DATA_EXPORT_PAGE_SIZE,
+            )
+            if (page.isEmpty()) break
+            details += page
+            val last = page.last()
+            afterDate = last.parentDateTime
+            afterIdText = last.parentIdText
+            afterConditionOrdinal = last.conditionOrdinal
+            afterConditionId = last.conditionId
+            afterAttemptOrdinal = last.attemptOrdinal ?: -1
+            afterAttemptId = last.attemptId ?: -1L
+        }
+        return details
     }
 
     private suspend fun writeJumpDetails(root: ExportMeasurementRow, cursor: DetailCursor, stream: DataExportStreamWriter) {
@@ -197,3 +240,117 @@ private fun DataExportSnapshot.toDocument(): DataExportDocument {
 }
 
 private fun Long.toUtcString(): String = Instant.ofEpochMilli(this).atOffset(ZoneOffset.UTC).toInstant().toString()
+
+/** NaN/Infinity nunca se exportan: se convierten en ausencia (null) al construir el modelo. */
+private fun Double?.finiteOrNull(): Double? = if (this == null || isFinite()) this else null
+
+/**
+ * Ensambla las raíces F-V-P con sus condiciones e intentos en el modelo del documento. Las filas
+ * planas se ordenan por (ordinal de condición, id de condición, ordinal de intento, id de intento).
+ *
+ * P2 (Wave 4a): cada raíz debe cumplir `sfvNsPerM == -slopeFv`; una fila finita pero contradictoria
+ * (creada con `insertAssessmentRaw`, que salta la validacion) hace fallar el ensamblado con
+ * `IllegalArgumentException` en vez de emitir un par imposible en JSON/CSV. La exportacion se
+ * rechaza entera: no se publica un valor contradictorio.
+ */
+internal fun fvpAssessments(
+    roots: List<ExportFvpAssessmentRow>,
+    details: List<ExportFvpDetailRow>,
+): List<ExportFvpAssessment> {
+    val detailsByAssessment = details.groupBy { it.assessmentId }
+    return roots.map { root ->
+        requireFvpOppositeSlopeSigns(root.slopeFv, root.sfvNsPerM, "assessment ${root.idText}")
+        val ordered = detailsByAssessment[root.id].orEmpty().sortedWith(
+            compareBy({ it.conditionOrdinal }, { it.conditionId }, { it.attemptOrdinal ?: -1 }, { it.attemptId ?: -1L }),
+        )
+        val attemptsByCondition = ordered.filter { it.attemptId != null }.groupBy { it.conditionId }
+        ExportFvpAssessment(
+            id = root.idText,
+            sessionKey = root.sessionKey,
+            protocolId = root.protocolId,
+            dateTimeUtc = root.dateTime.toUtcString(),
+            bodyMassKg = root.bodyMassKg,
+            bodyMassSource = root.bodyMassSource,
+            pushOffMode = root.pushOffMode,
+            pushOffM = root.pushOffM,
+            pushOffSource = root.pushOffSource,
+            algorithmVersion = root.algorithmVersion,
+            methodVersion = root.methodVersion,
+            conditionCount = root.conditionCount,
+            f0N = root.f0N,
+            slopeFv = root.slopeFv,
+            sfvNsPerM = root.sfvNsPerM,
+            vMinMps = root.vMinMps,
+            vMaxMps = root.vMaxMps,
+            fMinN = root.fMinN,
+            fMaxN = root.fMaxN,
+            warningsCsv = root.warningsCsv,
+            athleteId = root.athleteId?.toString(),
+            testingSessionId = root.testingSessionId?.toString(),
+            pushOffLandmark = root.pushOffLandmark,
+            pushOffLandmarkHeightCm = root.pushOffLandmarkHeightCm.finiteOrNull(),
+            pushOffProtocol = root.pushOffProtocol,
+            pushOffMeasuredAtUtc = root.pushOffMeasuredAt?.toUtcString(),
+            pushOffCrouchCm = root.pushOffCrouchCm.finiteOrNull(),
+            pushOffExtendedCm = root.pushOffExtendedCm.finiteOrNull(),
+            sourceFps = root.sourceFps.finiteOrNull(),
+            v0Mps = root.v0Mps.finiteOrNull(),
+            f0RelNPerKg = root.f0RelNPerKg.finiteOrNull(),
+            pmaxW = root.pmaxW.finiteOrNull(),
+            pmaxRelWPerKg = root.pmaxRelWPerKg.finiteOrNull(),
+            r2 = root.r2.finiteOrNull(),
+            notes = root.notes,
+            // Procedencia B0 (esquema 5): copia 1:1 de la fila, sin derivar ni normalizar.
+            acquiredAtUtc = root.acquiredAt?.toUtcString(),
+            acquisitionContextKind = root.acquisitionContextKind,
+            acquisitionContextKey = root.acquisitionContextKey,
+            bodyMassMeasurement = root.bodyMassMeasurement,
+            bodyMassMeasuredAtUtc = root.bodyMassMeasuredAt?.toUtcString(),
+            conditions = ordered.map { it.conditionId }.distinct().map { conditionId ->
+                val head = ordered.first { it.conditionId == conditionId }
+                ExportFvpCondition(
+                    ordinal = head.conditionOrdinal,
+                    conditionKey = head.conditionKey,
+                    addedLoadKg = head.addedLoadKg,
+                    totalMassKg = head.totalMassKg,
+                    pushOffM = head.pushOffM,
+                    selectedHeightM = head.selectedHeightM,
+                    selectedAttemptOrdinal = head.selectedAttemptOrdinal,
+                    addedLoadSource = head.addedLoadSource,
+                    addedLoadMeasuredAtUtc = head.addedLoadMeasuredAt?.toUtcString(),
+                    attempts = attemptsByCondition[conditionId].orEmpty().mapNotNull { row ->
+                        val ordinal = row.attemptOrdinal ?: return@mapNotNull null
+                        val heightM = row.heightM ?: return@mapNotNull null
+                        val method = row.method ?: return@mapNotNull null
+                        ExportFvpAttempt(
+                            ordinal = ordinal,
+                            heightM = heightM,
+                            method = method,
+                            valid = row.attemptValid ?: true,
+                            flightTimeS = row.flightTimeS.finiteOrNull(),
+                            sourceFps = row.sourceFps.finiteOrNull(),
+                            sourceAssessmentId = row.sourceAssessmentId?.toString(),
+                            sourceAttemptOrdinal = row.sourceAttemptOrdinal,
+                            sourceProtocolId = row.sourceProtocolId,
+                            exclusionReason = row.exclusionReason,
+                            notes = row.attemptNotes,
+                            sourceRecordedAtUtc = row.sourceRecordedAt?.toUtcString(),
+                            sourceAthleteId = row.sourceAthleteId?.toString(),
+                            acquiredAtUtc = row.acquiredAt?.toUtcString(),
+                            reuseConfirmedAtUtc = row.reuseConfirmedAt?.toUtcString(),
+                            reuseConfirmationVersion = row.reuseConfirmationVersion,
+                            takeoffPtsUs = row.takeoffPtsUs,
+                            takeoffPreviousPtsUs = row.takeoffPreviousPtsUs,
+                            takeoffNextPtsUs = row.takeoffNextPtsUs,
+                            landingPtsUs = row.landingPtsUs,
+                            landingPreviousPtsUs = row.landingPreviousPtsUs,
+                            landingNextPtsUs = row.landingNextPtsUs,
+                            timeMapping = row.timeMapping ?: "UNKNOWN",
+                            timeMappingEvidenceKey = row.timeMappingEvidenceKey,
+                        )
+                    },
+                )
+            },
+        )
+    }
+}

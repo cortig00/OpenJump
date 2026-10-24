@@ -4,6 +4,7 @@ import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
@@ -83,7 +84,7 @@ object JumpMarkingActionPolicy {
         isPlaying: Boolean,
         isCropFraming: Boolean,
     ): JumpMarkingAction {
-        if (draft == null || draft.protocolId == ProtocolId.HORIZONTAL || draft.definition.requiredEvents.isEmpty()) {
+        if (draft == null || draft.protocolId == ProtocolId.HORIZONTAL || draft.markingEvents.isEmpty()) {
             return JumpMarkingAction.Hidden
         }
 
@@ -145,7 +146,7 @@ internal fun JumpMarkingActionBar(
                     Button(
                         onClick = { onMark(action.event) },
                         enabled = action.enabled,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                     ) {
                         Text(
                             stringResource(
@@ -175,7 +176,7 @@ internal fun JumpMarkingActionBar(
                     Button(
                         onClick = onCompute,
                         enabled = action.enabled,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                         contentPadding = PaddingValues(vertical = 10.dp),
                     ) {
                         Text(

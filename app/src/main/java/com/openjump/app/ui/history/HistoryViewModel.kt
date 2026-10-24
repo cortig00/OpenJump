@@ -15,12 +15,15 @@ import com.openjump.app.data.GroupEntity
 import com.openjump.app.data.GroupRepository
 import com.openjump.app.data.HistoryQuery
 import com.openjump.app.data.JumpRepository
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** Which persisted measurement roots participate in a history query. */
 enum class HistoryFamily { ALL, JUMP, ENCODER }
@@ -78,6 +81,12 @@ class HistoryViewModel(
     val groups: StateFlow<List<GroupEntity>> = _groups.asStateFlow()
     private var cursor: AthleteHistoryCursor? = null
     private var requestId = 0L
+    // F035 row-level deletion: ids with an in-flight delete, plus the last failed id
+    // for the retry dialog. The list itself is never mutated optimistically.
+    private val _deletingIds = MutableStateFlow<Set<Long>>(emptySet())
+    val deletingIds: StateFlow<Set<Long>> = _deletingIds.asStateFlow()
+    private val _deleteFailedId = MutableStateFlow<Long?>(null)
+    val deleteFailedId: StateFlow<Long?> = _deleteFailedId.asStateFlow()
 
     init {
         // Lists are small roster metadata; measurement roots remain strictly query-backed.
@@ -102,6 +111,41 @@ class HistoryViewModel(
 
     /** Reload persisted rows on return from a measurement, save, or roster change. */
     fun refresh() = setFilters(_state.value.filters)
+
+    /**
+     * F035: delete one empty Encoder session from HISTORY. Delegates only to
+     * [EncoderRepository.deleteSession] on IO; guards double-delete via
+     * [deletingIds]; a `false` return (missing row) and an exception both
+     * surface the retry dialog defensibly without touching the retained list.
+     * Success reuses [refresh] (current filters, cursor reset, requestId bump
+     * so in-flight page loads are discarded, never raced). Cancel simply never
+     * calls this function and has no effect.
+     */
+    fun deleteEncoderSession(id: Long, onDeleted: () -> Unit = {}) {
+        if (id in _deletingIds.value) return
+        _deletingIds.value = _deletingIds.value + id
+        if (_deleteFailedId.value == id) _deleteFailedId.value = null
+        viewModelScope.launch {
+            val deleted = try {
+                withContext(Dispatchers.IO) { encoderRepository.deleteSession(id) }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                false
+            }
+            _deletingIds.value = _deletingIds.value - id
+            if (deleted) {
+                refresh()
+                onDeleted()
+            } else {
+                _deleteFailedId.value = id
+            }
+        }
+    }
+
+    fun acknowledgeDeleteFailure() {
+        _deleteFailedId.value = null
+    }
 
     private fun loadPage(id: Long) = viewModelScope.launch {
         val filters = _state.value.filters

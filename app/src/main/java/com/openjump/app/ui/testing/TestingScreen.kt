@@ -16,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -63,6 +64,7 @@ import com.openjump.app.ui.UnitAwareNumericInputState
 import com.openjump.app.ui.components.EmptyState
 import com.openjump.app.ui.currentAppLocale
 import com.openjump.app.ui.components.OpenJumpTopAppBar
+import com.openjump.app.ui.components.DiscardConfirmDialog
 import com.openjump.app.ui.theme.OpenJumpTypes
 import com.openjump.app.ui.theme.Spacing
 import com.openjump.app.ui.titleResource
@@ -258,6 +260,20 @@ fun TestingScreen(
             Button(onClick = {
                 viewModel.create(selectedGroupId, family, protocolName.takeIf { family == TestingFamily.JUMP }, exerciseName.takeIf { family == TestingFamily.ENCODER }, sideName.takeIf { family == TestingFamily.JUMP }, drop.takeIf { family == TestingFamily.JUMP }, load.takeIf { family == TestingFamily.ENCODER }, plate.takeIf { family == TestingFamily.ENCODER }, target ?: 0, onSessionSelected)
             }, enabled = validConfig, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(stringResource(R.string.testing_create)) }
+            if (!validConfig) {
+                // Con el CTA deshabilitado se explica qué falta. Ver F-007.
+                val requirement = when {
+                    selectedGroupId == null -> stringResource(R.string.testing_requires_group)
+                    target == null || target < 1 -> stringResource(R.string.testing_requires_attempts)
+                    family == TestingFamily.JUMP -> stringResource(R.string.testing_requires_protocol)
+                    else -> stringResource(R.string.testing_requires_encoder)
+                }
+                Text(
+                    text = requirement,
+                    style = OpenJumpTypes.Secondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             Text(stringResource(R.string.testing_recent), style = OpenJumpTypes.SectionTitle)
             if (sessions.isEmpty()) EmptyState(stringResource(R.string.testing_title), stringResource(R.string.testing_empty), Modifier.fillMaxWidth())
             else Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
@@ -302,6 +318,7 @@ fun TestingRunnerScreen(
     var detail by remember(sessionId) { mutableStateOf<com.openjump.app.data.TestingSessionWithParticipants?>(null) }
     var progress by remember(sessionId) { mutableStateOf<List<TestingParticipantProgress>>(emptyList()) }
     var refresh by remember(sessionId) { mutableIntStateOf(0) }
+    var confirmCancel by remember(sessionId) { mutableStateOf(false) }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, sessionId) {
         val observer = LifecycleEventObserver { _, event ->
@@ -348,7 +365,22 @@ fun TestingRunnerScreen(
                         .toSet(),
                 ) } }, enabled = isActive && current != null && !current.isComplete && !current.isOmitted, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(stringResource(R.string.testing_measure)) }
             Button(onClick = { viewModel.complete(sessionId) { onBack() } }, enabled = isActive, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(stringResource(R.string.testing_completed)) }
-            TextButton(onClick = { viewModel.cancel(sessionId) { onBack() } }, enabled = isActive, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(stringResource(R.string.testing_cancel)) }
+            TextButton(onClick = { confirmCancel = true }, enabled = isActive, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(stringResource(R.string.testing_cancel)) }
+            if (confirmCancel) {
+                // Cancelar una sesion en curso ya no es un tap accidental: dialogo
+                // con el efecto explicado. Ver F-008.
+                DiscardConfirmDialog(
+                    title = stringResource(R.string.testing_cancel_confirm_title),
+                    body = stringResource(R.string.testing_cancel_confirm_body),
+                    onConfirm = {
+                        confirmCancel = false
+                        viewModel.cancel(sessionId) { onBack() }
+                    },
+                    onDismiss = { confirmCancel = false },
+                    confirmLabel = stringResource(R.string.testing_cancel_confirm_action),
+                    dismissLabel = stringResource(R.string.common_back),
+                )
+            }
         }
     }
 }

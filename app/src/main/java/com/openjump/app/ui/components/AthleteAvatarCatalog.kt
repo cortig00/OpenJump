@@ -51,6 +51,11 @@ object AthleteAvatarCatalog {
             AthleteAvatarOption("avatar_boxer", R.drawable.avatar_boxer),
             AthleteAvatarOption("avatar_swimmer", R.drawable.avatar_swimmer),
             AthleteAvatarOption("avatar_mobility", R.drawable.avatar_mobility),
+            AthleteAvatarOption("avatar_volleyball_player_1", R.drawable.avatar_volleyball_player_1),
+            AthleteAvatarOption("avatar_volleyball_player_2", R.drawable.avatar_volleyball_player_2),
+            AthleteAvatarOption("avatar_basketball_player_1", R.drawable.avatar_basketball_player_1),
+            AthleteAvatarOption("avatar_basketball_player_2", R.drawable.avatar_basketball_player_2),
+            AthleteAvatarOption("avatar_swimmer_hero", R.drawable.avatar_swimmer_hero),
         )),
         AthleteAvatarGroup(R.string.athlete_avatar_group_team, listOf(
             AthleteAvatarOption("avatar_female_coach", R.drawable.avatar_female_coach),
@@ -93,6 +98,7 @@ object AthleteAvatarCatalog {
             AthleteAvatarOption("avatar_friendly_robot", R.drawable.avatar_friendly_robot),
             AthleteAvatarOption("avatar_cute_villain", R.drawable.avatar_cute_villain),
             AthleteAvatarOption("avatar_mech_guardian", R.drawable.avatar_mech_guardian),
+            AthleteAvatarOption("avatar_gorilla_swimmer", R.drawable.avatar_gorilla_swimmer),
         )),
         AthleteAvatarGroup(R.string.athlete_avatar_group_culture, listOf(
             AthleteAvatarOption("avatar_matador", R.drawable.avatar_matador),

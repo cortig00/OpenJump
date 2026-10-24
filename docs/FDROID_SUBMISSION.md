@@ -1,8 +1,11 @@
 # Submit OpenJump to official F-Droid
 
-Status: **prepared and locally validated, not submitted or accepted**. The
-unsigned APK is evidence, not an official release to upload. GitHub and GitLab
-are separate accounts; GitHub access does not authorize a GitLab submission.
+Status: **initial inclusion submitted and merged**. MR
+[!51299](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/51299)
+("New app: OpenJump") was merged into `fdroiddata` master on 2026-10-17 with
+the historical 1.0 / code 7 build. Later stable releases, including 1.2.0 /
+code 9, are detected automatically from annotated tags and need no new ordinary
+inclusion MR. This document is retained as the first-inclusion record.
 
 ## Exact contribution
 

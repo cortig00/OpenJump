@@ -25,8 +25,22 @@ import kotlin.math.abs
 
 const val MANUAL_BACKUP_CONTRACT = "openjump-manual-backup"
 const val MANUAL_BACKUP_FORMAT_VERSION = 1
-const val MANUAL_BACKUP_ROOM_VERSION = 10
+const val MANUAL_BACKUP_ROOM_VERSION = 12
+
+/**
+ * Version de esquema en la que nacen las tablas F-V-P. Se fija aqui (no en
+ * [MANUAL_BACKUP_ROOM_VERSION]) porque el esquema actual sube con cada carril aditivo: el gate de
+ * filas F-V-P debe seguir aceptando un documento Room 11 legitimo, que ya puede traerlas.
+ */
+const val MANUAL_BACKUP_FVP_INTRODUCED_ROOM_VERSION = 11
 private const val LEGACY_MANUAL_BACKUP_ROOM_VERSION = 9
+private const val LEGACY_MANUAL_BACKUP_ROOM_VERSION_10 = 10
+
+/** Cota de las claves opacas de procedencia (contrato B0 §2): `<= 128` caracteres. */
+private const val MANUAL_BACKUP_MAX_PROVENANCE_KEY_CHARS = 128
+
+/** Cota propia de `warningsCsv`; complementa (no sustituye) el presupuesto de texto del preflight. */
+internal const val MANUAL_BACKUP_MAX_WARNINGS_CSV_CHARS = 1_024
 const val MANUAL_BACKUP_MAX_BYTES = 8L * 1024L * 1024L
 internal const val MANUAL_BACKUP_MAX_JSON_VALUES = 1_500_000
 internal const val MANUAL_BACKUP_MAX_ARRAY_ITEMS = 50_000
@@ -48,6 +62,12 @@ data class ManualBackupDocument(
     val tables: ManualBackupTables,
 )
 
+/**
+ * Tablas del backup. Las colecciones F-V-P llevan `emptyList()` por defecto para que un backup
+ * creado antes de la integración F-V-P (Room 9/10/11 sin esas claves) siga restaurando; el
+ * contrato no se relaja porque [ManualBackupDocument.validate] sigue rechazando payloads
+ * malformados (referencias huérfanas, ids duplicados, valores no finitos, claves en blanco...).
+ */
 @Serializable
 data class ManualBackupTables(
     val athletes: List<BackupAthlete>,
@@ -65,6 +85,9 @@ data class ManualBackupTables(
     val encoderSamples: List<BackupEncoderSample>,
     val encoderRepetitions: List<BackupEncoderRepetition>,
     val encoderRepMetrics: List<BackupEncoderRepMetric>,
+    val fvpAssessments: List<BackupFvpAssessment> = emptyList(),
+    val fvpConditions: List<BackupFvpCondition> = emptyList(),
+    val fvpAttempts: List<BackupFvpAttempt> = emptyList(),
 )
 
 @Serializable
@@ -98,8 +121,114 @@ data class BackupEncoderRepetition(val id: Long, val sessionId: Long, val ordina
 @Serializable
 data class BackupEncoderRepMetric(val repetitionId: Long, val key: String, val value: Double?, val unit: String, val validity: String, val reason: String?)
 
-data class ManualBackupSummary(val createdAtEpochMillis: Long, val formatVersion: Int, val athleteCount: Int, val groupCount: Int, val testingSessionCount: Int, val assessmentCount: Int, val encoderSessionCount: Int) {
-    companion object { fun from(document: ManualBackupDocument) = with(document.tables) { ManualBackupSummary(document.createdAtEpochMillis, document.formatVersion, athletes.size, athleteGroups.size, testingSessions.size, assessments.size, encoderSessions.size) } }
+/**
+ * Raíz F-V-P; espeja TODAS las columnas de `fvp_assessments` (incluidas las nullable y la
+ * procedencia aditiva de Room 12). Los defaults de las columnas de procedencia existen SOLO para
+ * poder leer documentos 9/10/11 (que no traian esas claves); un documento 12 las lleva siempre
+ * porque el codec serializa con `encodeDefaults=true`. No son un relleno: UNKNOWN/NULL = desconocido.
+ */
+@Serializable
+data class BackupFvpAssessment(
+    val id: Long,
+    val sessionKey: String,
+    val athleteId: Long?,
+    val testingSessionId: Long?,
+    val protocolId: String,
+    val dateTime: Long,
+    val bodyMassKg: Double,
+    val bodyMassSource: String,
+    val pushOffMode: String,
+    val pushOffM: Double,
+    val pushOffSource: String,
+    val pushOffLandmark: String?,
+    val pushOffLandmarkHeightCm: Double?,
+    val pushOffProtocol: String?,
+    val pushOffMeasuredAt: Long?,
+    val pushOffCrouchCm: Double?,
+    val pushOffExtendedCm: Double?,
+    val sourceFps: Double?,
+    val algorithmVersion: String,
+    val methodVersion: String,
+    val notes: String?,
+    val f0N: Double,
+    val slopeFv: Double,
+    val sfvNsPerM: Double,
+    val v0Mps: Double?,
+    val pmaxW: Double?,
+    val r2: Double?,
+    val conditionCount: Int,
+    val vMinMps: Double,
+    val vMaxMps: Double,
+    val fMinN: Double,
+    val fMaxN: Double,
+    val f0RelNPerKg: Double?,
+    val pmaxRelWPerKg: Double?,
+    val warningsCsv: String,
+    // Procedencia declarada (Room 12, B0): se copia 1:1, nunca se deriva.
+    val acquiredAt: Long? = null,
+    val acquisitionContextKind: String = "UNKNOWN",
+    val acquisitionContextKey: String? = null,
+    val bodyMassMeasurement: String = "UNKNOWN",
+    val bodyMassMeasuredAt: Long? = null,
+)
+
+/**
+ * Condición de carga; espeja TODAS las columnas de `fvp_conditions` (defaults = lectura de
+ * documentos 9/10/11 sin las claves de procedencia).
+ */
+@Serializable
+data class BackupFvpCondition(
+    val id: Long,
+    val assessmentId: Long,
+    val ordinal: Int,
+    val conditionKey: String,
+    val addedLoadKg: Double,
+    val totalMassKg: Double,
+    val pushOffM: Double,
+    val selectedHeightM: Double,
+    val selectedAttemptOrdinal: Int?,
+    // Procedencia declarada (Room 12, B0): se copia 1:1, nunca se deriva.
+    val addedLoadSource: String = "UNKNOWN",
+    val addedLoadMeasuredAt: Long? = null,
+)
+
+/**
+ * Intento F-V-P; espeja TODAS las columnas de `fvp_attempts` (defaults = lectura de documentos
+ * 9/10/11 sin las claves de procedencia).
+ */
+@Serializable
+data class BackupFvpAttempt(
+    val id: Long,
+    val conditionId: Long,
+    val ordinal: Int,
+    val heightM: Double,
+    val method: String,
+    val flightTimeS: Double?,
+    val sourceFps: Double?,
+    val sourceAssessmentId: Long?,
+    val sourceAttemptOrdinal: Int?,
+    val sourceProtocolId: String?,
+    val valid: Boolean,
+    val exclusionReason: String?,
+    val notes: String?,
+    // Origen, reutilización y snapshots temporales (Room 12, B0): se copian 1:1, nunca se derivan.
+    val sourceRecordedAt: Long? = null,
+    val sourceAthleteId: Long? = null,
+    val acquiredAt: Long? = null,
+    val reuseConfirmedAt: Long? = null,
+    val reuseConfirmationVersion: String? = null,
+    val takeoffPtsUs: Long? = null,
+    val takeoffPreviousPtsUs: Long? = null,
+    val takeoffNextPtsUs: Long? = null,
+    val landingPtsUs: Long? = null,
+    val landingPreviousPtsUs: Long? = null,
+    val landingNextPtsUs: Long? = null,
+    val timeMapping: String = "UNKNOWN",
+    val timeMappingEvidenceKey: String? = null,
+)
+
+data class ManualBackupSummary(val createdAtEpochMillis: Long, val formatVersion: Int, val athleteCount: Int, val groupCount: Int, val testingSessionCount: Int, val assessmentCount: Int, val encoderSessionCount: Int, val fvpAssessmentCount: Int = 0) {
+    companion object { fun from(document: ManualBackupDocument) = with(document.tables) { ManualBackupSummary(document.createdAtEpochMillis, document.formatVersion, athletes.size, athleteGroups.size, testingSessions.size, assessments.size, encoderSessions.size, fvpAssessments.size) } }
 }
 
 internal fun BackupAthlete.entity() = AthleteEntity(id, displayName, birthDate, sex, notes, createdAt, updatedAt, archivedAt, avatarKey, weightKg, heightCm)
@@ -117,6 +246,41 @@ internal fun BackupEncoderSession.entity() = EncoderSessionEntity(id = id, sessi
 internal fun BackupEncoderSample.entity() = EncoderSampleEntity(sessionId, ordinal, frameIndex, sourcePtsUs, physicalTimeUs, rawPixelX, rawPixelY, rawMetricX, rawMetricY, smoothedMetricX, smoothedMetricY, velocityXMps, velocityYMps, confidence, trackingStatus, observationKind, fitResidualM, gapBeforeUs)
 internal fun BackupEncoderRepetition.entity() = EncoderRepetitionEntity(id, sessionId, ordinal, startSample, endSample, eccentricStartSample, eccentricEndSample, concentricStartSample, concentricEndSample, quality, reasons)
 internal fun BackupEncoderRepMetric.entity() = EncoderRepMetricEntity(repetitionId, key, value, unit, validity, reason)
+internal fun BackupFvpAssessment.entity() = FvpAssessmentEntity(
+    id = id, sessionKey = sessionKey, athleteId = athleteId, testingSessionId = testingSessionId,
+    protocolId = protocolId, dateTime = dateTime, bodyMassKg = bodyMassKg, bodyMassSource = bodyMassSource,
+    pushOffMode = pushOffMode, pushOffM = pushOffM, pushOffSource = pushOffSource,
+    pushOffLandmark = pushOffLandmark, pushOffLandmarkHeightCm = pushOffLandmarkHeightCm,
+    pushOffProtocol = pushOffProtocol, pushOffMeasuredAt = pushOffMeasuredAt,
+    pushOffCrouchCm = pushOffCrouchCm, pushOffExtendedCm = pushOffExtendedCm, sourceFps = sourceFps,
+    algorithmVersion = algorithmVersion, methodVersion = methodVersion, notes = notes, f0N = f0N,
+    slopeFv = slopeFv, sfvNsPerM = sfvNsPerM, v0Mps = v0Mps, pmaxW = pmaxW, r2 = r2,
+    conditionCount = conditionCount, vMinMps = vMinMps, vMaxMps = vMaxMps, fMinN = fMinN, fMaxN = fMaxN,
+    f0RelNPerKg = f0RelNPerKg, pmaxRelWPerKg = pmaxRelWPerKg, warningsCsv = warningsCsv,
+    // Copia literal de la procedencia: un documento 9/10/11 escribe UNKNOWN/NULL (el formato no
+    // las tenia y no se inventan) y uno 12 conserva lo que traiga.
+    acquiredAt = acquiredAt, acquisitionContextKind = acquisitionContextKind,
+    acquisitionContextKey = acquisitionContextKey, bodyMassMeasurement = bodyMassMeasurement,
+    bodyMassMeasuredAt = bodyMassMeasuredAt,
+)
+internal fun BackupFvpCondition.entity() = FvpConditionEntity(
+    id = id, assessmentId = assessmentId, ordinal = ordinal, conditionKey = conditionKey,
+    addedLoadKg = addedLoadKg, totalMassKg = totalMassKg, pushOffM = pushOffM,
+    selectedHeightM = selectedHeightM, selectedAttemptOrdinal = selectedAttemptOrdinal,
+    addedLoadSource = addedLoadSource, addedLoadMeasuredAt = addedLoadMeasuredAt,
+)
+internal fun BackupFvpAttempt.entity() = FvpAttemptEntity(
+    id = id, conditionId = conditionId, ordinal = ordinal, heightM = heightM, method = method,
+    flightTimeS = flightTimeS, sourceFps = sourceFps, sourceAssessmentId = sourceAssessmentId,
+    sourceAttemptOrdinal = sourceAttemptOrdinal, sourceProtocolId = sourceProtocolId, valid = valid,
+    exclusionReason = exclusionReason, notes = notes,
+    sourceRecordedAt = sourceRecordedAt, sourceAthleteId = sourceAthleteId, acquiredAt = acquiredAt,
+    reuseConfirmedAt = reuseConfirmedAt, reuseConfirmationVersion = reuseConfirmationVersion,
+    takeoffPtsUs = takeoffPtsUs, takeoffPreviousPtsUs = takeoffPreviousPtsUs,
+    takeoffNextPtsUs = takeoffNextPtsUs, landingPtsUs = landingPtsUs,
+    landingPreviousPtsUs = landingPreviousPtsUs, landingNextPtsUs = landingNextPtsUs,
+    timeMapping = timeMapping, timeMappingEvidenceKey = timeMappingEvidenceKey,
+)
 
 private fun finite(value: Double?, field: String) { require(value == null || value.isFinite()) { "$field must be finite" } }
 
@@ -124,7 +288,12 @@ fun ManualBackupDocument.validate(): ManualBackupDocument {
     ManualBackupPreflight.checkDocument(this)
     require(contract == MANUAL_BACKUP_CONTRACT) { "Not an OpenJump manual backup" }
     require(formatVersion == MANUAL_BACKUP_FORMAT_VERSION) { "Unsupported manual backup version" }
-    require(sourceRoomSchemaVersion == MANUAL_BACKUP_ROOM_VERSION || sourceRoomSchemaVersion == LEGACY_MANUAL_BACKUP_ROOM_VERSION) { "Unsupported Room schema version" }
+    require(
+        sourceRoomSchemaVersion == MANUAL_BACKUP_ROOM_VERSION ||
+            sourceRoomSchemaVersion == MANUAL_BACKUP_FVP_INTRODUCED_ROOM_VERSION ||
+            sourceRoomSchemaVersion == LEGACY_MANUAL_BACKUP_ROOM_VERSION ||
+            sourceRoomSchemaVersion == LEGACY_MANUAL_BACKUP_ROOM_VERSION_10,
+    ) { "Unsupported Room schema version" }
     require(!mediaIncluded && !preferencesIncluded) { "Media or preferences are not supported" }
     val t = tables
     require(t.allLists().any { it.isNotEmpty() }) { "Backup contains no restorable data" }
@@ -135,6 +304,9 @@ fun ManualBackupDocument.validate(): ManualBackupDocument {
     val attemptIds = unique(t.attempts.map { it.id }, "attempt id")
     val encoderIds = unique(t.encoderSessions.map { it.id }, "encoder session id")
     val repetitionIds = unique(t.encoderRepetitions.map { it.id }, "repetition id")
+    val fvpAssessmentIds = unique(t.fvpAssessments.map { it.id }, "fvp assessment id")
+    val fvpConditionIds = unique(t.fvpConditions.map { it.id }, "fvp condition id")
+    val fvpAttemptIds = unique(t.fvpAttempts.map { it.id }, "fvp attempt id")
     listOf(
         athleteIds to "athlete id",
         groupIds to "group id",
@@ -143,6 +315,9 @@ fun ManualBackupDocument.validate(): ManualBackupDocument {
         attemptIds to "attempt id",
         encoderIds to "encoder session id",
         repetitionIds to "repetition id",
+        fvpAssessmentIds to "fvp assessment id",
+        fvpConditionIds to "fvp condition id",
+        fvpAttemptIds to "fvp attempt id",
     ).forEach { (ids, field) -> ids.forEach { require(it > 0L) { "$field must be positive" } } }
     unique(t.assessments.map { it.sessionKey }, "assessment sessionKey")
     unique(t.encoderSessions.map { it.sessionKey }, "encoder sessionKey")
@@ -272,24 +447,43 @@ fun ManualBackupDocument.validate(): ManualBackupDocument {
             }
             ProtocolId.ASYMMETRY.storageKey -> {
                 // Bilateral children are unilateral attempts. Never sort by event type text:
-                // alphabetical order would put LANDING before MOVEMENT_START.
+                // alphabetical order would put LANDING before MOVEMENT_START. The movement start
+                // is optional; when present it must still precede takeoff.
                 val eventsByKey = eventsByAttempt[attempt.id].orEmpty()
                     .associateBy { it.type to it.ordinal }
-                val ordered = listOf("MOVEMENT_START", "TAKEOFF", "LANDING").map { type ->
-                    requireNotNull(eventsByKey[type to 0]) {
-                        "Missing bilateral event $type for attempt ${attempt.id}."
+                val takeoff = requireNotNull(eventsByKey["TAKEOFF" to 0]) {
+                    "Missing bilateral event TAKEOFF for attempt ${attempt.id}."
+                }
+                val landing = requireNotNull(eventsByKey["LANDING" to 0]) {
+                    "Missing bilateral event LANDING for attempt ${attempt.id}."
+                }
+                require(landing.ptsUs > takeoff.ptsUs)
+                eventsByKey["MOVEMENT_START" to 0]?.let { start ->
+                    require(start.ptsUs < takeoff.ptsUs) {
+                        "Bilateral MOVEMENT_START must precede TAKEOFF for attempt ${attempt.id}."
                     }
                 }
-                require(ordered.zipWithNext().all { (first, second) -> second.ptsUs > first.ptsUs })
             }
             else -> {
                 val definition = requireNotNull(ProtocolCatalog.find(protocol))
                 val byKey = eventsByAttempt[attempt.id].orEmpty()
                     .associateBy { it.type to it.ordinal }
-                val required = definition.requiredEvents.map { event ->
-                    requireNotNull(byKey[event.storageKey to 0])
+                // Mandatory events are always required; an optional movement start is validated
+                // for real chronology when the attempt actually carries one.
+                val mandatory = definition.mandatoryEvents.map { event ->
+                    requireNotNull(byKey[event.storageKey to 0]) {
+                        "Missing mandatory event ${event.storageKey} for attempt ${attempt.id}."
+                    }
                 }
-                require(required.zipWithNext().all { (first, second) -> second.ptsUs > first.ptsUs })
+                require(mandatory.zipWithNext().all { (first, second) -> second.ptsUs > first.ptsUs })
+                byKey[EventType.MOVEMENT_START.storageKey to 0]?.let { start ->
+                    if (EventType.MOVEMENT_START in definition.optionalEvents) {
+                        val takeoff = requireNotNull(byKey[EventType.TAKEOFF.storageKey to 0])
+                        require(start.ptsUs < takeoff.ptsUs) {
+                            "MOVEMENT_START must precede TAKEOFF for attempt ${attempt.id}."
+                        }
+                    }
+                }
             }
         }
     }
@@ -384,8 +578,234 @@ fun ManualBackupDocument.validate(): ManualBackupDocument {
         finite(m.value, "encoder metric")
     }
     t.encoderSessions.forEach { s -> val reps = t.encoderRepetitions.count { it.sessionId == s.id }; require(s.totalRepetitions == reps); require(s.validRepetitions == t.encoderRepetitions.count { it.sessionId == s.id && it.quality == RepetitionQuality.VALID.name }); finite(s.bestMcv,"bestMcv"); finite(s.setVelocityLoss,"setVelocityLoss") }
+    // --- F-V-P (Room 11) -----------------------------------------------------------------------
+    unique(t.fvpAssessments.map { it.sessionKey }, "fvp sessionKey")
+    unique(t.fvpConditions.map { it.assessmentId to it.ordinal }, "fvp condition ordinal")
+    unique(t.fvpConditions.map { it.assessmentId to it.conditionKey }, "fvp condition key")
+    unique(t.fvpAttempts.map { it.conditionId to it.ordinal }, "fvp attempt ordinal")
+    // Las tablas F-V-P nacen en Room 11: un payload que se declara 9/10 no puede traerlas. El gate
+    // usa la version de INTRODUCCION de F-V-P, no el esquema actual: un documento legítimo de
+    // Room 11 sí puede traer filas F-V-P y no debe rechazarse al subir [MANUAL_BACKUP_ROOM_VERSION].
+    if (sourceRoomSchemaVersion < MANUAL_BACKUP_FVP_INTRODUCED_ROOM_VERSION) {
+        require(t.fvpAssessments.isEmpty() && t.fvpConditions.isEmpty() && t.fvpAttempts.isEmpty()) {
+            "Room $sourceRoomSchemaVersion backup cannot contain F-V-P rows."
+        }
+    }
+    // La procedencia nace en Room 12: un documento que se declara 9/10/11 no puede traer ninguna de
+    // las 20 columnas. Mismo criterio que el gate de filas F-V-P: la version debe describir la forma,
+    // y asi los defaults no pueden tapar un linaje mentido ni una restauracion hibrida.
+    if (sourceRoomSchemaVersion < MANUAL_BACKUP_ROOM_VERSION) {
+        require(
+            t.fvpAssessments.all { it.provenanceIsUnknown() } &&
+                t.fvpConditions.all { it.provenanceIsUnknown() } &&
+                t.fvpAttempts.all { it.provenanceIsUnknown() },
+        ) {
+            "Room $sourceRoomSchemaVersion backup cannot carry Room $MANUAL_BACKUP_ROOM_VERSION provenance."
+        }
+    }
+    t.fvpAssessments.forEach { a ->
+        require(a.sessionKey.isNotBlank())
+        require(a.athleteId == null || a.athleteId in athleteIds)
+        require(a.testingSessionId == null || a.testingSessionId in testingIds)
+        require(a.protocolId in FVP_PROTOCOL_KEYS)
+        require(a.bodyMassSource in FVP_BODY_MASS_SOURCES)
+        require(a.pushOffMode in FVP_PUSH_OFF_MODES)
+        require(a.pushOffSource in FVP_PUSH_OFF_SOURCES)
+        require(a.acquisitionContextKind in FVP_ACQUISITION_CONTEXT_KINDS) {
+            "fvp assessment ${a.id} has an unknown acquisitionContextKind: '${a.acquisitionContextKind}'"
+        }
+        require(a.bodyMassMeasurement in FVP_BODY_MASS_MEASUREMENTS) {
+            "fvp assessment ${a.id} has an unknown bodyMassMeasurement: '${a.bodyMassMeasurement}'"
+        }
+        requireFvpTimestamp(a.acquiredAt, "fvp assessment ${a.id} acquiredAt")
+        requireFvpTimestamp(a.bodyMassMeasuredAt, "fvp assessment ${a.id} bodyMassMeasuredAt")
+        requireFvpProvenanceKey(a.acquisitionContextKey, "fvp assessment ${a.id} acquisitionContextKey")
+        // UNKNOWN/NULL sigue siendo desconocido: un contexto declarado como "misma adquisición"
+        // sin clave que lo identifique no es auditable y no se deriva de fechas ni de otro campo.
+        require(a.acquisitionContextKind != "SAME_ACQUISITION" || a.acquisitionContextKey != null) {
+            "fvp assessment ${a.id} SAME_ACQUISITION requires acquisitionContextKey"
+        }
+        require(a.algorithmVersion.isNotBlank())
+        require(a.methodVersion.isNotBlank())
+        require(a.notes == NoteNormalizer.normalize(a.notes))
+        require(a.warningsCsv.length <= MANUAL_BACKUP_MAX_WARNINGS_CSV_CHARS) { "fvp warningsCsv is too long" }
+        require(a.conditionCount >= 1) { "fvp conditionCount must be >= 1" }
+        finite(a.bodyMassKg, "fvp bodyMassKg")
+        finite(a.pushOffM, "fvp pushOffM")
+        finite(a.pushOffLandmarkHeightCm, "fvp pushOffLandmarkHeightCm")
+        finite(a.pushOffCrouchCm, "fvp pushOffCrouchCm")
+        finite(a.pushOffExtendedCm, "fvp pushOffExtendedCm")
+        finite(a.sourceFps, "fvp sourceFps")
+        finite(a.f0N, "fvp f0N")
+        finite(a.slopeFv, "fvp slopeFv")
+        finite(a.sfvNsPerM, "fvp sfvNsPerM")
+        // Misma invariante dura que `FvpDao.save` (`sfv = -slope` en el motor): un backup editado a
+        // mano no puede inyectar un par de signos imposible en la base de datos.
+        require(a.sfvNsPerM == -a.slopeFv) {
+            "fvp assessment ${a.id} sfvNsPerM must be exactly -slopeFv " +
+                "(sfvNsPerM=${a.sfvNsPerM}, slopeFv=${a.slopeFv})"
+        }
+        finite(a.v0Mps, "fvp v0Mps")
+        finite(a.pmaxW, "fvp pmaxW")
+        finite(a.r2, "fvp r2")
+        finite(a.vMinMps, "fvp vMinMps")
+        finite(a.vMaxMps, "fvp vMaxMps")
+        finite(a.fMinN, "fvp fMinN")
+        finite(a.fMaxN, "fvp fMaxN")
+        finite(a.f0RelNPerKg, "fvp f0RelNPerKg")
+        finite(a.pmaxRelWPerKg, "fvp pmaxRelWPerKg")
+    }
+    t.fvpConditions.forEach { c ->
+        require(c.assessmentId in fvpAssessmentIds) { "fvp condition references an unknown assessment" }
+        require(c.ordinal >= 0)
+        require(c.conditionKey.isNotBlank())
+        require(c.selectedAttemptOrdinal == null || c.selectedAttemptOrdinal >= 0)
+        require(c.addedLoadSource in FVP_ADDED_LOAD_SOURCES) {
+            "fvp condition ${c.id} has an unknown addedLoadSource: '${c.addedLoadSource}'"
+        }
+        requireFvpTimestamp(c.addedLoadMeasuredAt, "fvp condition ${c.id} addedLoadMeasuredAt")
+        finite(c.addedLoadKg, "fvp addedLoadKg")
+        finite(c.totalMassKg, "fvp totalMassKg")
+        finite(c.pushOffM, "fvp pushOffM")
+        finite(c.selectedHeightM, "fvp selectedHeightM")
+    }
+    t.fvpAttempts.forEach { a ->
+        require(a.conditionId in fvpConditionIds) { "fvp attempt references an unknown condition" }
+        require(a.ordinal >= 0)
+        require(a.method in FVP_MEASURE_METHODS)
+        // Misma regla dura que `FvpDao.save`/`checkSeries` (gate B3): un descarte tecnico sin motivo
+        // no es auditable. El backup es otra frontera de integridad (JSON editado a mano o de otra
+        // instalacion) y sin este `require` una fila `valid=false` sin `exclusionReason` se
+        // restauraria para degradar despues a `RECALCULATION_UNAVAILABLE` para siempre.
+        require(a.valid || !a.exclusionReason.isNullOrBlank()) {
+            "fvp attempt ${a.id} is invalid but has no exclusionReason"
+        }
+        require(a.sourceAssessmentId == null || a.sourceAssessmentId > 0L)
+        require(a.sourceAttemptOrdinal == null || a.sourceAttemptOrdinal >= 0)
+        require(a.sourceProtocolId == null || a.sourceProtocolId.isNotBlank())
+        // --- Procedencia y snapshots temporales (Room 12, B0) ------------------------------
+        require(a.timeMapping in FVP_TIME_MAPPINGS) {
+            "fvp attempt ${a.id} has an unknown timeMapping: '${a.timeMapping}'"
+        }
+        requireFvpTimestamp(a.sourceRecordedAt, "fvp attempt ${a.id} sourceRecordedAt")
+        requireFvpTimestamp(a.acquiredAt, "fvp attempt ${a.id} acquiredAt")
+        requireFvpTimestamp(a.reuseConfirmedAt, "fvp attempt ${a.id} reuseConfirmedAt")
+        require(a.sourceAthleteId == null || a.sourceAthleteId > 0L) {
+            "fvp attempt ${a.id} sourceAthleteId must be > 0 when present"
+        }
+        requireFvpProvenanceKey(a.timeMappingEvidenceKey, "fvp attempt ${a.id} timeMappingEvidenceKey")
+        // La evidencia temporal no se infiere de fps nominales, captura ni checkbox: un mapeo
+        // IDENTITY_VERIFIED sin clave de evidencia no puede restaurarse como si estuviera verificado.
+        require(a.timeMapping != "IDENTITY_VERIFIED" || a.timeMappingEvidenceKey != null) {
+            "fvp attempt ${a.id} IDENTITY_VERIFIED requires timeMappingEvidenceKey"
+        }
+        require(a.reuseConfirmationVersion == null || a.reuseConfirmationVersion == FVP_REUSE_CONFIRMATION_VERSION) {
+            "fvp attempt ${a.id} reuseConfirmationVersion must be null or '$FVP_REUSE_CONFIRMATION_VERSION', " +
+                "was '${a.reuseConfirmationVersion}'"
+        }
+        // Confirmacion durable: version y fecha van juntas o ninguna de las dos. No se completa una
+        // con la hora de restauracion ni con la fecha del intento.
+        require((a.reuseConfirmationVersion == null) == (a.reuseConfirmedAt == null)) {
+            "fvp attempt ${a.id} reuseConfirmationVersion and reuseConfirmedAt must be set together"
+        }
+        requireFvpPtsOrder(
+            label = "fvp attempt ${a.id}",
+            eventField = "takeoffPtsUs",
+            event = a.takeoffPtsUs,
+            previousField = "takeoffPreviousPtsUs",
+            previous = a.takeoffPreviousPtsUs,
+            nextField = "takeoffNextPtsUs",
+            next = a.takeoffNextPtsUs,
+        )
+        requireFvpPtsOrder(
+            label = "fvp attempt ${a.id}",
+            eventField = "landingPtsUs",
+            event = a.landingPtsUs,
+            previousField = "landingPreviousPtsUs",
+            previous = a.landingPreviousPtsUs,
+            nextField = "landingNextPtsUs",
+            next = a.landingNextPtsUs,
+        )
+        require(a.takeoffPtsUs == null || a.landingPtsUs == null || a.landingPtsUs > a.takeoffPtsUs) {
+            "fvp attempt ${a.id} landingPtsUs must be > takeoffPtsUs when both are present " +
+                "(takeoffPtsUs=${a.takeoffPtsUs}, landingPtsUs=${a.landingPtsUs})"
+        }
+        finite(a.heightM, "fvp heightM")
+        finite(a.flightTimeS, "fvp flightTimeS")
+        finite(a.sourceFps, "fvp sourceFps")
+    }
+    // Coherencia raiz-hijos: una evaluacion sin condiciones, o con un `conditionCount` que no
+    // coincide con sus condiciones, restauraria un perfil incompleto (el export INNER JOIN
+    // devolveria cero detalles). Se rechaza en la validacion, no se acepta en silencio.
+    t.fvpAssessments.forEach { a ->
+        val conditions = t.fvpConditions.count { it.assessmentId == a.id }
+        require(conditions >= 1) { "fvp assessment ${a.id} has no conditions" }
+        require(a.conditionCount == conditions) {
+            "fvp assessment ${a.id} conditionCount ${a.conditionCount} != $conditions stored conditions"
+        }
+    }
     return this
 }
 
 private fun <T> unique(values: List<T>, field: String): Set<T> { require(values.distinct().size == values.size) { "Duplicate $field" }; return values.toSet() }
-private fun ManualBackupTables.allLists() = listOf(athletes, athleteGroups, athleteGroupCrossRef, testingSessions, testingParticipants, assessments, attempts, attemptEvents, attemptMetrics, attemptCalibrations, attemptSpatialMarks, encoderSessions, encoderSamples, encoderRepetitions, encoderRepMetrics)
+
+/** Timestamp epoch ms de procedencia: `>= 0` cuando se informa, `null` = desconocido (nunca "hoy"). */
+private fun requireFvpTimestamp(value: Long?, field: String) {
+    require(value == null || value >= 0L) { "$field must be >= 0 when present" }
+}
+
+/** Clave opaca de procedencia: `null` = desconocida; si se informa, no vacía y de `<= 128`. */
+private fun requireFvpProvenanceKey(value: String?, field: String) {
+    if (value == null) return
+    require(value.isNotBlank() && value.length <= MANUAL_BACKUP_MAX_PROVENANCE_KEY_CHARS) {
+        "$field must be non-blank and at most $MANUAL_BACKUP_MAX_PROVENANCE_KEY_CHARS characters"
+    }
+}
+
+/** PTS [µs] de un evento con vecinos opcionales: no negativos, vecino exige evento y orden estricto. */
+private fun requireFvpPtsOrder(
+    label: String,
+    eventField: String,
+    event: Long?,
+    previousField: String,
+    previous: Long?,
+    nextField: String,
+    next: Long?,
+) {
+    requireFvpTimestamp(event, "$label $eventField")
+    requireFvpTimestamp(previous, "$label $previousField")
+    requireFvpTimestamp(next, "$label $nextField")
+    require(previous == null || event != null) { "$label $previousField requires $eventField" }
+    require(next == null || event != null) { "$label $nextField requires $eventField" }
+    require(previous == null || event == null || previous < event) { "$label $previousField must be < $eventField" }
+    require(next == null || event == null || event < next) { "$label $nextField must be > $eventField" }
+}
+private fun ManualBackupTables.allLists() = listOf(athletes, athleteGroups, athleteGroupCrossRef, testingSessions, testingParticipants, assessments, attempts, attemptEvents, attemptMetrics, attemptCalibrations, attemptSpatialMarks, encoderSessions, encoderSamples, encoderRepetitions, encoderRepMetrics, fvpAssessments, fvpConditions, fvpAttempts)
+
+/** `true` si la raiz no declara ninguna columna de procedencia (`UNKNOWN`/NULL, como un documento <12). */
+private fun BackupFvpAssessment.provenanceIsUnknown(): Boolean =
+    acquiredAt == null &&
+        acquisitionContextKind == "UNKNOWN" &&
+        acquisitionContextKey == null &&
+        bodyMassMeasurement == "UNKNOWN" &&
+        bodyMassMeasuredAt == null
+
+/** `true` si la condicion no declara procedencia de carga (`UNKNOWN`/NULL, como un documento <12). */
+private fun BackupFvpCondition.provenanceIsUnknown(): Boolean =
+    addedLoadSource == "UNKNOWN" && addedLoadMeasuredAt == null
+
+/** `true` si el intento no declara procedencia (`UNKNOWN`/NULL, como un documento <12). */
+private fun BackupFvpAttempt.provenanceIsUnknown(): Boolean =
+    sourceRecordedAt == null &&
+        sourceAthleteId == null &&
+        acquiredAt == null &&
+        reuseConfirmedAt == null &&
+        reuseConfirmationVersion == null &&
+        takeoffPtsUs == null &&
+        takeoffPreviousPtsUs == null &&
+        takeoffNextPtsUs == null &&
+        landingPtsUs == null &&
+        landingPreviousPtsUs == null &&
+        landingNextPtsUs == null &&
+        timeMapping == "UNKNOWN" &&
+        timeMappingEvidenceKey == null

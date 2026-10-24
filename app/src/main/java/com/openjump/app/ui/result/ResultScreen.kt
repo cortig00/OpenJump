@@ -44,6 +44,10 @@ fun ResultScreen(
     onHome: () -> Unit,
     onCorrect: () -> Unit,
     onSaved: ((List<PersonalRecord>) -> Unit)? = null,
+    // F-004: final bilateral save lands on the persisted detail via this
+    // callback. Null preserves the legacy records-only behavior for callers
+    // that do not navigate to a saved detail.
+    onBilateralSaved: ((Long, List<PersonalRecord>) -> Unit)? = null,
     viewModel: ResultViewModel = viewModel(factory = ResultViewModel.Factory),
 ) {
     val draft by AppSession.draft.collectAsState()
@@ -77,6 +81,9 @@ fun ResultScreen(
             comparison = completedBilateral,
             completionFeedback = showCompletedFeedback,
             onSaved = { records ->
+                if (onSaved != null) onSaved(records) else { AppSession.reset(); onHome() }
+            },
+            onBilateralSaved = onBilateralSaved ?: { _, records ->
                 if (onSaved != null) onSaved(records) else { AppSession.reset(); onHome() }
             },
             onDiscard = { AppSession.reset(); onHome() },

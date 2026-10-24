@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -17,6 +18,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -34,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -61,6 +64,7 @@ import com.openjump.app.ui.components.AthleteAvatar
 import com.openjump.app.ui.components.ExperienceModePicker
 import com.openjump.app.ui.components.OpenJumpTopAppBar
 import com.openjump.app.ui.components.StatusPill
+import com.openjump.app.ui.theme.OpenJumpTheme
 import com.openjump.app.ui.theme.OpenJumpTypes
 import com.openjump.app.ui.theme.ShapeTokens
 import com.openjump.app.ui.theme.Spacing
@@ -204,8 +208,11 @@ private fun ProfileIdentity(athlete: AthleteEntity) {
             AthleteAvatar(athlete.displayName, athlete.avatarKey, size = 80.dp)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                 Text(athlete.displayName, style = OpenJumpTypes.ScreenTitle, maxLines = 2)
+                // F-026: punto verde solo para Active; Archived usa la pastilla
+                // neutra con borde sin punto.
                 StatusPill(
                     text = stringResource(if (athlete.archivedAt == null) R.string.athlete_profile_active else R.string.athlete_profile_archived),
+                    leadingDot = if (athlete.archivedAt == null) OpenJumpTheme.colors.positive else null,
                 )
                 listOfNotNull(
                     athlete.birthDate?.let {
@@ -476,15 +483,26 @@ private fun ActivityRow(
             )
         }
     }
+    // F-024: misma fila que HistoryEntryRow (ListItem surface, min 72dp,
+    // overline Label, headline titleMedium, trailing titleMedium, divisor con
+    // inset). Reutiliza el estilo existente sin crear otro componente.
     ListItem(
-        modifier = Modifier.fillMaxWidth().clickable {
+        modifier = Modifier.fillMaxWidth().heightIn(min = 72.dp).clickable(role = Role.Button) {
             when {
                 jump -> onMeasurementSelected(entry.id)
                 else -> onEncoderSelected(entry.id)
             }
         },
-        overlineContent = { Text(stringResource(when { jump -> R.string.history_type_jump; else -> R.string.history_type_encoder }), style = OpenJumpTypes.Label) },
-        headlineContent = { Text(title) },
+        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
+        overlineContent = {
+            Text(
+                stringResource(when { jump -> R.string.history_type_jump; else -> R.string.history_type_encoder }),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.SemiBold,
+                style = OpenJumpTypes.Label,
+            )
+        },
+        headlineContent = { Text(title, style = MaterialTheme.typography.titleMedium) },
         supportingContent = {
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                 Text(
@@ -493,12 +511,28 @@ private fun ActivityRow(
                         if (jump && entry.protocolId == ProtocolId.ASYMMETRY.storageKey) stringResource(R.string.history_bilateral_best) else null,
                     ).joinToString(" · "),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = OpenJumpTypes.Secondary,
                 )
             }
         },
-        trailingContent = { Text(value ?: stringResource(R.string.common_value_unavailable), fontWeight = FontWeight.Bold) },
+        trailingContent = {
+            if (value != null) {
+                Text(
+                    value,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleMedium,
+                )
+            } else {
+                Text(
+                    stringResource(R.string.common_value_unavailable),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = OpenJumpTypes.Secondary,
+                )
+            }
+        },
     )
-    if (showDivider) HorizontalDivider(Modifier.padding(horizontal = Spacing.lg))
+    if (showDivider) HorizontalDivider(Modifier.padding(start = Spacing.lg))
 }
 
 internal fun availableSeries(jumps: List<AthleteJumpRecord>, encoders: List<AthleteEncoderRecord>): Set<EvolutionSelection> {

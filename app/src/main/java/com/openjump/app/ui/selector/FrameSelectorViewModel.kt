@@ -22,11 +22,13 @@ import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.exoplayer.video.VideoFrameMetadataListener
 import com.openjump.app.OpenJumpApp
 import com.openjump.app.R
+import com.openjump.app.benchmark.PreviewMmrPrefetchFrameSource
 import com.openjump.app.encoder.EncoderDraft
 import com.openjump.app.encoder.GeometricPlateDetector
 import com.openjump.app.encoder.PlateDetection
 import com.openjump.app.encoder.PlateDetectionMode
 import com.openjump.app.encoder.PlateDetectionOutcome
+import com.openjump.app.encoder.PlateDetectionSource
 import com.openjump.app.encoder.PlateDetectorConfig
 import com.openjump.app.encoder.VideoTimingDecision
 import com.openjump.app.protocol.EventType
@@ -37,6 +39,7 @@ import com.openjump.app.tracking.PyramidalKltMotionTracker
 import com.openjump.app.tracking.TrackingFrameResult
 import com.openjump.app.tracking.TrackingPerformanceProfiler
 import com.openjump.app.tracking.TrackingStatus
+import com.openjump.app.tracking.TrackingFrameSource
 import com.openjump.app.video.AppSession
 import com.openjump.app.video.VideoFrameIndex
 import com.openjump.app.video.isPlateCircleWithinFrame
@@ -162,19 +165,92 @@ data class PlateDetectionUiState(
     val isBusy: Boolean get() = phase == PlateDetectionPhase.DETECTING_AUTO || phase == PlateDetectionPhase.DETECTING_ASSISTED || confirming
     val acceptsAssistedTap: Boolean get() = phase == PlateDetectionPhase.ASSISTED_REQUIRED || phase == PlateDetectionPhase.ASSISTED_FAILED
     val canConfirm: Boolean get() = phase == PlateDetectionPhase.REVIEW && !confirming && proposal?.let {
-        it.isWithinPresentationBounds && (!it.requiresAdjustment || it.adjusted)
+        it.isWithinPresentationBounds && (!it.requiresAdjustment || it.adjusted || isObliquePlateOverrideEligible(it))
     } == true
 }
+
+/**
+ * Genuine oblique override: an untouched detector proposal whose contour-ellipse
+ * perspective fell below the automatic-calibration threshold. The user may
+ * explicitly confirm it with a precision warning; the commit still uses the
+ * manual branch (no automatic detection is invented). Provisional proposals
+ * without detector provenance (USER_CIRCLE/ASSISTED_TAP) and gradient-circle
+ * fallbacks never qualify. Thresholds live in the detector; this only reads
+ * the existing source/perspective/acceptance outcome with finite guards.
+ */
+internal fun isObliquePlateOverrideEligible(proposal: PlateCalibrationProposal): Boolean {
+    if (proposal.adjusted) return false
+    if (!proposal.requiresAdjustment) return false
+    val detection = proposal.originalDetection ?: return false
+    if (detection.source != PlateDetectionSource.CONTOUR_ELLIPSE) return false
+    if (detection.mode == PlateDetectionMode.MANUAL) return false
+    if (detection.autoCalibrationAccepted) return false
+    if (!detection.perspectiveRatio.isFinite() || !detection.confidence.isFinite()) return false
+    if (detection.perspectiveRatio <= 0.0) return false
+    if (!detection.ellipseMajorAxisPx.isFinite() || !detection.ellipseMinorAxisPx.isFinite() ||
+        !detection.ellipseAngleRadians.isFinite()
+    ) return false
+    val provenance = proposal.provenance
+    if (provenance != null && provenance != PlateDetectionSource.CONTOUR_ELLIPSE.name) return false
+    return true
+}
+
+/**
+ * Mirrors the confirm branch: only the accepted untouched detector path keeps
+ * detector provenance. Any manual commit (adjusted geometry or a
+ * requiresAdjustment proposal, including the explicit oblique override) commits
+ * with manual provenance and no invented automatic detection/confidence.
+ */
+internal fun committedPlateDetectionForConfirm(proposal: PlateCalibrationProposal): PlateDetection? =
+    if (proposal.adjusted || proposal.requiresAdjustment) null else proposal.originalDetection
 
 data class TrackingUiState(
     val phase: TrackingPhase = TrackingPhase.IDLE,
     val results: List<TrackingFrameResult> = emptyList(),
     val progress: Float = 0f,
+    val estimatedRemainingMs: Long? = null,
     val message: String? = null,
     val processingPreview: TrackingProcessingPreview? = null,
 ) {
     val isBusy: Boolean get() = phase == TrackingPhase.INITIALIZING || phase == TrackingPhase.PROCESSING
     val canStart: Boolean get() = phase == TrackingPhase.READY
+}
+
+/**
+ * Remaining-time estimate for offline tracking, from observed throughput only.
+ *
+ * Returns null while there is not enough signal (start, first frames, complete
+ * or degenerate input) so the UI can honestly show "estimating" instead of a
+ * made-up number. Pure function, no clock access: tested on JVM.
+ */
+internal fun trackingRemainingMs(progress: Float, elapsedSinceFirstFrameMs: Long): Long? {
+    if (!progress.isFinite() || progress < 0.03f || progress >= 1f) return null
+    if (elapsedSinceFirstFrameMs < 2_000L) return null
+    val remaining = elapsedSinceFirstFrameMs * (1f - progress) / progress
+    if (!remaining.isFinite()) return null
+    return remaining.toLong().coerceAtLeast(0L)
+}
+
+/**
+ * UI prefetch canary seam (approved slice only). Nullable factory default null = usual route.
+ * Applies ONLY to initializeTrackingTarget and only when FLAG_DEBUGGABLE; never touches
+ * preview callback, calibration, PTS, KLT, algorithm, close/generation/navigation logic.
+ *
+ * When no explicit factory is injected (the normal app path) AND the build is debuggable,
+ * the tracking source defaults to [PreviewMmrPrefetchFrameSource] (prefetch ON for this
+ * build). An explicit factory still wins (canary instrumentation). Reverting the
+ * production route is one line: set [PREFETCH_DEFAULT_ON] to false.
+ */
+internal const val PREFETCH_DEFAULT_ON = true
+fun interface SelectorTrackingSourceFactory {
+    fun create(
+        context: Context,
+        uri: Uri,
+        index: VideoFrameIndex,
+        profiler: TrackingPerformanceProfiler,
+        seedFrameIndex: Int,
+        previewObserver: ((frameIndex: Int, ptsUs: Long, borrowedBitmap: Bitmap, rotationDegrees: Int) -> Unit)?,
+    ): TrackingFrameSource
 }
 
 /**
@@ -186,7 +262,10 @@ data class TrackingUiState(
  * renderizar, de modo que nunca se marca un target todavía obsoleto.
  */
 @OptIn(UnstableApi::class)
-class FrameSelectorViewModel(private val context: Context) : ViewModel() {
+class FrameSelectorViewModel(
+    private val context: Context,
+    private val trackingSourceFactory: SelectorTrackingSourceFactory? = null,
+) : ViewModel() {
 
     private val _player = MutableStateFlow<ExoPlayer?>(null)
     val player: StateFlow<ExoPlayer?> = _player.asStateFlow()
@@ -504,22 +583,19 @@ class FrameSelectorViewModel(private val context: Context) : ViewModel() {
         val requested = AppSession.currentFrameIndex.value
         val index = AppSession.frameIndex.value ?: return
         val exoPlayer = _player.value ?: return
-        val hadRenderedFrame = _displayState.value.renderedIndex != null
 
         if (_displayState.value.isPlaying) return
         _displayState.update { it.request(requested, ViewerTransportMode.SEEKING) }
         _loading.value = _displayState.value.renderedIndex == null
 
-        if (hadRenderedFrame) {
-            // Al recrear SurfaceView, un codec pausado puede entregar el buffer
-            // siguiente. Reiniciar solo en este borde de lifecycle garantiza
-            // el frame exacto sin penalizar la navegación normal.
-            exoPlayer.stop()
-            exoPlayer.seekTo(index.timeOf(requested) / 1_000L)
-            exoPlayer.prepare()
-        } else {
-            seekToFrame(requested)
-        }
+        // Una superficie nueva puede llegar DESPUES del seek inicial (arranque en frio) o al
+        // volver de otra pantalla. Un seek a la misma posicion es un no-op para ExoPlayer y deja
+        // el visor negro hasta que el usuario avanza un fotograma. Reiniciar la fuente en este
+        // borde garantiza que la superficie recien creada reciba el frame solicitado; no se hace
+        // durante la reproduccion (guard anterior) y el coste queda acotado a crear la superficie.
+        exoPlayer.stop()
+        exoPlayer.seekTo(index.timeOf(requested) / 1_000L)
+        exoPlayer.prepare()
     }
 
     /** A user chooses the reference before any optional detection runs. */
@@ -647,7 +723,7 @@ class FrameSelectorViewModel(private val context: Context) : ViewModel() {
                     val detection = proposal.originalDetection ?: return@launch
                     AppSession.applyPlateDetection(detection, proposal.frameIndex)
                 }
-                val committedDetection = if (!proposal.adjusted) proposal.originalDetection else null
+                val committedDetection = committedPlateDetectionForConfirm(proposal)
                 _plateDetectionState.value = stateAfterCommit(proposal, committedDetection)
                 initializeTrackingTarget(proposal.center, decoded)
             } catch (_: CancellationException) {
@@ -688,7 +764,7 @@ class FrameSelectorViewModel(private val context: Context) : ViewModel() {
                 confidence = detection?.confidence,
                 perspectiveRatio = detection?.perspectiveRatio,
                 cmPerPixel = draft?.calibration?.metersPerPixel?.times(100.0),
-                autoCalibrationAccepted = detection != null && !proposal.adjusted,
+                autoCalibrationAccepted = detection != null && !proposal.adjusted && !proposal.requiresAdjustment,
             ),
         )
     }
@@ -985,6 +1061,8 @@ class FrameSelectorViewModel(private val context: Context) : ViewModel() {
                     message = context.getString(
                         if (detection.autoCalibrationAccepted) {
                             R.string.selector_plate_review_ready
+                        } else if (isObliquePlateOverrideEligible(proposal)) {
+                            R.string.encoder_reference_oblique
                         } else {
                             R.string.selector_plate_manual_needed
                         },
@@ -1129,13 +1207,7 @@ class FrameSelectorViewModel(private val context: Context) : ViewModel() {
         trackingJob = viewModelScope.launch {
             try {
                 val performanceProfiler = TrackingPerformanceProfiler()
-                val runner = OfflineVideoTracker(
-                    source = VideoTrackingFrameSource(
-                        context = context,
-                        uri = uri,
-                        index = index,
-                        performanceProfiler = performanceProfiler,
-                        previewObserver = { frame, pts, borrowed, rotation ->
+                val originalPreviewObserver: (Int, Long, Bitmap, Int) -> Unit = { frame, pts, borrowed, rotation ->
                             val shouldCopy = (frame - renderedIndex) % PROGRESS_UPDATE_INTERVAL == 0 || frame == index.frameCount - 1
                             if (shouldCopy && trackingPreviewVisible && generation == trackingGeneration &&
                                 _trackingState.value.phase == TrackingPhase.PROCESSING
@@ -1147,8 +1219,30 @@ class FrameSelectorViewModel(private val context: Context) : ViewModel() {
                                     pendingTrackingPreview = PendingTrackingPreview(generation, frame, pts, owned)
                                 } else owned.recycle() // Never published/drawn.
                             }
-                        },
-                    ),
+                        }
+                val debugFactory = trackingSourceFactory?.takeIf { debugLoggingEnabled }
+                val trackingSource: TrackingFrameSource = debugFactory?.create(
+                    context, uri, index, performanceProfiler, renderedIndex, originalPreviewObserver,
+                ) ?: if (debugLoggingEnabled && PREFETCH_DEFAULT_ON) {
+                    PreviewMmrPrefetchFrameSource(
+                        context = context,
+                        uri = uri,
+                        index = index,
+                        profiler = performanceProfiler,
+                        seedFrameIndex = renderedIndex,
+                        originalPreviewObserver = originalPreviewObserver,
+                    )
+                } else {
+                    VideoTrackingFrameSource(
+                        context = context,
+                        uri = uri,
+                        index = index,
+                        performanceProfiler = performanceProfiler,
+                        previewObserver = originalPreviewObserver,
+                    )
+                }
+                val runner = OfflineVideoTracker(
+                    source = trackingSource,
                     tracker = PyramidalKltMotionTracker(performanceProfiler = performanceProfiler),
                     performanceProfiler = performanceProfiler,
                 )
@@ -1206,7 +1300,12 @@ class FrameSelectorViewModel(private val context: Context) : ViewModel() {
         trackingJob = viewModelScope.launch {
             pendingTrackingPreview = null
             pausePlayback()
-            _trackingState.update { it.copy(phase = TrackingPhase.PROCESSING, progress = 0f, message = null, processingPreview = null) }
+            val trackingStartNs = System.nanoTime()
+            // ETA anchor: first published frame. Creation/reset of the anchor lives in
+            // this coroutine only, so a cancelled generation can never leak into the next.
+            var etaAnchorProcessed = -1
+            var etaAnchorElapsedMs = 0L
+            _trackingState.update { it.copy(phase = TrackingPhase.PROCESSING, progress = 0f, estimatedRemainingMs = null, message = null, processingPreview = null) }
             try {
                 val finalResults = withContext(Dispatchers.Default) {
                     runner.trackRemaining { result, processed, total ->
@@ -1221,6 +1320,21 @@ class FrameSelectorViewModel(private val context: Context) : ViewModel() {
                                 if (generation != trackingGeneration || state.phase != TrackingPhase.PROCESSING) state else state.copy(
                                     results = results,
                                     progress = if (total == 0) 1f else processed.toFloat() / total,
+                                    estimatedRemainingMs = if (total == 0 || processed <= 0) {
+                                        null
+                                    } else {
+                                        val elapsedMs = (System.nanoTime() - trackingStartNs) / 1_000_000L
+                                        if (etaAnchorProcessed < 0) {
+                                            etaAnchorProcessed = processed
+                                            etaAnchorElapsedMs = elapsedMs
+                                            null
+                                        } else {
+                                            trackingRemainingMs(
+                                                progress = processed.toFloat() / total,
+                                                elapsedSinceFirstFrameMs = elapsedMs - etaAnchorElapsedMs,
+                                            )
+                                        }
+                                    },
                                     processingPreview = if (!trackingPreviewVisible) null else pending?.let {
                                         TrackingProcessingPreview(it.bitmap, result)
                                     } ?: state.processingPreview,
@@ -1246,7 +1360,7 @@ class FrameSelectorViewModel(private val context: Context) : ViewModel() {
                         finalResults.last().frameIndex + 1,
                     )
                 } else {
-                    context.getString(R.string.selector_trajectory_complete, finalResults.size)
+                    context.getString(R.string.selector_tracking_completed_plain)
                 }
                 val currentSessionKey = AppSession.encoderDraft.value?.sessionKey
                 val currentVideoUri = AppSession.videoUri.value?.toString()
@@ -1580,7 +1694,10 @@ class FrameSelectorViewModel(private val context: Context) : ViewModel() {
         val runner = offlineTracker
         trackingJob = null
         offlineTracker = null
-        if (job?.isActive == true) {
+        // ViewModel.clear cancels the scope BEFORE onCleared, so a cancelled job reports
+        // isActive == false while its cleanup/join may still run. Gate on !isCompleted so
+        // runner.close stays ordered after actual job completion instead of racing it.
+        if (job != null && !job.isCompleted) {
             job.cancel()
             job.invokeOnCompletion { runner?.close() }
         } else {
@@ -1626,12 +1743,20 @@ class FrameSelectorViewModel(private val context: Context) : ViewModel() {
         private const val STEP_SCRUB_RELEASE_MS = 300L
         private const val TRACKING_PERFORMANCE_TAG = "OpenJumpTrackingPerf"
         private const val PLATE_DETECTION_TAG = "OpenJumpPlateDetection"
+        /** Ephemeral DEBUG-only override; null/OFF = usual route. Cleared in test finally. */
+        @Volatile
+        internal var debugTrackingSourceFactory: SelectorTrackingSourceFactory? = null
 
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 val applicationContext =
                     (this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as Context).applicationContext
-                FrameSelectorViewModel(applicationContext)
+                val debugOverride = if (applicationContext.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
+                    debugTrackingSourceFactory
+                } else {
+                    null
+                }
+                FrameSelectorViewModel(applicationContext, debugOverride)
             }
         }
     }

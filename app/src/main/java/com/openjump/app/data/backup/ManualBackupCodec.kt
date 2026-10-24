@@ -90,6 +90,9 @@ object ManualBackupCodec {
             encoderSamples = tables.encoderSamples.sortedWith(compareBy({ it.sessionId }, { it.ordinal })),
             encoderRepetitions = tables.encoderRepetitions.sortedWith(compareBy({ it.sessionId }, { it.ordinal }, { it.id })),
             encoderRepMetrics = tables.encoderRepMetrics.sortedWith(compareBy({ it.repetitionId }, { it.key })),
+            fvpAssessments = tables.fvpAssessments.sortedBy { it.id },
+            fvpConditions = tables.fvpConditions.sortedWith(compareBy({ it.assessmentId }, { it.ordinal })),
+            fvpAttempts = tables.fvpAttempts.sortedWith(compareBy({ it.conditionId }, { it.ordinal })),
         ),
     )
 }

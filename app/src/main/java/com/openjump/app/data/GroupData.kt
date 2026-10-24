@@ -93,6 +93,11 @@ interface GroupDao {
     @Query("SELECT * FROM athlete_groups ORDER BY archivedAt IS NOT NULL, name COLLATE NOCASE, id")
     fun all(): Flow<List<GroupEntity>>
 
+    /** Lista con miembros cargados para mostrar el contador de la tarjeta (F-031). */
+    @Transaction
+    @Query("SELECT * FROM athlete_groups ORDER BY archivedAt IS NOT NULL, name COLLATE NOCASE, id")
+    fun allWithMembers(): Flow<List<GroupWithMembers>>
+
     @Transaction
     @Query("SELECT * FROM athlete_groups WHERE id = :id LIMIT 1")
     suspend fun detail(id: Long): GroupWithMembers?
@@ -191,6 +196,7 @@ interface GroupDao {
 class GroupRepository(private val dao: GroupDao) {
     fun active(): Flow<List<GroupEntity>> = dao.active()
     fun all(): Flow<List<GroupEntity>> = dao.all()
+    fun allWithMembers(): Flow<List<GroupWithMembers>> = dao.allWithMembers()
     suspend fun byId(id: Long): GroupEntity? = dao.byId(id)
     suspend fun detail(id: Long): GroupWithMembers? = dao.detail(id)
     fun observeDetail(id: Long): Flow<GroupWithMembers?> = dao.observeDetail(id)

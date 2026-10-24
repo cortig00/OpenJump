@@ -13,6 +13,7 @@ object ProtocolCatalog {
             requiredEvents = listOf(EventType.MOVEMENT_START, EventType.TAKEOFF, EventType.LANDING),
             primaryMetric = MetricKey.HEIGHT_CM,
             includesRsiMod = true,
+            optionalEvents = listOf(EventType.MOVEMENT_START),
         ),
         ProtocolDefinition(
             id = ProtocolId.SJ,
@@ -36,6 +37,7 @@ object ProtocolCatalog {
             requiredEvents = listOf(EventType.MOVEMENT_START, EventType.TAKEOFF, EventType.LANDING),
             primaryMetric = MetricKey.HEIGHT_CM,
             includesRsiMod = true,
+            optionalEvents = listOf(EventType.MOVEMENT_START),
         ),
         ProtocolDefinition(
             id = ProtocolId.UNILATERAL,
@@ -48,6 +50,7 @@ object ProtocolCatalog {
             requiredEvents = listOf(EventType.MOVEMENT_START, EventType.TAKEOFF, EventType.LANDING),
             primaryMetric = MetricKey.HEIGHT_CM,
             includesRsiMod = true,
+            optionalEvents = listOf(EventType.MOVEMENT_START),
         ),
         ProtocolDefinition(
             id = ProtocolId.DROP_JUMP,

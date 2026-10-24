@@ -40,41 +40,57 @@ fun TrackingOverlay(
     modifier: Modifier = Modifier,
 ) {
     val status = current?.result?.sample?.status
+    // Phase-aware: READY (and other non-IDLE phases) must read as the phase,
+    // never as a stale sample status (READY says phase-ready, not SEGUIMIENTO).
+    // COMPLETED is the only phase that yields to a live per-sample UNCERTAIN/
+    // LOST so review keeps the current sample visible instead of hiding it
+    // behind the whole-session COMPLETED status. No new logic or data.
     val statusLabel = stringResource(
-        when (status) {
-            TrackingStatus.TRACKING -> R.string.selector_tracking_status_tracking
-            TrackingStatus.UNCERTAIN -> R.string.selector_tracking_status_uncertain
-            TrackingStatus.LOST -> R.string.selector_tracking_status_lost
-            null -> when (trackingPhase) {
-                TrackingPhase.IDLE -> R.string.selector_tracking_status_ready
-                TrackingPhase.INITIALIZING -> R.string.selector_tracking_status_initializing
-                TrackingPhase.READY -> R.string.selector_tracking_status_ready
-                TrackingPhase.PROCESSING -> R.string.selector_tracking_status_processing
-                TrackingPhase.COMPLETED -> R.string.selector_tracking_status_completed
-                TrackingPhase.LOST -> R.string.selector_tracking_status_lost
-                TrackingPhase.ERROR -> R.string.selector_tracking_status_error
+        when (trackingPhase) {
+            TrackingPhase.IDLE -> when (status) {
+                TrackingStatus.TRACKING -> R.string.selector_tracking_status_tracking
+                TrackingStatus.UNCERTAIN -> R.string.selector_tracking_status_uncertain
+                TrackingStatus.LOST -> R.string.selector_tracking_status_lost
+                // IDLE with no sample is not target-ready: describe the idle action
+                // instead of claiming READY. READY stays the explicit phase text.
+                null -> R.string.selector_tracking_idle
             }
+            TrackingPhase.INITIALIZING -> R.string.selector_tracking_status_initializing
+            TrackingPhase.READY -> R.string.selector_tracking_status_ready
+            TrackingPhase.PROCESSING -> R.string.selector_tracking_status_processing
+            TrackingPhase.COMPLETED -> when (status) {
+                TrackingStatus.UNCERTAIN -> R.string.selector_tracking_status_uncertain
+                TrackingStatus.LOST -> R.string.selector_tracking_status_lost
+                else -> R.string.selector_tracking_status_completed
+            }
+            TrackingPhase.LOST -> R.string.selector_tracking_status_review
+            TrackingPhase.ERROR -> R.string.selector_tracking_status_error
         },
     )
-    val color = when (status) {
-        TrackingStatus.TRACKING -> OpenJumpTheme.colors.positive
-        TrackingStatus.UNCERTAIN -> OpenJumpTheme.colors.warning
-        TrackingStatus.LOST -> MaterialTheme.colorScheme.error
-        null -> when (trackingPhase) {
-            TrackingPhase.LOST, TrackingPhase.ERROR -> MaterialTheme.colorScheme.error
+    val color = when (trackingPhase) {
+        TrackingPhase.LOST, TrackingPhase.ERROR -> MaterialTheme.colorScheme.error
+        TrackingPhase.COMPLETED -> when (status) {
+            TrackingStatus.UNCERTAIN -> OpenJumpTheme.colors.warning
+            TrackingStatus.LOST -> MaterialTheme.colorScheme.error
             else -> MaterialTheme.colorScheme.onSurfaceVariant
         }
+        TrackingPhase.IDLE -> when (status) {
+            TrackingStatus.TRACKING -> OpenJumpTheme.colors.positive
+            TrackingStatus.UNCERTAIN -> OpenJumpTheme.colors.warning
+            TrackingStatus.LOST -> MaterialTheme.colorScheme.error
+            null -> MaterialTheme.colorScheme.onSurfaceVariant
+        }
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
-    val validPointCount = recent.count { it.result.sample.point != null }
-    val trajectoryDescription = if (validPointCount == 0) {
-        stringResource(R.string.selector_tracking_trajectory_empty)
-    } else {
-        stringResource(R.string.selector_tracking_trajectory_description, validPointCount)
-    }
+    // Reference oval uses a neutral tone computed in @Composable context (Canvas is DrawScope).
+    val referenceColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.92f)
+    // F010/F037: main overlay stays plain (phase only). The graphical trajectory
+    // path below remains visible; raw visible-point counts live in the collapsed
+    // technical details (TechnicalDetailsDisclosure), not in this semantics.
     Box(
         modifier = modifier
             .semantics {
-                contentDescription = "$statusLabel. $trajectoryDescription"
+                contentDescription = statusLabel
             }
             .pointerInput(mapper, selectionEnabled) {
                 if (selectionEnabled) {
@@ -123,8 +139,10 @@ fun TrackingOverlay(
                     (majorEdge.x - center.x).toDouble(),
                 ).toFloat() * 180f / kotlin.math.PI.toFloat()
                 rotate(angleDegrees, center) {
+                    // Reference stays visually separate from the ROI: neutral tone,
+                    // while the followed zone uses the phase/status color below.
                     drawOval(
-                        color = color.copy(alpha = 0.92f),
+                        color = referenceColor,
                         topLeft = Offset(center.x - majorRadius, center.y - minorRadius),
                         size = Size(majorRadius * 2f, minorRadius * 2f),
                         style = Stroke(width = 4f),
@@ -132,6 +150,7 @@ fun TrackingOverlay(
                 }
             }
 
+            // Real ROI rectangle stays prominent: the zone inside it is followed.
             current?.result?.region?.let { region ->
                 val topLeft = mapper.videoToView(ImagePoint(region.left, region.top))
                 val bottomRight = mapper.videoToView(ImagePoint(region.right, region.bottom))
@@ -142,11 +161,12 @@ fun TrackingOverlay(
                         (bottomRight.x - topLeft.x).toFloat(),
                         (bottomRight.y - topLeft.y).toFloat(),
                     ),
-                    style = Stroke(width = 3f),
+                    style = Stroke(width = 5f),
                 )
             }
+            // Micro-features subdued: diagnostic data retained in technical details.
             current?.result?.featurePoints?.forEach { feature ->
-                drawCircle(color.copy(alpha = 0.75f), radius = 2.5f, center = mapper.videoToView(feature).offset())
+                drawCircle(color.copy(alpha = 0.30f), radius = 2f, center = mapper.videoToView(feature).offset())
             }
             current?.result?.sample?.point?.let { point ->
                 val mapped = mapper.videoToView(point).offset()

@@ -256,6 +256,37 @@ class JumpRepository(
         cursor?.kind ?: "",
     )
 
+    /**
+     * Intentos de salto guardados de un protocolo reutilizables como medicion de una condicion
+     * F-V-P, del mas reciente al mas antiguo y acotados a `limit` filas.
+     *
+     * La altura se expone en metros (SI) y los fps son los detectados del video origen; el
+     * llamante decide si los acepta (nunca se rellena una carga ni un h_po por defecto). El tiempo
+     * de vuelo del intento se expone en segundos SOLO si la metrica persistida existe y es
+     * utilizable: un intento sin `FLIGHT_TIME_MS` se mapea a `null` ([flightTimeMsToSeconds]).
+     */
+    suspend fun reusableMeasurementsFor(
+        athleteId: Long,
+        protocolId: String,
+        limit: Int,
+    ): List<ReusableJumpMeasurement> {
+        require(limit > 0) { "El limite de mediciones reutilizables debe ser > 0." }
+        return dao.reusableMeasurementsFor(athleteId, protocolId, limit).map { row ->
+            ReusableJumpMeasurement(
+                assessmentId = row.assessmentId,
+                attemptOrdinal = row.attemptOrdinal,
+                dateTime = row.dateTime,
+                heightM = row.heightCm / 100.0,
+                flightTimeS = flightTimeMsToSeconds(row.flightTimeMs),
+                detectedFps = row.detectedFps,
+                side = row.side,
+                protocolId = row.protocolId,
+                hasVideoUri = row.hasVideoUri,
+                notes = row.notes,
+            )
+        }
+    }
+
     private fun AssessmentWithAttempts.toStoredMeasurement(athleteName: String? = null): StoredMeasurement {
         val primaryKey = requireNotNull(MetricKey.fromStorageKey(assessment.primaryMetricKey)) {
             "La medición guardada usa una métrica no compatible."
@@ -339,3 +370,41 @@ class JumpRepository(
         )
     }
 }
+
+/**
+ * Tiempo de vuelo persistido de un intento reutilizable [ms] -> segundos, o `null` cuando la
+ * evidencia no existe o no es utilizable.
+ *
+ * Reglas (puras, sin Android ni Room):
+ * - `null` (metrica `FLIGHT_TIME_MS` ausente en el intento) -> `null`: la ausencia se propaga como
+ *   ausencia, nunca se sustituye por 0.0 ni por el valor de otro intento (D7);
+ * - valor no finito (NaN / infinito) -> `null`;
+ * - valor <= 0 -> `null`: un tiempo de vuelo no positivo no es una medicion reutilizable;
+ * - valor finito y positivo -> `ms / 1000.0` (la metrica se persiste en milisegundos).
+ */
+internal fun flightTimeMsToSeconds(flightTimeMs: Double?): Double? {
+    val ms = flightTimeMs ?: return null
+    if (!ms.isFinite() || ms <= 0.0) return null
+    return ms / 1000.0
+}
+
+/**
+ * Intento de salto guardado en OpenJump reutilizable como medicion de una condicion F-V-P.
+ *
+ * [heightM] esta en metros (SI, convertido desde el cm persistido) y [detectedFps] son los fps
+ * efectivos detectados del video origen. [flightTimeS] es el tiempo de vuelo del MISMO intento en
+ * segundos, o `null` si el intento guardado no lo tenia: es una medida YA existente, nunca se
+ * deriva de la altura ni se rellena por defecto. Sigue sin implicar carga ni h_po.
+ */
+data class ReusableJumpMeasurement(
+    val assessmentId: Long,
+    val attemptOrdinal: Int,
+    val dateTime: Long,
+    val heightM: Double,
+    val flightTimeS: Double?,
+    val detectedFps: Int,
+    val side: String?,
+    val protocolId: String,
+    val hasVideoUri: Boolean,
+    val notes: String?,
+)

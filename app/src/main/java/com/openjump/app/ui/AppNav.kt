@@ -2,9 +2,11 @@ package com.openjump.app.ui
 
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
+import com.openjump.app.FeatureFlags
 import com.openjump.app.OpenJumpApp
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
@@ -14,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -61,6 +64,7 @@ import com.openjump.app.protocol.VideoSource
 import com.openjump.app.encoder.EncoderExercise
 import com.openjump.app.settings.EncoderSettings
 import com.openjump.app.settings.ExperienceMode
+import com.openjump.app.settings.JumpSettings
 import com.openjump.app.settings.OnboardingCompletion
 import com.openjump.app.ui.athletes.AthletesScreen
 import com.openjump.app.ui.athletes.AthletesViewModel
@@ -73,6 +77,16 @@ import com.openjump.app.ui.encoder.EncoderMethodologyScreen
 import com.openjump.app.ui.encoder.EncoderResultScreen
 import com.openjump.app.ui.encoder.EncoderSetupScreen
 import com.openjump.app.ui.encoder.SavedEncoderResultScreen
+import com.openjump.app.ui.fvp.FvpConditionsScreen
+import com.openjump.app.ui.fvp.FvpDraftSession
+import com.openjump.app.ui.fvp.FvpFlowViewModel
+import com.openjump.app.ui.fvp.FvpHistoryScreen
+import com.openjump.app.ui.fvp.FvpRecoveryNotice
+import com.openjump.app.ui.fvp.FvpResultScreen
+import com.openjump.app.ui.fvp.FvpSessionPolicy
+import com.openjump.app.ui.fvp.FvpSetupScreen
+import com.openjump.app.ui.fvp.fvpFlowStepForRoute
+import com.openjump.app.ui.fvp.fvpRecoveryNoticeText
 import com.openjump.app.ui.history.HistoryScreen
 import com.openjump.app.ui.groups.GroupDetailScreen
 import com.openjump.app.ui.groups.GroupsScreen
@@ -85,6 +99,8 @@ import com.openjump.app.ui.onboarding.OnboardingScreen
 import com.openjump.app.ui.protocol.ProtocolSetupScreen
 import com.openjump.app.ui.protocol.ProtocolGuidanceCatalog
 import com.openjump.app.ui.result.ResultScreen
+import com.openjump.app.ui.result.bilateralContinuationTarget
+import com.openjump.app.ui.result.navigateBilateralFinalSave
 import com.openjump.app.ui.result.SavedResultScreen
 import com.openjump.app.ui.result.SavedMeasurementDispatch
 import com.openjump.app.ui.result.SavedBilateralResultRoute
@@ -102,7 +118,7 @@ import com.openjump.app.ui.theme.OpenJumpTheme
 import com.openjump.app.video.AppSession
 import com.openjump.app.video.SeriesFeedback
 
-private const val HOME_ROUTE = "home"
+internal const val HOME_ROUTE = "home"
 private const val ONBOARDING_ROUTE = "onboarding"
 private const val HISTORY_ROUTE = "history"
 private const val SETTINGS_ROUTE = "settings"
@@ -123,6 +139,70 @@ private const val COMPARISON_RESULTS_ROUTE = "$COMPARISON_ROUTE/results"
 internal fun athleteEditRoute(athleteId: Long): String = "athlete/$athleteId/edit"
 internal fun comparisonResultsRoute(): String = COMPARISON_RESULTS_ROUTE
 internal fun comparisonRoutes(): List<String> = listOf(COMPARISON_ROUTE, COMPARISON_RESULTS_ROUTE)
+
+// F-V-P experimental flow. Routes stay out of `isBottomBarVisible` and `settingsSectionRoutes`.
+internal const val FVP_SETUP_ROUTE = "fvp/setup"
+internal const val FVP_CONDITIONS_ROUTE = "fvp/conditions"
+internal const val FVP_LIVE_RESULT_ROUTE = "fvp/result"
+internal const val FVP_HISTORY_ROUTE = "fvp/history"
+internal const val FVP_SAVED_RESULT_ROUTE = "fvp/result/{assessmentId}"
+
+internal fun fvpSavedResultRoute(assessmentId: Long): String = "fvp/result/$assessmentId"
+
+/**
+ * Destino + politica de pila de UNA transicion del flujo F-V-P, como datos puros.
+ *
+ * INVARIANTE DE NAVEGACION (P0 A-P0-1): tras guardar con exito la serie, la pila queda SIEMPRE
+ * `Home -> fvp/result/{id}`, tanto si se guardo desde el resultado vivo como si se llego por
+ * "Editar" (resultado guardado -> conditions -> resultado vivo). El pop va hasta [HOME_ROUTE] y NO
+ * es inclusivo porque Home es la raiz del flujo (unica entrada, linea `onFvpSelected`); en cambio
+ * `fvp/setup` NO esta en la pila cuando se edita, asi que un `popUpTo(FVP_SETUP_ROUTE)` se ignora y
+ * deja `result/{viejo} -> conditions -> result/{nuevo}`, con Back cayendo primero en el borrador
+ * caducado y despues en la serie antigua.
+ *
+ * Se expone como datos para poder verificar la politica (pop/single-top) en tests JVM e
+ * instrumentados sin componer el `NavHost` completo de la app.
+ */
+internal data class FvpNavTarget(
+    val route: String,
+    val popUpToRoute: String? = null,
+    val popUpToInclusive: Boolean = false,
+    val launchSingleTop: Boolean = false,
+)
+
+/** Home -> `fvp/setup`: `launchSingleTop` evita apilar dos setups con un doble toque. */
+internal fun fvpSetupNavTarget(): FvpNavTarget =
+    FvpNavTarget(route = FVP_SETUP_ROUTE, launchSingleTop = true)
+
+/**
+ * Guardar (resultado vivo o tras editar) -> `fvp/result/{id}`, podando la pila hasta Home.
+ *
+ * `launchSingleTop` mantiene la operacion idempotente si ese mismo resultado ya estuviera arriba; la
+ * entrada nueva es siempre el destino de resultado guardado con el id recien persistido.
+ */
+internal fun fvpSavedResultNavTarget(assessmentId: Long): FvpNavTarget = FvpNavTarget(
+    route = fvpSavedResultRoute(assessmentId),
+    popUpToRoute = HOME_ROUTE,
+    launchSingleTop = true,
+)
+
+/** Unico punto de navegacion del flujo F-V-P: traduce un [FvpNavTarget] a `NavOptions`. */
+internal fun NavHostController.navigateFvp(target: FvpNavTarget) {
+    navigate(target.route) {
+        target.popUpToRoute?.let { route ->
+            popUpTo(route) { inclusive = target.popUpToInclusive }
+        }
+        launchSingleTop = target.launchSingleTop
+    }
+}
+
+internal fun fvpFlowRoutes(): List<String> = listOf(
+    FVP_SETUP_ROUTE,
+    FVP_CONDITIONS_ROUTE,
+    FVP_LIVE_RESULT_ROUTE,
+    FVP_SAVED_RESULT_ROUTE,
+    FVP_HISTORY_ROUTE,
+)
 
 private data class TopLevelDestination(
     val route: String,
@@ -187,6 +267,8 @@ fun AppNav() {
 fun OpenJumpNavHost(navController: NavHostController) {
     val context = LocalContext.current
     val encoderSettings = remember(context) { EncoderSettings(context) }
+    // Read at session start only: the preference seeds new drafts and never rewrites existing ones.
+    val jumpSettings = remember(context) { JumpSettings(context) }
     val app = context.applicationContext as OpenJumpApp
     SideEffect { AppSession.setVideoOwnershipChangedListener(app::requestVideoUriReconciliation) }
     val mode by app.experienceModeStore.mode.collectAsState()
@@ -212,6 +294,11 @@ fun OpenJumpNavHost(navController: NavHostController) {
         }
     }
     val activeAthletes = activeAthletesOrNull.orEmpty()
+    // Nombres del roster activo por id: la cabecera del resultado identifica el atleta DE LA SERIE
+    // (no el seleccionado) y cae al marcador neutro si el nombre no se puede resolver.
+    val athleteNamesById = remember(activeAthletes) {
+        activeAthletes.associate { it.id to it.displayName }
+    }
     val athletesLoading = activeAthletesOrNull == null
     val selectedAthleteId by app.selectedAthleteStore.selectedAthleteId.collectAsState()
     val navScope = rememberCoroutineScope()
@@ -223,10 +310,45 @@ fun OpenJumpNavHost(navController: NavHostController) {
     }
     val encoderDraft by AppSession.encoderDraft.collectAsState()
     val draft by AppSession.draft.collectAsState()
+    // D6/R2: UNICO dueño del estado recuperable del flujo F-V-P y de su `SavedStateHandle`. Se crea
+    // UNA vez por grafo de navegacion -no por destino- y RESTAURA en su `init` SIN BLOQUEAR (A3):
+    // publica PENDIENTE de forma sincrona y reconcilia con la verdad persistida en una corrutina
+    // acotada. No es una segunda fuente de verdad: envuelve a la sesion (ver FvpFlowViewModel), y es
+    // el objetivo de TODA mutacion del flujo (A2): las pantallas reciben ESTE dueño, nunca crean otro.
+    // El flag es de compilacion: en release no se crea el dueno del flujo ni se ejecuta su
+    // recuperacion, de modo que ocultar la entrada no toca borradores ni datos persistidos.
+    val fvpProfileEnabled = FeatureFlags.fvpEnabled
+    val fvpFlowViewModel: FvpFlowViewModel? =
+        if (fvpProfileEnabled) {
+            androidx.lifecycle.viewmodel.compose.viewModel(factory = FvpFlowViewModel.Factory)
+        } else {
+            null
+        }
+    val fvpRecoveryNotice: FvpRecoveryNotice =
+        fvpFlowViewModel?.recoveryNotice?.collectAsState()?.value ?: FvpRecoveryNotice.None
+    // A3: reconciliacion EN VUELO. Mientras sea `true`, setup/condiciones/resultado en vivo muestran
+    // un cuerpo de carga NO interactivo: no siembran formularios, no declaran caducidad, no calculan
+    // ni guardan. Historial y resultado GUARDADO no esperan (leen sus propias filas).
+    val fvpReconciliationPending: Boolean =
+        fvpFlowViewModel?.reconciliationPending?.collectAsState()?.value == true
+    val fvpDraft by FvpDraftSession.draft.collectAsState()
+    // Conservar el estado de texto de Saltos al retroceder a Medicion. Solo se restaura la
+    // entrada guardada si sigue siendo la MISMA sesion; una nueva identidad no hereda ediciones.
+    var savedFvpConditionsSession by rememberSaveable { mutableStateOf<String?>(null) }
     val videoUri by AppSession.videoUri.collectAsState()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
     val currentRoute = currentDestination?.route
+    // Paso visible del flujo F-V-P (metadato del payload de recuperacion) y salida terminal a
+    // Home: el payload se limpia para que un borrador descartado no se resucite (D6). Se observa
+    // la RUTA y no un boton concreto, de modo que tambien cubre el Back del sistema. Las rutas
+    // ajenas al flujo no tocan ni el paso ni el payload.
+    LaunchedEffect(currentRoute, fvpProfileEnabled) {
+        if (fvpProfileEnabled) {
+            fvpFlowStepForRoute(currentRoute)?.let { fvpFlowViewModel?.onStepVisible(it) }
+            if (currentRoute == HOME_ROUTE) fvpFlowViewModel?.onLeftFlow()
+        }
+    }
     val showNavigationBar = isBottomBarVisible(currentRoute)
     var completedSeriesFeedback by rememberSaveable { mutableStateOf<SeriesFeedback?>(null) }
     var pendingRecords by remember { mutableStateOf<List<PersonalRecord>>(emptyList()) }
@@ -234,9 +356,10 @@ fun OpenJumpNavHost(navController: NavHostController) {
     var recordedVideoStopElapsedMs by remember { mutableStateOf<Long?>(null) }
 
     Scaffold(
-        contentWindowInsets = WindowInsets.safeDrawing.only(
-            WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom,
-        ),
+        // Only the immersive camera owns its insets: preview edge-to-edge,
+        // floating controls inside safeDrawing. All other routes stay unchanged.
+        contentWindowInsets = if (currentRoute == "camera") WindowInsets(0, 0, 0, 0) else
+            WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom),
         bottomBar = {
             if (showNavigationBar) {
                 OpenJumpNavigationBar(
@@ -305,6 +428,10 @@ fun OpenJumpNavHost(navController: NavHostController) {
                     onHistorySelected = { navController.navigateTopLevel(HISTORY_ROUTE) },
                     onMeasurementSelected = { navController.navigate("measurement/$it") },
                     onEncoderSessionSelected = { navController.navigate("encoder/session/$it") },
+                    onFvpSelected = {
+                        if (fvpProfileEnabled) navController.navigateFvp(fvpSetupNavTarget())
+                    },
+                    fvpProfileEnabled = fvpProfileEnabled,
                 )
             }
 
@@ -426,6 +553,7 @@ fun OpenJumpNavHost(navController: NavHostController) {
                                         activeAthletes.anthropometricsSnapshotFor(
                                             participant.participant.athleteId,
                                         ),
+                                        markMovementStart = jumpSettings.markMovementStart,
                                     )
                                     navController.navigate("camera")
                                 }
@@ -615,6 +743,7 @@ fun OpenJumpNavHost(navController: NavHostController) {
                         onAthleteSelected = { athleteId ->
                             navScope.launch { app.selectedAthleteStore.select(app.athleteRepository, athleteId) }
                         },
+                        markMovementStart = jumpSettings.markMovementStart,
                         onImport = { uri, setup, athleteId, targetAttempts ->
                             val pendingImport = app.videoUriGrantReconciler.registerOwner(setOf(uri.toString()))
                             try {
@@ -623,6 +752,7 @@ fun OpenJumpNavHost(navController: NavHostController) {
                                         targetAttempts = targetAttempts,
                                         athleteId = athleteId,
                                         athleteAnthropometrics = activeAthletes.anthropometricsSnapshotFor(athleteId),
+                                        markMovementStart = jumpSettings.markMovementStart,
                                     )
                                 } else {
                                     AppSession.begin(
@@ -631,6 +761,7 @@ fun OpenJumpNavHost(navController: NavHostController) {
                                         athleteId,
                                         athleteAnthropometrics = activeAthletes.anthropometricsSnapshotFor(athleteId),
                                         targetAttempts = targetAttempts,
+                                        markMovementStart = jumpSettings.markMovementStart,
                                     )
                                 }
                                 AppSession.attachVideo(uri, VideoSource.IMPORTED)
@@ -646,6 +777,7 @@ fun OpenJumpNavHost(navController: NavHostController) {
                                     targetAttempts = targetAttempts,
                                     athleteId = athleteId,
                                     athleteAnthropometrics = activeAthletes.anthropometricsSnapshotFor(athleteId),
+                                    markMovementStart = jumpSettings.markMovementStart,
                                 )
                             } else {
                                 AppSession.begin(
@@ -654,6 +786,7 @@ fun OpenJumpNavHost(navController: NavHostController) {
                                     athleteId,
                                     athleteAnthropometrics = activeAthletes.anthropometricsSnapshotFor(athleteId),
                                     targetAttempts = targetAttempts,
+                                    markMovementStart = jumpSettings.markMovementStart,
                                 )
                             }
                             navController.navigate("camera")
@@ -684,6 +817,21 @@ fun OpenJumpNavHost(navController: NavHostController) {
                         onBack = { navController.popBackStack() },
                         captureGuidance = guidance,
                         jumpFlowStep = if (encoderDraft == null) JumpFlowStep.VIDEO else null,
+                        onImportVideo = { uri ->
+                            // Alternativa desde el propio error de cámara (F-032): se
+                            // registra el grant del vídeo elegido y se sigue al selector
+                            // como si se hubiera grabado.
+                            val pendingImport = app.videoUriGrantReconciler.registerOwner(setOf(uri.toString()))
+                            try {
+                                AppSession.attachVideo(uri, VideoSource.IMPORTED)
+                                navController.navigate("selector") {
+                                    popUpTo("camera") { inclusive = true }
+                                }
+                            } finally {
+                                pendingImport.close()
+                                app.requestVideoUriReconciliation()
+                            }
+                        },
                     )
                 }
             }
@@ -752,8 +900,11 @@ fun OpenJumpNavHost(navController: NavHostController) {
                         onCorrect = { navController.popBackStack() },
                         onSaved = { records ->
                             if (records.isNotEmpty()) pendingRecords = records
-                            if (AppSession.bilateral.value != null) {
-                                navController.popBackStack("selector", false)
+                            val continuation = bilateralContinuationTarget(AppSession.bilateral.value != null)
+                            if (continuation != null) {
+                                // Per-attempt continuation: no Room id exists yet, the
+                                // bilateral session stays open for the next side.
+                                navController.popBackStack(continuation, false)
                             } else if (AppSession.prepareNextSeriesAttempt()) {
                                 navController.popBackStack("selector", false)
                             } else {
@@ -763,6 +914,16 @@ fun OpenJumpNavHost(navController: NavHostController) {
                                 if (testingId != null) navController.popBackStack("$TESTING_ROUTE/$testingId", false)
                                 else navController.popBackStack(HOME_ROUTE, false)
                             }
+                        },
+                        // F-004: final bilateral save lands on the persisted detail.
+                        // Reset runs only after the Room commit, on the success path:
+                        // failure keeps the session and the retry UI. The shared
+                        // production router pops jumps/protocol/selector/result so
+                        // Back from the detail lands on Home. No record banner is
+                        // queued here: the detail already shows the records and a
+                        // lingering pendingRecords would surface stale on next Home.
+                        onBilateralSaved = { id, _ ->
+                            navController.navigateBilateralFinalSave(id)
                         },
                     )
                 }
@@ -795,7 +956,173 @@ fun OpenJumpNavHost(navController: NavHostController) {
                     )
                 }
             }
+
+            // --- Flujo F-V-P experimental (fuera de la barra inferior) ---------------------------
+            // Las rutas siguen registradas para no romper la restauracion de una pila antigua,
+            // pero con el flag OFF ninguna compone pantalla ni crea su ViewModel: el guard poda a
+            // Home. En debug/demo el comportamiento es el de siempre.
+
+            composable(FVP_SETUP_ROUTE) {
+                FvpAccessGate(fvpProfileEnabled, { navController.popBackStack(HOME_ROUTE, false) }) {
+                    val flow = requireNotNull(fvpFlowViewModel)
+                    // A3: mientras la reconciliacion esta PENDIENTE no se compone el formulario. Sembrar
+                    // los campos con una sesion todavia sin adoptar dejaria el paso 1 vacio aunque la
+                    // restauracion se completase un instante despues: se muestra carga no interactiva.
+                    if (fvpReconciliationPending) {
+                        FvpRecoveryPendingBody()
+                    } else {
+                        FvpSetupScreen(
+                            flowViewModel = flow,
+                            activeAthletes = activeAthletes,
+                            athletesLoading = athletesLoading,
+                            selectedAthleteId = selectedAthleteId,
+                            onAthleteSelected = { athleteId ->
+                                navScope.launch { app.selectedAthleteStore.select(app.athleteRepository, athleteId) }
+                            },
+                            onBack = { navController.popBackStack() },
+                            onContinue = {
+                                val sessionKey = FvpDraftSession.draft.value?.sessionKey
+                                val restore = sessionKey != null && sessionKey == savedFvpConditionsSession
+                                if (!restore) navController.clearBackStack(FVP_CONDITIONS_ROUTE)
+                                navController.navigate(FVP_CONDITIONS_ROUTE) { restoreState = restore }
+                            },
+                            onHistory = { navController.navigate(FVP_HISTORY_ROUTE) },
+                        )
+                    }
+                }
+            }
+
+            composable(FVP_CONDITIONS_ROUTE) {
+                FvpAccessGate(fvpProfileEnabled, { navController.popBackStack(HOME_ROUTE, false) }) {
+                    val flow = requireNotNull(fvpFlowViewModel)
+                    // A3: PENDIENTE manda sobre el guard de sesion: sin la reconciliacion resuelta el
+                    // borrador aun no esta adoptado, y declarar caducidad aqui seria un veredicto falso
+                    // sobre una restauracion en curso. Tampoco se calcula ni se guarda.
+                    if (fvpReconciliationPending) {
+                        FvpRecoveryPendingBody()
+                    } else if (!FvpSessionPolicy.canOpenConditions(fvpDraft != null)) {
+                        ExpiredSession(
+                            onHome = { navController.popBackStack(HOME_ROUTE, false) },
+                            // Un payload que no se pudo recuperar se dice como tal; nunca se inventa un
+                            // borrador ni se presenta como una caducidad cualquiera (D6).
+                            recoveryMessage = fvpRecoveryNoticeText(fvpRecoveryNotice),
+                        )
+                    } else {
+                        FvpConditionsScreen(
+                            flowViewModel = flow,
+                            onBack = {
+                                if (navController.previousBackStackEntry?.destination?.route == FVP_SETUP_ROUTE) {
+                                    savedFvpConditionsSession = FvpDraftSession.draft.value?.sessionKey
+                                    navController.popBackStack(FVP_SETUP_ROUTE, inclusive = false, saveState = true)
+                                } else {
+                                    // Duplicar desde un guardado no tiene Setup detras: vuelve a su
+                                    // origen, sin inventar una entrada ni reutilizar otra sesion.
+                                    navController.popBackStack()
+                                }
+                            },
+                            onCalculate = { navController.navigate(FVP_LIVE_RESULT_ROUTE) },
+                        )
+                    }
+                }
+            }
+
+            composable(FVP_HISTORY_ROUTE) {
+                FvpAccessGate(fvpProfileEnabled, { navController.popBackStack(HOME_ROUTE, false) }) {
+                    FvpHistoryScreen(
+                        athleteId = selectedAthleteId,
+                        onBack = { navController.popBackStack() },
+                        onOpen = { navController.navigate(fvpSavedResultRoute(it)) },
+                        // Nombre del atleta SELECCIONADO solo como contexto de la lista; el resultado
+                        // guardado resuelve su propio atleta desde la fila.
+                        athleteName = selectedAthleteId?.let { athleteNamesById[it] },
+                    )
+                }
+            }
+
+            composable(FVP_LIVE_RESULT_ROUTE) {
+                FvpAccessGate(fvpProfileEnabled, { navController.popBackStack(HOME_ROUTE, false) }) {
+                    val flow = requireNotNull(fvpFlowViewModel)
+                    // A3: PENDIENTE manda sobre el guard: ni caducidad, ni calculo, ni guardado hasta que
+                    // la reconciliacion resuelva.
+                    if (fvpReconciliationPending) {
+                        FvpRecoveryPendingBody()
+                    } else if (!FvpSessionPolicy.canOpenLiveResult(fvpDraft != null)) {
+                        ExpiredSession(
+                            onHome = { navController.popBackStack(HOME_ROUTE, false) },
+                            recoveryMessage = fvpRecoveryNoticeText(fvpRecoveryNotice),
+                        )
+                    } else {
+                        FvpResultScreen(
+                            flowViewModel = flow,
+                            onBack = { navController.popBackStack() },
+                            onExit = {
+                                // A2: descarte explicito por el DUEÑO (supersede pendiente + payload).
+                                flow.reset()
+                                navController.popBackStack(HOME_ROUTE, false)
+                            },
+                            onEdit = { navController.popBackStack() },
+                            // Terminal del flujo: la pila queda Home -> resultado guardado. El pop va a
+                            // HOME (presente siempre), nunca a `fvp/setup`, que puede no estar en la pila.
+                            onSaved = { id -> navController.navigateFvp(fvpSavedResultNavTarget(id)) },
+                            onDeleted = { navController.popBackStack(HOME_ROUTE, false) },
+                            // Identidad de la serie (Muse P1-3): atleta del borrador vivo.
+                            athleteName = fvpDraft?.athleteId?.let { athleteNamesById[it] },
+                            athleteNameById = athleteNamesById,
+                        )
+                    }
+                }
+            }
+
+            composable(FVP_SAVED_RESULT_ROUTE) { entry ->
+                FvpAccessGate(fvpProfileEnabled, { navController.popBackStack(HOME_ROUTE, false) }) {
+                    val flow = requireNotNull(fvpFlowViewModel)
+                    val assessmentId = entry.arguments?.getString("assessmentId")?.toLongOrNull()
+                    if (assessmentId == null || assessmentId <= 0L) {
+                        UnknownMeasurement(onBack = { navController.popBackStack() })
+                    } else {
+                        FvpResultScreen(
+                            assessmentId = assessmentId,
+                            // Mismo dueño que en el resto del flujo: "duplicar y editar" de una serie
+                            // guardada es una mutacion EXTERNA y debe superseder pendiente/recuperacion.
+                            flowViewModel = flow,
+                            onBack = { navController.popBackStack() },
+                            onExit = { navController.popBackStack() },
+                            onEdit = { navController.navigate(FVP_CONDITIONS_ROUTE) },
+                            // DEAD CODE conocido: esta rama pasa `onSave = null`, asi que el boton
+                            // Guardar no se compone y este lambda nunca se invoca (no se puede quitar
+                            // el parametro sin tocar FvpResultScreen). Se mantiene con la MISMA
+                            // politica que el resultado vivo para que ambas ramas no diverjan.
+                            onSaved = { id -> navController.navigateFvp(fvpSavedResultNavTarget(id)) },
+                            onDeleted = { navController.popBackStack() },
+                            // El atleta lo resuelve la pantalla desde la PROPIA fila
+                            // (`assessment.athleteId`), no desde el atleta seleccionado.
+                            athleteNameById = athleteNamesById,
+                        )
+                    }
+                }
+            }
         }
+    }
+}
+
+
+/**
+ * Puerta unica de los destinos F-V-P. Con el flag OFF no compone la pantalla, no toca el
+ * ViewModel/borrador y devuelve al usuario a Home. Se mantiene como guard (en vez de eliminar las
+ * rutas del grafo) para que una pila restaurada de una version anterior no provoque una excepcion
+ * por destino inexistente.
+ */
+@Composable
+private fun FvpAccessGate(
+    enabled: Boolean,
+    onBlocked: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    if (enabled) {
+        content()
+    } else {
+        LaunchedEffect(Unit) { onBlocked() }
+        Box(Modifier.fillMaxSize())
     }
 }
 
@@ -844,8 +1171,31 @@ private fun NavHostController.navigateTopLevel(route: String) {
     }
 }
 
+/**
+ * Cuerpo de carga NO interactivo del flujo F-V-P mientras el dueño reconcilia un borrador
+ * recuperado con la verdad persistida (A3). Reutiliza el copy de carga YA existente y localizado
+ * ([R.string.result_loading]) y no ofrece ninguna accion: no hay formulario que sembrar, ni
+ * calculo que pedir, ni serie que guardar hasta que la reconciliacion resuelva (y entonces esta
+ * ruta compone el destino real, o su explicacion de caducidad si la reconciliacion la descarto).
+ */
 @Composable
-private fun ExpiredSession(onHome: () -> Unit) {
+private fun FvpRecoveryPendingBody() {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        CircularProgressIndicator()
+        Text(
+            stringResource(R.string.result_loading),
+            modifier = Modifier.padding(top = 12.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun ExpiredSession(onHome: () -> Unit, recoveryMessage: String? = null) {
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp),
         verticalArrangement = Arrangement.Center,
@@ -860,6 +1210,15 @@ private fun ExpiredSession(onHome: () -> Unit) {
             modifier = Modifier.padding(top = 8.dp),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        // Flujo F-V-P con un payload que NO se pudo recuperar: se dice el motivo real (no hay
+        // recuperacion para esa sesion) en vez de dejar solo el mensaje generico de caducidad.
+        if (recoveryMessage != null) {
+            Text(
+                recoveryMessage,
+                modifier = Modifier.padding(top = 8.dp),
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
         Button(onClick = onHome, modifier = Modifier.padding(top = 16.dp)) {
             Text(stringResource(R.string.session_expired_home))
         }

@@ -1,45 +1,35 @@
-# Android / Gradle local state
+# Gradle / Android
 .gradle/
-.kotlin/
-**/build/
-local.properties
-.idea/
-*.iml
+build/
+app/build/
 captures/
+.kotlin/
+*.iml
+.idea/
+!.idea/copyright/
+.idea/libraries/
+local.properties
 
-# Signing keys, credentials and local configuration
-*.jks
-*.keystore
-*.p12
-*.pfx
-*.pem
-*.key
-.env
-.env.*
-keystore.properties
-signing.properties
+# Entorno local (máquina específica)
+# `gradle.properties` es portable y versionado para que clones/worktrees compartan
+# memoria, AndroidX y build cache. Las rutas locales pertenecen a local.properties,
+# JAVA_HOME o GRADLE_USER_HOME; nunca añadir org.gradle.java.home al repositorio.
 
-# Generated binaries and personal data
-*.apk
-*.aab
-*.apks
-*.mp4
-*.mov
-*.db
-*.db-shm
-*.db-wal
-*.ojbackup.json
-artifacts/
-testdata/
-scratch/
-
-# Agent / workstation files
+# Herramientas del agente (artefactos de trabajo, screenshots, planes)
 .pi/
-.agents/
-.worktrees/
-AGENTS.md
-.tmp-*/
-__pycache__/
-*.pyc
+
+# OS
 .DS_Store
 Thumbs.db
+
+# Artefactos pesados / videos de prueba (no versionar)
+*.mp4
+.tmp-frames/
+.tmp-shots/
+media-examples/
+app/src/androidTest/assets/
+# Artefactos de release locales (AAB/APK/firmas de prueba/logs)
+artifacts/
+
+# Auditorías locales con evidencias pesadas (no forman parte del producto)
+docs/auditorias/

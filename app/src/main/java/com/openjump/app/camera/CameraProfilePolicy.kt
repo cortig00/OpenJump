@@ -23,29 +23,48 @@ data class CameraProductProfile(
     fun label(): String = "${height}p · $fps fps"
 }
 
+/** Transient per-visit resolution choice. AUTO preserves the historical default. */
+enum class CameraResolutionPreference {
+    AUTO,
+    HD_720P,
+    FHD_1080P,
+}
+
 /** Pure product policy shared by CameraX discovery, settings and tests. */
 object CameraProfilePolicy {
     val visibleFps: List<Int> = listOf(60, 120, 240)
     private val autoOrder = listOf(120, 60, 240, 30)
 
-    fun chooseAuto(profiles: Collection<CameraProductProfile>): CameraProductProfile? =
+    fun chooseAuto(
+        profiles: Collection<CameraProductProfile>,
+        resolution: CameraResolutionPreference = CameraResolutionPreference.AUTO,
+    ): CameraProductProfile? =
         autoOrder.asSequence().mapNotNull { fps ->
-            profiles.filter { it.fps == fps }.bestAtSameFps()
+            resolution.filter(profiles).filter { it.fps == fps }.bestAtSameFps()
         }.firstOrNull()
 
     fun choose(
         profiles: Collection<CameraProductProfile>,
         preferredFps: Int,
-    ): CameraProductProfile? = candidates(profiles, preferredFps).firstOrNull()
+        resolution: CameraResolutionPreference = CameraResolutionPreference.AUTO,
+    ): CameraProductProfile? = candidates(profiles, preferredFps, resolution).firstOrNull()
 
-    /** Manual requests bind only the exact FPS; quality fallback remains within that FPS. */
+    /**
+     * Manual requests bind only the exact FPS and the exact resolution; quality
+     * fallback remains within that FPS and never silently switches resolution.
+     * A `preferredFps <= 0` keeps the Auto FPS order inside the chosen resolution.
+     */
     fun candidates(
         profiles: Collection<CameraProductProfile>,
         preferredFps: Int,
-    ): List<CameraProductProfile> = if (preferredFps <= 0) {
-        autoOrder.flatMap { fps -> profiles.filter { it.fps == fps }.sortedByQuality() }
-    } else {
-        profiles.filter { it.fps == preferredFps }.sortedByQuality()
+        resolution: CameraResolutionPreference = CameraResolutionPreference.AUTO,
+    ): List<CameraProductProfile> {
+        val scoped = resolution.filter(profiles)
+        return if (preferredFps <= 0) {
+            autoOrder.flatMap { fps -> scoped.filter { it.fps == fps }.sortedByQuality() }
+        } else {
+            scoped.filter { it.fps == preferredFps }.sortedByQuality()
+        }
     }
 
     fun visible(profiles: Collection<CameraProductProfile>): List<CameraProductProfile> =
@@ -54,6 +73,29 @@ object CameraProfilePolicy {
                 .thenBy { it.qualityRank() }
                 .thenBy { it.cameraId },
         )
+
+    /**
+     * REC guard: the bound profile must still satisfy the current manual request.
+     * Auto (`preferredFps <= 0`) accepts any FPS inside the chosen resolution; a manual
+     * FPS requires the exact tuple. Never falls back to another resolution.
+     */
+    fun isCompatible(
+        active: CameraProductProfile?,
+        preferredFps: Int,
+        resolution: CameraResolutionPreference = CameraResolutionPreference.AUTO,
+    ): Boolean {
+        if (active == null) return false
+        return candidates(listOf(active), preferredFps, resolution).isNotEmpty()
+    }
+
+    /** Exact dimensions only: an unknown size is excluded, never relabeled as 720p. */
+    private fun CameraResolutionPreference.filter(
+        profiles: Collection<CameraProductProfile>,
+    ): Collection<CameraProductProfile> = when (this) {
+        CameraResolutionPreference.AUTO -> profiles
+        CameraResolutionPreference.HD_720P -> profiles.filter { it.width == 1280 && it.height == 720 }
+        CameraResolutionPreference.FHD_1080P -> profiles.filter { it.width == 1920 && it.height == 1080 }
+    }
 
     private fun Collection<CameraProductProfile>.bestAtSameFps(): CameraProductProfile? =
         minWithOrNull(compareBy<CameraProductProfile> { it.qualityRank() }

@@ -21,6 +21,7 @@ import com.openjump.app.ui.result.TimelineSegmentKind
 fun AppLanguage.titleResource(): Int = when (this) {
     AppLanguage.SYSTEM -> R.string.settings_language_system
     AppLanguage.SPANISH -> R.string.settings_language_spanish
+    AppLanguage.SPANISH_LATIN_AMERICA -> R.string.settings_language_spanish_latin_america
     AppLanguage.ENGLISH -> R.string.settings_language_english
     AppLanguage.FRENCH -> R.string.settings_language_french
     AppLanguage.GERMAN -> R.string.settings_language_german
@@ -28,6 +29,9 @@ fun AppLanguage.titleResource(): Int = when (this) {
     AppLanguage.PORTUGUESE_PORTUGAL -> R.string.settings_language_portuguese_portugal
     AppLanguage.ITALIAN -> R.string.settings_language_italian
     AppLanguage.TURKISH -> R.string.settings_language_turkish
+    AppLanguage.POLISH -> R.string.settings_language_polish
+    AppLanguage.JAPANESE -> R.string.settings_language_japanese
+    AppLanguage.KOREAN -> R.string.settings_language_korean
 }
 
 @StringRes

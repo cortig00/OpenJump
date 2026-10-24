@@ -33,14 +33,14 @@ internal val LightPositiveContainer = Color(0xFFBBEDCC)
 internal val LightWarning = Color(0xFF8A4F00)      // amber family, uncertainty
 internal val LightWarningContainer = Color(0xFFFFDDB8)
 
-// Semantic roles that intentionally share the existing light values for now.
-// Dark mode separates interaction and data roles below without disturbing light.
+// Semantic roles: navigation + stepper use the brand-green family so the
+// lavender/blue data role stays reserved for data visualization only.
 internal val LightDataBlue = LightSecondary
 internal val LightDataBlueContainer = LightSecondaryContainer
-internal val LightNavigationSelectedContainer = LightSecondaryContainer
-internal val LightNavigationSelectedContent = LightOnSecondaryContainer
-internal val LightProgressCompletedContainer = LightSecondary
-internal val LightProgressCompletedContent = Color.White
+internal val LightNavigationSelectedContainer = LightPrimaryContainer
+internal val LightNavigationSelectedContent = LightOnPrimaryContainer
+internal val LightProgressCompletedContainer = LightPrimaryContainer
+internal val LightProgressCompletedContent = LightOnPrimaryContainer
 
 // ── Dark scheme ────────────────────────────────────────────────────────────
 internal val DarkPrimary = Color(0xFF67D1B8)

@@ -28,7 +28,11 @@ object CameraXProfileCatalog {
         val info = runCatching { provider.getCameraInfo(selector) }.getOrNull() ?: return null
         val cameraId = info.cameraIdentifier.toString()
         val qualities = listOf(Quality.HD, Quality.FHD)
-        val regular = capabilities(info, Recorder.VIDEO_CAPABILITIES_SOURCE_CODEC_CAPABILITIES)
+        // Same CAMCORDER_PROFILE source the runtime Recorder uses by default: discovery
+        // advertises the manufacturer-declared profile set the Recorder consults at bind
+        // time (declared profiles, not a runtime guarantee).
+        // High-speed below keeps its CAMCORDER_PROFILE default via getHighSpeedVideoCapabilities.
+        val regular = capabilities(info, CameraXRecorderConfig.videoCapabilitiesSource)
         val highSpeed = runCatching { Recorder.getHighSpeedVideoCapabilities(info) }.getOrNull()
         val profiles = buildList {
             addAll(profilesFor(info, cameraId, regular, qualities, 30, CameraSessionKind.NORMAL))

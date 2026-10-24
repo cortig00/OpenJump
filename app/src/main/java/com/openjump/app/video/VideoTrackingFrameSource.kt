@@ -12,6 +12,7 @@ import com.openjump.app.tracking.TrackingPerformanceProfiler
 import com.openjump.app.tracking.VideoPresentationGeometry
 import kotlin.coroutines.coroutineContext
 import kotlin.math.abs
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
@@ -25,6 +26,8 @@ class VideoTrackingFrameSource(
     private val performanceProfiler: TrackingPerformanceProfiler = TrackingPerformanceProfiler(enabled = false),
     /** Optional borrowed-bitmap observation; the receiver must copy anything it retains. */
     private val previewObserver: ((frameIndex: Int, ptsUs: Long, borrowedBitmap: Bitmap, rotationDegrees: Int) -> Unit)? = null,
+    /** Test-only decoder dispatcher seam. Defaults to Dispatchers.IO; production route unchanged. */
+    private val decoderDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : TrackingFrameSource {
 
     override val frameCount: Int get() = index.frameCount
@@ -42,15 +45,18 @@ class VideoTrackingFrameSource(
         VideoFrameSafety.indexedBatchSize(index.width, index.height, maximumTrackingDimension)
     }
 
-    override suspend fun frameAt(index: Int): DecodedTrackingFrame = withContext(Dispatchers.IO) {
+    override suspend fun frameAt(index: Int): DecodedTrackingFrame = withContext(decoderDispatcher) {
         require(index in 0 until frameCount)
         coroutineContext.ensureActive()
         val decoder = decoder()
         val bitmap = performanceProfiler.measure(TrackingPerformanceProfiler.Stage.DECODE) {
             if (Build.VERSION.SDK_INT >= 28 && retrieverFrameCount(decoder) == frameCount) {
+                performanceProfiler.count(TrackingPerformanceProfiler.Metric.INDEXED_SINGLE_ATTEMPTS)
                 frameAtIndex(decoder, index)
             } else {
-                frameAtTime(decoder, this@VideoTrackingFrameSource.index.timeOf(index))
+                frameAtTime(decoder, this@VideoTrackingFrameSource.index.timeOf(index)).also { decoded ->
+                    if (decoded != null) performanceProfiler.count(TrackingPerformanceProfiler.Metric.DECODE_FALLBACK_FRAMES)
+                }
             }
         } ?: error("No se pudo decodificar el frame ${index + 1}.")
         try {
@@ -65,7 +71,7 @@ class VideoTrackingFrameSource(
     override suspend fun forEachFrame(
         startIndex: Int,
         onFrame: suspend (DecodedTrackingFrame) -> Boolean,
-    ) = withContext(Dispatchers.IO) {
+    ) = withContext(decoderDispatcher) {
         require(startIndex in 0..frameCount)
         if (startIndex == frameCount) return@withContext
         val decoder = decoder()
@@ -76,19 +82,33 @@ class VideoTrackingFrameSource(
             while (next < frameCount) {
                 coroutineContext.ensureActive()
                 val count = minOf(VideoFrameSafety.indexedBatchSize(index.width, index.height, maximumTrackingDimension), frameCount - next)
+                performanceProfiler.count(TrackingPerformanceProfiler.Metric.DECODE_BATCH_ATTEMPTS)
                 val decodeStartedNs = System.nanoTime()
                 val bitmaps = try {
                     framesAtIndex(decoder, next, count)
                 } catch (_: RuntimeException) {
                     emptyList()
                 } finally {
+                    // Native attempt plus existing exception handling. Record the same interval once
+                    // per attempt and amortized per requested frame; never add these totals.
+                    val elapsedNs = System.nanoTime() - decodeStartedNs
                     performanceProfiler.record(
                         TrackingPerformanceProfiler.Stage.DECODE,
-                        System.nanoTime() - decodeStartedNs,
+                        elapsedNs,
                         repetitions = count,
                     )
+                    if (performanceProfiler.pipelineDetailsEnabled) {
+                        performanceProfiler.record(TrackingPerformanceProfiler.Stage.DECODE_BATCH, elapsedNs)
+                    }
                 }
+                // Returned includes partial native batches later discarded by the size gate.
+                performanceProfiler.count(
+                    TrackingPerformanceProfiler.Metric.DECODE_BATCH_RETURNED_FRAMES,
+                    bitmaps.size.toLong(),
+                )
                 if (bitmaps.size != count) {
+                    // An exception already collapsed to emptyList(), so both failure kinds count once here.
+                    performanceProfiler.count(TrackingPerformanceProfiler.Metric.DECODE_BATCH_FAILURES)
                     bitmaps.forEach(Bitmap::recycle)
                     break
                 }
@@ -122,6 +142,7 @@ class VideoTrackingFrameSource(
             val bitmap = performanceProfiler.measure(TrackingPerformanceProfiler.Stage.DECODE) {
                 frameAtTime(decoder, index.timeOf(next))
             } ?: error("No se pudo decodificar el frame ${next + 1}.")
+            performanceProfiler.count(TrackingPerformanceProfiler.Metric.DECODE_FALLBACK_FRAMES)
             val keepGoing = try {
                 coroutineContext.ensureActive()
                 validateDecodedBatch(listOf(bitmap))
@@ -143,14 +164,17 @@ class VideoTrackingFrameSource(
         }
     }
 
-    private fun decoder(): MediaMetadataRetriever = retriever ?: MediaMetadataRetriever().also {
-        it.setDataSource(context, uri)
-        retriever = it
-    }
+    private fun decoder(): MediaMetadataRetriever = retriever ?: performanceProfiler.measureDetailed(
+        TrackingPerformanceProfiler.Stage.DECODER_PREPARE,
+    ) {
+        MediaMetadataRetriever().also { it.setDataSource(context, uri) }
+    }.also { retriever = it }
 
     private fun retrieverFrameCount(decoder: MediaMetadataRetriever): Int? =
         if (Build.VERSION.SDK_INT >= 28) {
-            decoder.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_FRAME_COUNT)?.toIntOrNull()
+            performanceProfiler.measureDetailed(TrackingPerformanceProfiler.Stage.FRAME_COUNT_PROBE) {
+                decoder.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_FRAME_COUNT)?.toIntOrNull()
+            }
         } else {
             null
         }
@@ -206,7 +230,19 @@ class VideoTrackingFrameSource(
             },
             presentationWidth = presentation.width,
             presentationHeight = presentation.height,
-        )
+        ).also {
+            performanceProfiler.count(TrackingPerformanceProfiler.Metric.DELIVERED_FRAMES)
+            if (performanceProfiler.pipelineDetailsEnabled) {
+                performanceProfiler.count(deliveredBitmapConfig(bitmap))
+            }
+        }
+    }
+
+    /** Provenance only: which bitmap config the decoder actually returned for a delivered frame. */
+    private fun deliveredBitmapConfig(bitmap: Bitmap): TrackingPerformanceProfiler.Metric = when (bitmap.config) {
+        Bitmap.Config.RGB_565 -> TrackingPerformanceProfiler.Metric.DELIVERED_BITMAP_RGB565
+        Bitmap.Config.ARGB_8888 -> TrackingPerformanceProfiler.Metric.DELIVERED_BITMAP_ARGB8888
+        else -> TrackingPerformanceProfiler.Metric.DELIVERED_BITMAP_OTHER_CONFIG
     }
 
     /** Android normally applies container rotation. Dimension/aspect comparison handles codecs that do not. */

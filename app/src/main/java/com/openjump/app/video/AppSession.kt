@@ -93,6 +93,7 @@ object AppSession {
         testingParticipantIds: Set<Long> = emptySet(),
         athleteAnthropometrics: AthleteAnthropometrics = AthleteAnthropometrics(),
         targetAttempts: Int = 1,
+        markMovementStart: Boolean = false,
     ) {
         require(athleteId > 0L) { "Selecciona un atleta antes de comenzar." }
         require(targetAttempts in seriesAttemptRange) { "La serie debe tener entre 1 y 5 saltos." }
@@ -115,6 +116,7 @@ object AppSession {
             protocolId = protocolId,
             setup = setup,
             horizontalJump = if (protocolId == ProtocolId.HORIZONTAL) HorizontalJumpDraft() else null,
+            markMovementStart = markMovementStart,
         )
         _encoderDraft.value = null
         _encoderAnalysis.value = null
@@ -180,6 +182,7 @@ object AppSession {
         testingSessionId: Long? = null,
         testingParticipantIds: Set<Long> = emptySet(),
         athleteAnthropometrics: AthleteAnthropometrics = AthleteAnthropometrics(),
+        markMovementStart: Boolean = false,
     ) {
         require(targetAttempts in seriesAttemptRange) {
             "La comparación debe tener entre 1 y 5 saltos por pierna."
@@ -206,8 +209,12 @@ object AppSession {
             athleteAnthropometrics = athleteAnthropometrics,
             currentSide = MeasurementSide.LEFT,
             currentSideAttempt = 1,
+            markMovementStart = markMovementStart,
         )
-        _draft.value = bilateralDraft(rootKey, athleteId, testingSessionId, athleteAnthropometrics, MeasurementSide.LEFT, 1)
+        _draft.value = bilateralDraft(
+            rootKey, athleteId, testingSessionId, athleteAnthropometrics, MeasurementSide.LEFT, 1,
+            markMovementStart = markMovementStart,
+        )
         notifyVideoOwnershipChanged()
     }
 
@@ -220,6 +227,7 @@ object AppSession {
         val next = state.pendingDrafts[side] ?: bilateralDraft(
             state.sessionKey, state.athleteId, state.testingSessionId, state.athleteAnthropometrics,
             side, state.completedCount(side) + 1, current.source, current.videoUri,
+            markMovementStart = state.markMovementStart,
         )
         _bilateral.value = state.copy(
             currentSide = side,
@@ -280,6 +288,7 @@ object AppSession {
         _draft.value = updated.pendingDrafts[nextSide] ?: bilateralDraft(
             state.sessionKey, state.athleteId, state.testingSessionId, state.athleteAnthropometrics,
             nextSide, nextOrdinal, draft.source, draft.videoUri,
+            markMovementStart = state.markMovementStart,
         )
         setFrameIndex(updated.pendingFrameIndices[nextSide] ?: seriesResumeFrameIndex(draft, _currentFrameIndex.value))
         return BilateralAdvance.CONTINUE
@@ -307,6 +316,7 @@ object AppSession {
         sideOrdinal: Int,
         source: VideoSource? = null,
         videoUri: String? = null,
+        markMovementStart: Boolean = false,
     ) = MeasurementDraft(
         sessionKey = "$rootKey/$sideOrdinal-${side.storageKey}",
         protocolId = ProtocolId.UNILATERAL,
@@ -318,6 +328,7 @@ object AppSession {
         videoUri = videoUri,
         // Bilateral notes belong to the comparison root, never to an attempt.
         notes = null,
+        markMovementStart = markMovementStart,
     )
 
     /** Updates only the active jump draft note; video and analysis state are untouched. */
@@ -833,6 +844,8 @@ data class BilateralSessionState(
     val pendingFrameIndices: Map<MeasurementSide, Int> = emptyMap(),
     /** Note belongs to the bilateral root and is not copied to child attempts. */
     val notes: String? = null,
+    /** Marking-mode snapshot shared by every child draft of this comparison. */
+    val markMovementStart: Boolean = false,
 )
 
 fun BilateralSessionState.completedCount(side: MeasurementSide): Int = attempts.count { it.side == side }

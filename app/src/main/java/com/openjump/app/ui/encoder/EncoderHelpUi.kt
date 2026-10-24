@@ -29,6 +29,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -38,6 +39,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -55,56 +58,66 @@ import com.openjump.app.ui.theme.OpenJumpTypes
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EncoderMetricsHelpSheet(onDismiss: () -> Unit) {
+    // The dialog creates its own platform locals; retain the invoking screen's language/font.
+    val callerContext = LocalContext.current
+    val callerConfiguration = LocalConfiguration.current
+    val callerDensity = LocalDensity.current
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         contentWindowInsets = { WindowInsets.safeDrawing },
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .navigationBarsPadding()
-                .padding(start = Spacing.screenHorizontal, end = Spacing.screenHorizontal, bottom = Spacing.xl),
-            verticalArrangement = Arrangement.spacedBy(Spacing.md),
+        CompositionLocalProvider(
+            LocalContext provides callerContext,
+            LocalConfiguration provides callerConfiguration,
+            LocalDensity provides callerDensity,
         ) {
-            Text(stringResource(R.string.encoder_help_metrics_title), style = MaterialTheme.typography.titleLarge)
-            Text(
-                stringResource(R.string.encoder_help_metrics_intro),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            encoderMetricHelp.forEach { help ->
-                Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                    Text(
-                        stringResource(help.titleResource),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Text(
-                        stringResource(help.shortDescriptionResource),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .navigationBarsPadding()
+                    .padding(start = Spacing.screenHorizontal, end = Spacing.screenHorizontal, bottom = Spacing.xl),
+                verticalArrangement = Arrangement.spacedBy(Spacing.md),
+            ) {
+                Text(stringResource(R.string.encoder_help_metrics_title), style = MaterialTheme.typography.titleLarge)
+                Text(
+                    stringResource(R.string.encoder_help_metrics_intro),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                encoderMetricHelp.forEach { help ->
+                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                        Text(
+                            stringResource(help.titleResource),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            stringResource(help.shortDescriptionResource),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
+                HorizontalDivider()
+                Text(stringResource(R.string.encoder_help_quality_title), style = MaterialTheme.typography.titleMedium)
+                QualityHelp(
+                    RepetitionQuality.VALID,
+                    stringResource(R.string.encoder_help_valid_description),
+                )
+                QualityHelp(
+                    RepetitionQuality.UNCERTAIN,
+                    stringResource(R.string.encoder_help_uncertain_description),
+                )
+                QualityHelp(
+                    RepetitionQuality.INVALID,
+                    stringResource(R.string.encoder_help_invalid_description),
+                )
+                EncoderInfoNote(
+                    title = stringResource(R.string.encoder_help_important),
+                    body = stringResource(R.string.encoder_help_loss_caveat),
+                )
             }
-            HorizontalDivider()
-            Text(stringResource(R.string.encoder_help_quality_title), style = MaterialTheme.typography.titleMedium)
-            QualityHelp(
-                RepetitionQuality.VALID,
-                stringResource(R.string.encoder_help_valid_description),
-            )
-            QualityHelp(
-                RepetitionQuality.UNCERTAIN,
-                stringResource(R.string.encoder_help_uncertain_description),
-            )
-            QualityHelp(
-                RepetitionQuality.INVALID,
-                stringResource(R.string.encoder_help_invalid_description),
-            )
-            EncoderInfoNote(
-                title = stringResource(R.string.encoder_help_important),
-                body = stringResource(R.string.encoder_help_loss_caveat),
-            )
         }
     }
 }

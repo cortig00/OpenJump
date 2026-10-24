@@ -27,12 +27,13 @@ interface DataExportDao {
     @Query("SELECT a.id, a.displayName, a.birthDate, a.sex FROM athletes AS a WHERE EXISTS (SELECT 1 FROM assessments AS m WHERE m.athleteId = a.id) OR EXISTS (SELECT 1 FROM encoder_sessions AS s WHERE s.athleteId = a.id) ORDER BY a.id")
     suspend fun athleteRows(): List<ExportAthleteRow>
 
-    @Query("SELECT s.id, s.groupNameSnapshot FROM testing_sessions AS s WHERE EXISTS (SELECT 1 FROM assessments AS m WHERE m.testingSessionId = s.id) OR EXISTS (SELECT 1 FROM encoder_sessions AS e WHERE e.testingSessionId = s.id) ORDER BY s.id")
+    @Query("SELECT s.id, s.groupNameSnapshot FROM testing_sessions AS s WHERE EXISTS (SELECT 1 FROM assessments AS m WHERE m.testingSessionId = s.id) OR EXISTS (SELECT 1 FROM encoder_sessions AS e WHERE e.testingSessionId = s.id) OR EXISTS (SELECT 1 FROM fvp_assessments AS f WHERE f.testingSessionId = s.id) ORDER BY s.id")
     suspend fun testingRows(): List<ExportTestingRow>
 
     @Query("SELECT id, displayName, birthDate, sex FROM athletes WHERE (" +
         "EXISTS (SELECT 1 FROM assessments m WHERE m.athleteId = athletes.id) OR " +
-        "EXISTS (SELECT 1 FROM encoder_sessions s WHERE s.athleteId = athletes.id)) AND " +
+        "EXISTS (SELECT 1 FROM encoder_sessions s WHERE s.athleteId = athletes.id) OR " +
+        "EXISTS (SELECT 1 FROM fvp_assessments f WHERE f.athleteId = athletes.id)) AND " +
         "(:afterIdText IS NULL OR CAST(id AS TEXT) > :afterIdText) ORDER BY CAST(id AS TEXT) LIMIT :limit")
     suspend fun athletePage(afterIdText: String?, limit: Int): List<ExportAthleteRow>
 
@@ -109,6 +110,28 @@ interface DataExportDao {
         afterMetricUnit: String, limit: Int,
     ): List<ExportEncoderDetailRow>
 
+    /**
+     * Raíces F-V-P con su propio cursor keyset: la familia no comparte forma con `measurements`,
+     * así que se pagina aparte y se emite después de las familias jump/encoder.
+     */
+    @Query("SELECT " + FVP_ROOT_COLUMNS + " FROM fvp_assessments a WHERE (:afterDate IS NULL OR " +
+        "dateTime > :afterDate OR (dateTime = :afterDate AND CAST(a.id AS TEXT) > :afterIdText)) " +
+        "ORDER BY a.dateTime, CAST(a.id AS TEXT) LIMIT :limit")
+    suspend fun fvpPage(afterDate: Long?, afterIdText: String, limit: Int): List<ExportFvpAssessmentRow>
+
+    /** Condiciones con sus intentos (`LEFT JOIN`: una condición sin intentos viaja con `attemptId` NULL). */
+    @Query("SELECT " + FVP_DETAIL_COLUMNS + " FROM fvp_assessments a " +
+        "JOIN fvp_conditions c ON c.assessmentId = a.id " +
+        "LEFT JOIN fvp_attempts at ON at.conditionId = c.id " +
+        "WHERE a.id IN (:parentIds) AND (:afterDate IS NULL OR " +
+        "(a.dateTime, CAST(a.id AS TEXT), c.ordinal, c.id, COALESCE(at.ordinal, -1), COALESCE(at.id, -1)) > " +
+        "(:afterDate, :afterIdText, :afterConditionOrdinal, :afterConditionId, :afterAttemptOrdinal, :afterAttemptId)) " +
+        "ORDER BY a.dateTime, CAST(a.id AS TEXT), c.ordinal, c.id, at.ordinal, at.id LIMIT :limit")
+    suspend fun fvpDetailPage(
+        parentIds: List<Long>, afterDate: Long?, afterIdText: String, afterConditionOrdinal: Int,
+        afterConditionId: Long, afterAttemptOrdinal: Int, afterAttemptId: Long, limit: Int,
+    ): List<ExportFvpDetailRow>
+
     /** Compatibility API for backup-era tests; production uses the paged methods above. */
     @Transaction
     suspend fun snapshot(): DataExportSnapshot {
@@ -129,6 +152,78 @@ interface DataExportDao {
 }
 
 const val DATA_EXPORT_PAGE_SIZE = 256
+
+private const val FVP_ROOT_COLUMNS = "a.id AS id, CAST(a.id AS TEXT) AS idText, a.sessionKey AS sessionKey, " +
+    "a.athleteId AS athleteId, a.testingSessionId AS testingSessionId, a.protocolId AS protocolId, " +
+    "a.dateTime AS dateTime, a.bodyMassKg AS bodyMassKg, a.bodyMassSource AS bodyMassSource, " +
+    "a.pushOffMode AS pushOffMode, a.pushOffM AS pushOffM, a.pushOffSource AS pushOffSource, " +
+    "a.pushOffLandmark AS pushOffLandmark, a.pushOffLandmarkHeightCm AS pushOffLandmarkHeightCm, " +
+    "a.pushOffProtocol AS pushOffProtocol, a.pushOffMeasuredAt AS pushOffMeasuredAt, " +
+    "a.pushOffCrouchCm AS pushOffCrouchCm, a.pushOffExtendedCm AS pushOffExtendedCm, " +
+    "a.sourceFps AS sourceFps, a.algorithmVersion AS algorithmVersion, a.methodVersion AS methodVersion, " +
+    "a.conditionCount AS conditionCount, a.f0N AS f0N, a.slopeFv AS slopeFv, a.sfvNsPerM AS sfvNsPerM, " +
+    "a.v0Mps AS v0Mps, a.pmaxW AS pmaxW, a.r2 AS r2, a.vMinMps AS vMinMps, a.vMaxMps AS vMaxMps, " +
+    "a.fMinN AS fMinN, a.fMaxN AS fMaxN, a.f0RelNPerKg AS f0RelNPerKg, " +
+    "a.pmaxRelWPerKg AS pmaxRelWPerKg, a.warningsCsv AS warningsCsv, a.notes AS notes, " +
+    // Procedencia B0 (Room 12), 1:1 con las columnas de `fvp_assessments`.
+    "a.acquiredAt AS acquiredAt, a.acquisitionContextKind AS acquisitionContextKind, " +
+    "a.acquisitionContextKey AS acquisitionContextKey, a.bodyMassMeasurement AS bodyMassMeasurement, " +
+    "a.bodyMassMeasuredAt AS bodyMassMeasuredAt"
+
+private const val FVP_DETAIL_COLUMNS = "a.dateTime AS parentDateTime, a.id AS assessmentId, " +
+    "CAST(a.id AS TEXT) AS parentIdText, c.id AS conditionId, c.ordinal AS conditionOrdinal, " +
+    "c.conditionKey AS conditionKey, c.addedLoadKg AS addedLoadKg, c.totalMassKg AS totalMassKg, " +
+    "c.pushOffM AS pushOffM, c.selectedHeightM AS selectedHeightM, " +
+    "c.selectedAttemptOrdinal AS selectedAttemptOrdinal, at.id AS attemptId, at.ordinal AS attemptOrdinal, " +
+    "at.heightM AS heightM, at.method AS method, at.flightTimeS AS flightTimeS, at.sourceFps AS sourceFps, " +
+    "at.sourceAssessmentId AS sourceAssessmentId, at.sourceAttemptOrdinal AS sourceAttemptOrdinal, " +
+    "at.sourceProtocolId AS sourceProtocolId, at.valid AS attemptValid, " +
+    "at.exclusionReason AS exclusionReason, at.notes AS attemptNotes, " +
+    // Procedencia B0 (Room 12): condiciones e intentos, 1:1 con sus columnas.
+    "c.addedLoadSource AS addedLoadSource, c.addedLoadMeasuredAt AS addedLoadMeasuredAt, " +
+    "at.sourceRecordedAt AS sourceRecordedAt, at.sourceAthleteId AS sourceAthleteId, " +
+    "at.acquiredAt AS acquiredAt, at.reuseConfirmedAt AS reuseConfirmedAt, " +
+    "at.reuseConfirmationVersion AS reuseConfirmationVersion, at.takeoffPtsUs AS takeoffPtsUs, " +
+    "at.takeoffPreviousPtsUs AS takeoffPreviousPtsUs, at.takeoffNextPtsUs AS takeoffNextPtsUs, " +
+    "at.landingPtsUs AS landingPtsUs, at.landingPreviousPtsUs AS landingPreviousPtsUs, " +
+    "at.landingNextPtsUs AS landingNextPtsUs, at.timeMapping AS timeMapping, " +
+    "at.timeMappingEvidenceKey AS timeMappingEvidenceKey"
+
+/** Raíz F-V-P tal como la pagina [DataExportDao.fvpPage]. */
+data class ExportFvpAssessmentRow(
+    val id: Long, val idText: String, val sessionKey: String, val athleteId: Long?, val testingSessionId: Long?,
+    val protocolId: String, val dateTime: Long, val bodyMassKg: Double, val bodyMassSource: String,
+    val pushOffMode: String, val pushOffM: Double, val pushOffSource: String, val pushOffLandmark: String?,
+    val pushOffLandmarkHeightCm: Double?, val pushOffProtocol: String?, val pushOffMeasuredAt: Long?,
+    val pushOffCrouchCm: Double?, val pushOffExtendedCm: Double?, val sourceFps: Double?,
+    val algorithmVersion: String, val methodVersion: String, val conditionCount: Int, val f0N: Double,
+    val slopeFv: Double, val sfvNsPerM: Double, val v0Mps: Double?, val pmaxW: Double?, val r2: Double?,
+    val vMinMps: Double, val vMaxMps: Double, val fMinN: Double, val fMaxN: Double,
+    val f0RelNPerKg: Double?, val pmaxRelWPerKg: Double?, val warningsCsv: String, val notes: String? = null,
+    // Procedencia B0 (Room 12). Sin default: si falta en la proyeccion, Room falla al compilar.
+    val acquiredAt: Long?, val acquisitionContextKind: String, val acquisitionContextKey: String?,
+    val bodyMassMeasurement: String, val bodyMassMeasuredAt: Long?,
+)
+
+/** Fila plana condición+intento de la familia F-V-P. */
+data class ExportFvpDetailRow(
+    val parentDateTime: Long, val assessmentId: Long, val parentIdText: String, val conditionId: Long,
+    val conditionOrdinal: Int, val conditionKey: String, val addedLoadKg: Double, val totalMassKg: Double,
+    val pushOffM: Double, val selectedHeightM: Double, val selectedAttemptOrdinal: Int?,
+    val attemptId: Long?, val attemptOrdinal: Int?, val heightM: Double?, val method: String?,
+    val flightTimeS: Double?, val sourceFps: Double?, val sourceAssessmentId: Long?,
+    val sourceAttemptOrdinal: Int?, val sourceProtocolId: String?, val attemptValid: Boolean?,
+    val exclusionReason: String?, val attemptNotes: String?,
+    // Procedencia B0 (Room 12). Sin default: si falta en la proyeccion, Room falla al compilar.
+    val addedLoadSource: String, val addedLoadMeasuredAt: Long?,
+    val sourceRecordedAt: Long?, val sourceAthleteId: Long?, val acquiredAt: Long?,
+    val reuseConfirmedAt: Long?, val reuseConfirmationVersion: String?,
+    val takeoffPtsUs: Long?, val takeoffPreviousPtsUs: Long?, val takeoffNextPtsUs: Long?,
+    val landingPtsUs: Long?, val landingPreviousPtsUs: Long?, val landingNextPtsUs: Long?,
+    // `timeMapping` llega NULL en una condición SIN intentos (LEFT JOIN): solo se usa cuando
+    // `attemptId != null`, donde la columna Room es NOT NULL.
+    val timeMapping: String?, val timeMappingEvidenceKey: String?,
+)
 
 data class ExportAssessmentRow(val id: Long, val athleteId: Long?, val testingSessionId: Long?, val protocolId: String, val dateTime: Long, val primaryMetricKey: String, val primaryMetricValue: Double, val primaryMetricUnit: String, val notes: String? = null)
 data class ExportAttemptRow(val id: Long, val assessmentId: Long, val ordinal: Int, val side: String?, val dropHeightCm: Double?, val distanceCm: Double?)

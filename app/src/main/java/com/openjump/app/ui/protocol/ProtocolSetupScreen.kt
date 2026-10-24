@@ -75,6 +75,8 @@ fun ProtocolSetupScreen(
     onAthleteSelected: (Long) -> Unit,
     onImport: (Uri, ProtocolSetup, Long, Int) -> Unit,
     onRecord: (ProtocolSetup, Long, Int) -> Unit,
+    /** Current "mark movement start" preference; it shapes the marking summary before starting. */
+    markMovementStart: Boolean = false,
 ) {
     var sideName by rememberSaveable { mutableStateOf<String?>(null) }
     var dropHeightInput by rememberSaveable(stateSaver = UnitAwareNumericInputState.Saver) {
@@ -83,7 +85,9 @@ fun ProtocolSetupScreen(
     var setupAthleteId by rememberSaveable(selectedAthleteId) { mutableStateOf(selectedAthleteId) }
     var targetAttempts by rememberSaveable { mutableStateOf(1) }
     var showFullGuide by rememberSaveable { mutableStateOf(false) }
-    val guidance = remember(definition.id) { ProtocolGuidanceCatalog.forProtocol(definition.id) }
+    val guidance = remember(definition.id, markMovementStart) {
+        ProtocolGuidanceCatalog.forProtocol(definition.id, markMovementStart)
+    }
     // Blocks repeated taps only while this setup destination is actively composed.
     // Returning from Camera/Mark creates a fresh unlocked setup state.
     var startDispatched by remember { mutableStateOf(false) }

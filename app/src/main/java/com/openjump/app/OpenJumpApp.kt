@@ -3,6 +3,7 @@ package com.openjump.app
 import android.app.Application
 import com.openjump.app.data.AthleteRepository
 import com.openjump.app.data.EncoderRepository
+import com.openjump.app.data.FvpRepository
 import com.openjump.app.data.JumpDatabase
 import com.openjump.app.data.SelectedAthleteStore
 import com.openjump.app.data.JumpRepository
@@ -20,7 +21,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class OpenJumpApp : Application() {
+open class OpenJumpApp : Application() {
 
     // Initialize in onCreate (after Context attachment), before any Activity can open Room.
     val onboardingPreferencesStore: OnboardingPreferencesStore by lazy { OnboardingPreferencesStore(this) }
@@ -59,6 +60,7 @@ class OpenJumpApp : Application() {
     val testingRepository: com.openjump.app.data.TestingRepository by lazy {
         com.openjump.app.data.TestingRepository(database.testingDao(), database.groupDao())
     }
+    val fvpRepository: FvpRepository by lazy { FvpRepository(database.fvpDao()) }
     val selectedAthleteStore: SelectedAthleteStore by lazy { SelectedAthleteStore(this) }
 
     val experienceModeStore: ExperienceModeStore by lazy { ExperienceModeStore(this) }

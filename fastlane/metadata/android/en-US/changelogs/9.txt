@@ -1,0 +1,1 @@
+OpenJump 1.2.0: video jump analysis with six protocols, athlete profiles, history, comparisons and manual backups. Camera, frame selector and export improvements. The F-V-P profile is not available in this release. Offline processing on your device.

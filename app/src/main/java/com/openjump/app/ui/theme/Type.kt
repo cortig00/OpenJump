@@ -2,7 +2,6 @@ package com.openjump.app.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
@@ -63,6 +62,17 @@ object OpenJumpTypes {
     val MetricLabel =
         TextStyle(fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.Medium, letterSpacing = 0.4.sp)
 
-    /** Timestamps / technical values. */
-    val Timestamp = TextStyle(fontSize = 13.sp, lineHeight = 18.sp, fontFamily = FontFamily.Monospace)
+    /**
+     * Numeric timestamps / technical values use the sans family with tabular
+     * figures (`tnum`) so dates, clocks and detail values align without the
+     * three-family mix. Monospace is reserved for documented legal/code blocks
+     * only (for example the license text in `LicenseScreen`); result values,
+     * frame captions and detail rows must use this token instead of ad-hoc
+     * `FontFamily.Monospace`.
+     */
+    val Timestamp = TextStyle(
+        fontSize = 13.sp,
+        lineHeight = 18.sp,
+        fontFeatureSettings = "tnum",
+    )
 }

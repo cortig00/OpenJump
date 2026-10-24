@@ -40,6 +40,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.openjump.app.FeatureFlags
 import com.openjump.app.R
 import com.openjump.app.data.PersonalRecord
 import com.openjump.app.ui.athletes.PersonalRecordFeedbackBanner
@@ -67,6 +68,8 @@ fun HomeScreen(
     onHistorySelected: () -> Unit,
     onMeasurementSelected: (Long) -> Unit,
     onEncoderSessionSelected: (Long) -> Unit,
+    onFvpSelected: () -> Unit = {},
+    fvpProfileEnabled: Boolean = FeatureFlags.fvpEnabled,
     viewModel: HomeViewModel = viewModel(factory = HomeViewModel.Factory),
 ) {
     val recentActivity by viewModel.recentActivity.collectAsState()
@@ -154,6 +157,13 @@ fun HomeScreen(
                             color = MaterialTheme.colorScheme.outlineVariant,
                         )
                         EncoderEntry(onEncoderSelected)
+                        if (fvpProfileEnabled) {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(start = 72.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant,
+                            )
+                            FvpEntry(onFvpSelected)
+                        }
                     }
                 }
             }
@@ -216,6 +226,16 @@ private fun JumpEntry(onClick: () -> Unit) = AnalysisEntryRow(
 private fun EncoderEntry(onClick: () -> Unit) = AnalysisEntryRow(
     title = stringResource(R.string.labs_name),
     description = stringResource(R.string.labs_home_description),
+    icon = R.drawable.ic_encoder,
+    experimental = true,
+    onClick = onClick,
+)
+
+/** Entrada al flujo experimental F-V-P: misma fila que Encoder/Labs, con la etiqueta obligatoria. */
+@Composable
+private fun FvpEntry(onClick: () -> Unit) = AnalysisEntryRow(
+    title = stringResource(R.string.fvp_title),
+    description = stringResource(R.string.fvp_experimental_label),
     icon = R.drawable.ic_encoder,
     experimental = true,
     onClick = onClick,

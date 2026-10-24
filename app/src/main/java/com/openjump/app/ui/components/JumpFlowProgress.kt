@@ -62,10 +62,26 @@ fun JumpFlowProgress(
         R.string.jump_flow_mark,
         R.string.jump_flow_result,
     ).map { stringResource(it) }
+    OpenJumpFlowProgress(
+        labels = labels,
+        currentStepIndex = currentStep.ordinal,
+        modifier = modifier,
+    )
+}
+
+/** Shared numbered timeline; each flow owns its labels and zero-based current position. */
+@Composable
+fun OpenJumpFlowProgress(
+    labels: List<String>,
+    currentStepIndex: Int,
+    modifier: Modifier = Modifier,
+) {
+    require(labels.isNotEmpty()) { "A flow must have at least one step" }
+    require(currentStepIndex in labels.indices) { "Current step must belong to the flow" }
     val progressDescription = stringResource(
         R.string.jump_flow_progress,
-        currentStep.ordinal + 1,
-        JumpFlowStep.entries.size,
+        currentStepIndex + 1,
+        labels.size,
     )
     val fontScale = LocalDensity.current.fontScale
 
@@ -81,7 +97,7 @@ fun JumpFlowProgress(
             val trackHeight = if (useTwoLabelLines) 84.dp else 64.dp
             ConnectedStepTimeline(
                 labels = labels,
-                currentStep = currentStep,
+                currentStepIndex = currentStepIndex,
                 allowTwoLabelLines = useTwoLabelLines,
                 trackHeight = trackHeight,
             )
@@ -92,13 +108,13 @@ fun JumpFlowProgress(
 @Composable
 private fun ConnectedStepTimeline(
     labels: List<String>,
-    currentStep: JumpFlowStep,
+    currentStepIndex: Int,
     allowTwoLabelLines: Boolean,
     trackHeight: Dp,
 ) {
     val trackColor = MaterialTheme.colorScheme.outlineVariant
     val completedTrackColor = OpenJumpTheme.colors.progressCompletedContainer.copy(alpha = 0.72f)
-    val progressFraction = currentStep.ordinal.toFloat() / (labels.size - 1).coerceAtLeast(1)
+    val progressFraction = currentStepIndex.toFloat() / (labels.size - 1).coerceAtLeast(1)
 
     Box(
         modifier = Modifier
@@ -136,12 +152,11 @@ private fun ConnectedStepTimeline(
 
         Row(Modifier.fillMaxSize()) {
             labels.forEachIndexed { index, label ->
-                val step = JumpFlowStep.entries[index]
                 FlowStep(
-                    step = step,
+                    stepIndex = index,
                     label = label,
-                    isCompleted = step.ordinal < currentStep.ordinal,
-                    isActive = step == currentStep,
+                    isCompleted = index < currentStepIndex,
+                    isActive = index == currentStepIndex,
                     allowTwoLabelLines = allowTwoLabelLines,
                     modifier = Modifier.weight(1f),
                 )
@@ -152,7 +167,7 @@ private fun ConnectedStepTimeline(
 
 @Composable
 private fun FlowStep(
-    step: JumpFlowStep,
+    stepIndex: Int,
     label: String,
     isCompleted: Boolean,
     isActive: Boolean,
@@ -166,7 +181,7 @@ private fun FlowStep(
     }
     val stepDescription = stringResource(
         R.string.jump_flow_step,
-        step.ordinal + 1,
+        stepIndex + 1,
         label,
         state,
     )
@@ -181,7 +196,7 @@ private fun FlowStep(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         StepNode(
-            number = step.ordinal + 1,
+            number = stepIndex + 1,
             isCompleted = isCompleted,
             isActive = isActive,
         )

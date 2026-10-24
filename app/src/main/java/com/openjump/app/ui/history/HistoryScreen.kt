@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -49,6 +50,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -67,6 +69,7 @@ import com.openjump.app.ui.currentAppLocale
 import com.openjump.app.ui.components.OpenJumpDateField
 import com.openjump.app.ui.components.OpenJumpTopAppBar
 import com.openjump.app.ui.theme.OpenJumpTypes
+import com.openjump.app.ui.theme.ShapeTokens
 import com.openjump.app.ui.theme.Spacing
 import com.openjump.app.ui.titleResource
 import java.time.Instant
@@ -82,6 +85,11 @@ fun HistoryScreen(
     val state by viewModel.state.collectAsState()
     val athletes by viewModel.athletes.collectAsState()
     val groups by viewModel.groups.collectAsState()
+    // F035: pending confirmed deletion (cancel = null, no effect) and failure retry.
+    // The list is preserved until EncoderRepository.deleteSession succeeds.
+    val deletingIds by viewModel.deletingIds.collectAsState()
+    val deleteFailedId by viewModel.deleteFailedId.collectAsState()
+    var pendingDeleteId by rememberSaveable { mutableStateOf<Long?>(null) }
     var showFilters by rememberSaveable { mutableStateOf(false) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refresh() }
 
@@ -122,17 +130,36 @@ fun HistoryScreen(
                     OutlinedTextField(
                         value = state.filters.search,
                         onValueChange = { viewModel.setFilters(state.filters.copy(search = it)) },
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).heightIn(min = 56.dp),
                         singleLine = true,
-                        label = { Text(stringResource(R.string.history_search)) },
+                        // Pastilla compartida con Filtros (F-015): misma forma/tipo y
+                        // altura, sin cambiar la lógica de filtrado. F-009 se
+                        // conserva: etiqueta en una línea con elipsis.
+                        shape = ShapeTokens.full,
+                        // En pantallas compactas la etiqueta se partía en dos líneas
+                        // dentro del campo. Se fuerza una sola línea con elipsis sin
+                        // cambiar el copy. Ver hallazgo F-009.
+                        label = {
+                            Text(
+                                stringResource(R.string.history_search),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        },
                     )
-                    OutlinedButton(onClick = { showFilters = true }, modifier = Modifier.heightIn(min = 56.dp)) {
+                    OutlinedButton(
+                        onClick = { showFilters = true },
+                        modifier = Modifier.heightIn(min = 56.dp),
+                        shape = ShapeTokens.full,
+                    ) {
                         Text(
                             if (state.filters.activeCount > 0) {
                                 stringResource(R.string.history_filters_count, state.filters.activeCount)
                             } else {
                                 stringResource(R.string.history_filters)
                             },
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }
@@ -172,6 +199,7 @@ fun HistoryScreen(
                         is MeasurementHistoryItem.Encoder -> "encoder-${item.id}"
                     }
                 }) { index, item ->
+                    val deletable = isDeletableEmptyEncoderRow(item)
                     HistoryEntryRow(
                         item,
                         onClick = {
@@ -181,11 +209,63 @@ fun HistoryScreen(
                             }
                         },
                         showDivider = index < state.items.lastIndex,
+                        // F035: empty Encoder rows offer Delete directly; success
+                        // refreshes inside the ViewModel (current filters/cursor reset).
+                        onDelete = if (deletable) ({ pendingDeleteId = item.id }) else null,
+                        deleting = deletable && item.id in deletingIds,
                     )
                 }
                 historyListFooter(state, onLoadMore = viewModel::loadMore)
             }
         }
+    }
+
+    // F035: confirm uses the existing saved-detail copy; cancel only dismisses.
+    val pendingId = pendingDeleteId
+    if (pendingId != null) {
+        AlertDialog(
+            onDismissRequest = { pendingDeleteId = null },
+            title = { Text(stringResource(R.string.result_delete_title)) },
+            text = { Text(stringResource(R.string.result_delete_body)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingDeleteId = null
+                        viewModel.deleteEncoderSession(pendingId)
+                    },
+                ) {
+                    Text(
+                        stringResource(R.string.result_delete_action),
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDeleteId = null }) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            },
+        )
+    }
+
+    // F035: failure preserves the retained list; retry reuses the pending cursor path.
+    val failedId = deleteFailedId
+    if (failedId != null) {
+        AlertDialog(
+            onDismissRequest = viewModel::acknowledgeDeleteFailure,
+            title = { Text(stringResource(R.string.result_delete_title)) },
+            text = { Text(stringResource(R.string.result_delete_error)) },
+            confirmButton = {
+                TextButton(onClick = { viewModel.deleteEncoderSession(failedId) }) {
+                    Text(stringResource(R.string.common_retry))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::acknowledgeDeleteFailure) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            },
+        )
     }
 }
 

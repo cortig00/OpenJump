@@ -24,8 +24,11 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         AthleteGroupCrossRef::class,
         TestingSessionEntity::class,
         TestingParticipantEntity::class,
+        FvpAssessmentEntity::class,
+        FvpConditionEntity::class,
+        FvpAttemptEntity::class,
     ],
-    version = 10,
+    version = 12,
     exportSchema = true,
 )
 abstract class JumpDatabase : RoomDatabase() {
@@ -35,6 +38,7 @@ abstract class JumpDatabase : RoomDatabase() {
     abstract fun athleteDao(): AthleteDao
     abstract fun groupDao(): GroupDao
     abstract fun testingDao(): TestingDao
+    abstract fun fvpDao(): FvpDao
     abstract fun dataExportDao(): com.openjump.app.data.export.DataExportDao
     abstract fun manualBackupDao(): com.openjump.app.data.backup.ManualBackupDao
 
@@ -724,6 +728,171 @@ abstract class JumpDatabase : RoomDatabase() {
             }
         }
 
+        /** v10→v11 is strictly additive: the three F-V-P tables plus their indices, no legacy data touched. */
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS fvp_assessments (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        sessionKey TEXT NOT NULL,
+                        athleteId INTEGER,
+                        testingSessionId INTEGER,
+                        protocolId TEXT NOT NULL,
+                        dateTime INTEGER NOT NULL,
+                        bodyMassKg REAL NOT NULL,
+                        bodyMassSource TEXT NOT NULL,
+                        pushOffMode TEXT NOT NULL,
+                        pushOffM REAL NOT NULL,
+                        pushOffSource TEXT NOT NULL,
+                        pushOffLandmark TEXT,
+                        pushOffLandmarkHeightCm REAL,
+                        pushOffProtocol TEXT,
+                        pushOffMeasuredAt INTEGER,
+                        pushOffCrouchCm REAL,
+                        pushOffExtendedCm REAL,
+                        sourceFps REAL,
+                        algorithmVersion TEXT NOT NULL,
+                        methodVersion TEXT NOT NULL,
+                        notes TEXT,
+                        f0N REAL NOT NULL,
+                        slopeFv REAL NOT NULL,
+                        sfvNsPerM REAL NOT NULL,
+                        v0Mps REAL,
+                        pmaxW REAL,
+                        r2 REAL,
+                        conditionCount INTEGER NOT NULL,
+                        vMinMps REAL NOT NULL,
+                        vMaxMps REAL NOT NULL,
+                        fMinN REAL NOT NULL,
+                        fMaxN REAL NOT NULL,
+                        f0RelNPerKg REAL,
+                        pmaxRelWPerKg REAL,
+                        warningsCsv TEXT NOT NULL,
+                        FOREIGN KEY (athleteId) REFERENCES athletes (id)
+                            ON UPDATE NO ACTION ON DELETE NO ACTION
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS index_fvp_assessments_sessionKey " +
+                        "ON fvp_assessments (sessionKey)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_fvp_assessments_athleteId_dateTime_id " +
+                        "ON fvp_assessments (athleteId, dateTime, id)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_fvp_assessments_testingSessionId_dateTime_id " +
+                        "ON fvp_assessments (testingSessionId, dateTime, id)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_fvp_assessments_dateTime_id " +
+                        "ON fvp_assessments (dateTime, id)",
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS fvp_conditions (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        assessmentId INTEGER NOT NULL,
+                        ordinal INTEGER NOT NULL,
+                        conditionKey TEXT NOT NULL,
+                        addedLoadKg REAL NOT NULL,
+                        totalMassKg REAL NOT NULL,
+                        pushOffM REAL NOT NULL,
+                        selectedHeightM REAL NOT NULL,
+                        selectedAttemptOrdinal INTEGER,
+                        FOREIGN KEY (assessmentId) REFERENCES fvp_assessments (id)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_fvp_conditions_assessmentId " +
+                        "ON fvp_conditions (assessmentId)",
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS index_fvp_conditions_assessmentId_ordinal " +
+                        "ON fvp_conditions (assessmentId, ordinal)",
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS index_fvp_conditions_assessmentId_conditionKey " +
+                        "ON fvp_conditions (assessmentId, conditionKey)",
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS fvp_attempts (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        conditionId INTEGER NOT NULL,
+                        ordinal INTEGER NOT NULL,
+                        heightM REAL NOT NULL,
+                        method TEXT NOT NULL,
+                        flightTimeS REAL,
+                        sourceFps REAL,
+                        sourceAssessmentId INTEGER,
+                        sourceAttemptOrdinal INTEGER,
+                        sourceProtocolId TEXT,
+                        valid INTEGER NOT NULL,
+                        exclusionReason TEXT,
+                        notes TEXT,
+                        FOREIGN KEY (conditionId) REFERENCES fvp_conditions (id)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_fvp_attempts_conditionId " +
+                        "ON fvp_attempts (conditionId)",
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS index_fvp_attempts_conditionId_ordinal " +
+                        "ON fvp_attempts (conditionId, ordinal)",
+                )
+            }
+        }
+
+        /**
+         * v11→v12 is strictly additive: provenance/acquisition columns on the three F-V-P tables.
+         * Existing rows keep NULL on the optional columns and the 'UNKNOWN' literal on the four
+         * enum-like TEXT columns; no legacy row, index or foreign key is touched.
+         */
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE fvp_assessments ADD COLUMN acquiredAt INTEGER")
+                db.execSQL(
+                    "ALTER TABLE fvp_assessments ADD COLUMN acquisitionContextKind " +
+                        "TEXT NOT NULL DEFAULT 'UNKNOWN'",
+                )
+                db.execSQL("ALTER TABLE fvp_assessments ADD COLUMN acquisitionContextKey TEXT")
+                db.execSQL(
+                    "ALTER TABLE fvp_assessments ADD COLUMN bodyMassMeasurement " +
+                        "TEXT NOT NULL DEFAULT 'UNKNOWN'",
+                )
+                db.execSQL("ALTER TABLE fvp_assessments ADD COLUMN bodyMassMeasuredAt INTEGER")
+                db.execSQL(
+                    "ALTER TABLE fvp_conditions ADD COLUMN addedLoadSource " +
+                        "TEXT NOT NULL DEFAULT 'UNKNOWN'",
+                )
+                db.execSQL("ALTER TABLE fvp_conditions ADD COLUMN addedLoadMeasuredAt INTEGER")
+                db.execSQL("ALTER TABLE fvp_attempts ADD COLUMN sourceRecordedAt INTEGER")
+                db.execSQL("ALTER TABLE fvp_attempts ADD COLUMN sourceAthleteId INTEGER")
+                db.execSQL("ALTER TABLE fvp_attempts ADD COLUMN acquiredAt INTEGER")
+                db.execSQL("ALTER TABLE fvp_attempts ADD COLUMN reuseConfirmedAt INTEGER")
+                db.execSQL("ALTER TABLE fvp_attempts ADD COLUMN reuseConfirmationVersion TEXT")
+                db.execSQL("ALTER TABLE fvp_attempts ADD COLUMN takeoffPtsUs INTEGER")
+                db.execSQL("ALTER TABLE fvp_attempts ADD COLUMN takeoffPreviousPtsUs INTEGER")
+                db.execSQL("ALTER TABLE fvp_attempts ADD COLUMN takeoffNextPtsUs INTEGER")
+                db.execSQL("ALTER TABLE fvp_attempts ADD COLUMN landingPtsUs INTEGER")
+                db.execSQL("ALTER TABLE fvp_attempts ADD COLUMN landingPreviousPtsUs INTEGER")
+                db.execSQL("ALTER TABLE fvp_attempts ADD COLUMN landingNextPtsUs INTEGER")
+                db.execSQL(
+                    "ALTER TABLE fvp_attempts ADD COLUMN timeMapping " +
+                        "TEXT NOT NULL DEFAULT 'UNKNOWN'",
+                )
+                db.execSQL("ALTER TABLE fvp_attempts ADD COLUMN timeMappingEvidenceKey TEXT")
+            }
+        }
+
         @Volatile
         private var instance: JumpDatabase? = null
 
@@ -743,6 +912,8 @@ abstract class JumpDatabase : RoomDatabase() {
                     MIGRATION_7_8,
                     MIGRATION_8_9,
                     MIGRATION_9_10,
+                    MIGRATION_10_11,
+                    MIGRATION_11_12,
                 )
                     .build()
                     .also { instance = it }

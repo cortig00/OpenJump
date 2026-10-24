@@ -2,6 +2,7 @@ package com.openjump.app.ui.protocol
 
 import androidx.annotation.StringRes
 import com.openjump.app.R
+import com.openjump.app.protocol.EventType
 import com.openjump.app.protocol.ProtocolAvailability
 import com.openjump.app.protocol.ProtocolCatalog
 import com.openjump.app.protocol.ProtocolId
@@ -16,7 +17,12 @@ data class ProtocolGuidance(
 )
 
 object ProtocolGuidanceCatalog {
-    fun forProtocol(protocolId: ProtocolId): ProtocolGuidance? = guidance[protocolId]
+    /**
+     * [markMovementStart] mirrors the preference snapshot of the session about to start, so the
+     * marking summary lists only the events the selector will actually ask for.
+     */
+    fun forProtocol(protocolId: ProtocolId, markMovementStart: Boolean = false): ProtocolGuidance? =
+        guidance[protocolId]?.withMarkingMode(protocolId, markMovementStart)
 
     fun available(): Map<ProtocolId, ProtocolGuidance> = guidance.filterKeys { id ->
         ProtocolCatalog.find(id).availability == ProtocolAvailability.AVAILABLE
@@ -63,4 +69,25 @@ object ProtocolGuidanceCatalog {
     private fun guidance(
         first: Int, second: Int, third: Int, camera: Int, marking: Int, limits: Int, illustration: Int,
     ) = ProtocolGuidance(listOf(first, second, third), camera, marking, limits, illustration)
+
+    /** Only the protocols whose optional start can be left unmarked change their summary. */
+    private fun ProtocolGuidance.withMarkingMode(
+        protocolId: ProtocolId,
+        markMovementStart: Boolean,
+    ): ProtocolGuidance {
+        if (markMovementStart) return this
+        // ASYMMETRY is a comparison shell over UNILATERAL drafts: those always carry the optional
+        // start, so the bilateral flow follows the same preference even though its own definition
+        // declares no events.
+        val hadOptionalStart = protocolId == ProtocolId.ASYMMETRY ||
+            EventType.MOVEMENT_START in ProtocolCatalog.find(protocolId).optionalEvents
+        if (!hadOptionalStart) return this
+        return copy(
+            markingSummary = if (protocolId == ProtocolId.ASYMMETRY) {
+                R.string.guidance_mark_events_bilateral_no_start
+            } else {
+                R.string.guidance_mark_events_sj
+            },
+        )
+    }
 }

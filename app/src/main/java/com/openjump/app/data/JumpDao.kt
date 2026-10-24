@@ -7,6 +7,28 @@ import androidx.room.Query
 import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 
+/**
+ * Fila cruda de un intento de salto reutilizable como medicion de una condicion F-V-P.
+ *
+ * `heightCm` es el valor canonico persistido de `attempt_metrics.HEIGHT_CM`; `detectedFps` son los
+ * fps efectivos detectados del video origen. `flightTimeMs` es el valor persistido de
+ * `attempt_metrics.FLIGHT_TIME_MS` del MISMO intento, o `null` si esa metrica no existe: la
+ * ausencia se propaga como ausencia (nunca se fabrica un tiempo de vuelo). El mapeo a dominio vive
+ * en `JumpRepository.reusableMeasurementsFor`.
+ */
+data class ReusableJumpMeasurementRow(
+    val assessmentId: Long,
+    val attemptOrdinal: Int,
+    val dateTime: Long,
+    val heightCm: Double,
+    val flightTimeMs: Double?,
+    val detectedFps: Int,
+    val side: String?,
+    val protocolId: String,
+    val hasVideoUri: Boolean,
+    val notes: String?,
+)
+
 @Dao
 interface JumpDao {
 
@@ -418,4 +440,34 @@ interface JumpDao {
         cursorId: Long,
         cursorKind: String,
     ): List<AthleteHistoryPage>
+
+    /**
+     * Intentos de salto de un protocolo reutilizables como medicion de una condicion F-V-P.
+     *
+     * Una fila por intento con metrica de altura (`HEIGHT_CM`, ordinal 0); se ordena por fecha
+     * descendente y se acota con `limit` (nunca se lee el historial completo). `protocolId` filtra
+     * el protocolo (SJ canonico para F-V-P); la altura se devuelve en cm tal como se persistio.
+     *
+     * El tiempo de vuelo del mismo intento (`FLIGHT_TIME_MS`, ordinal 0) se lee con un LEFT JOIN:
+     * un intento sin esa metrica devuelve `flightTimeMs = null`, nunca un valor inventado ni el de
+     * otro intento.
+     */
+    @Query(
+        """
+        SELECT a.id AS assessmentId, t.ordinal AS attemptOrdinal, a.dateTime AS dateTime,
+               m.value AS heightCm, t.detectedFps AS detectedFps, t.side AS side,
+               a.protocolId AS protocolId,
+               CASE WHEN t.videoUri IS NOT NULL AND TRIM(t.videoUri) <> '' THEN 1 ELSE 0 END AS hasVideoUri,
+               a.notes AS notes,
+               ft.value AS flightTimeMs
+        FROM assessments AS a
+        INNER JOIN attempts AS t ON t.assessmentId = a.id
+        INNER JOIN attempt_metrics AS m ON m.attemptId = t.id AND m.`key` = 'HEIGHT_CM' AND m.ordinal = 0
+        LEFT JOIN attempt_metrics AS ft ON ft.attemptId = t.id AND ft.`key` = 'FLIGHT_TIME_MS' AND ft.ordinal = 0
+        WHERE a.athleteId = :athleteId AND a.protocolId = :protocolId
+        ORDER BY a.dateTime DESC, a.id DESC, t.ordinal ASC
+        LIMIT :limit
+        """,
+    )
+    suspend fun reusableMeasurementsFor(athleteId: Long, protocolId: String, limit: Int): List<ReusableJumpMeasurementRow>
 }

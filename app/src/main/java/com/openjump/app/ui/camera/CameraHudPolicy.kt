@@ -19,7 +19,16 @@ internal object CameraHudPolicy {
         JumpCameraState.FINALIZING -> CameraHudVisibility(false, false, false, false, false)
         JumpCameraState.STARTING -> CameraHudVisibility(false, false, false, true, true)
         JumpCameraState.BINDING -> CameraHudVisibility(true, false, false, true, true)
-        JumpCameraState.BLOCKED, JumpCameraState.ERROR ->
+        // BLOCKED without camera permission keeps quick controls hidden; the retry
+        // path re-requests permission instead of offering FPS/resolution.
+        JumpCameraState.BLOCKED ->
             CameraHudVisibility(true, false, false, false, false)
+        // ERROR keeps quick FPS/resolution controls visible (no REC, no active caption)
+        // so a manual impossible tuple (e.g. 720p rejected by the
+        // incompatibility cache while FHD 120 stays valid) can be changed to Auto or
+        // another supported tuple before retry. BINDING/STARTING/RECORDING/FINALIZING
+        // stay hidden per baseline. No silent FPS/resolution switch and no cache reset here.
+        JumpCameraState.ERROR ->
+            CameraHudVisibility(true, true, false, false, false)
     }
 }

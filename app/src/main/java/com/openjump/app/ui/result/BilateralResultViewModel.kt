@@ -11,6 +11,7 @@ import com.openjump.app.data.PersonalRecord
 import com.openjump.app.protocol.BilateralComparison
 import com.openjump.app.protocol.NoteNormalizer
 import com.openjump.app.video.launchWithLease
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -35,15 +36,44 @@ class BilateralResultViewModel internal constructor(
     }
 
     fun save(comparison: BilateralComparison, note: String?, onSaved: (List<PersonalRecord>) -> Unit) {
+        saveInternal(comparison, note) { _, records -> onSaved(records) }
+    }
+
+    /**
+     * F-004: final bilateral save forwards the real persisted Room id alongside
+     * any records, so the caller can land on `measurement/{id}`. Success, retry
+     * and double-save semantics are identical to the records-only overloads.
+     */
+    fun save(comparison: BilateralComparison, onSavedWithId: (Long, List<PersonalRecord>) -> Unit) {
+        save(comparison, comparison.notes, onSavedWithId)
+    }
+
+    fun save(comparison: BilateralComparison, note: String?, onSavedWithId: (Long, List<PersonalRecord>) -> Unit) {
+        saveInternal(comparison, note, onSavedWithId)
+    }
+
+    private fun saveInternal(
+        comparison: BilateralComparison,
+        note: String?,
+        onResult: (Long, List<PersonalRecord>) -> Unit,
+    ) {
         if (_saveState.value == BilateralSaveState.Saving || _saveState.value == BilateralSaveState.Saved) return
         _saveState.value = BilateralSaveState.Saving
         val saveLease = grants.registerOwner(comparison.attempts.mapNotNull { it.draft.videoUri }.toSet())
         viewModelScope.launchWithLease(saveLease, onCompletion = requestReconcile) {
             try {
                 val id = repository.saveBilateral(comparison.copy(notes = NoteNormalizer.normalize(note)))
-                val records = runCatching { repository.recordsWonBy(comparison.athleteId, id) }.getOrDefault(emptyList())
+                val records = try {
+                    repository.recordsWonBy(comparison.athleteId, id)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    emptyList()
+                }
                 _saveState.value = BilateralSaveState.Saved
-                onSaved(records)
+                onResult(id, records)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (error: Exception) {
                 _saveState.value = BilateralSaveState.Error
             }

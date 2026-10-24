@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -30,7 +29,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
@@ -52,6 +50,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -68,6 +67,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -77,7 +77,6 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.KeyboardType
@@ -98,8 +97,10 @@ import com.openjump.app.OpenJumpApp
 import com.openjump.app.data.anthropometricsSnapshotFor
 import com.openjump.app.encoder.EncoderDraft
 import com.openjump.app.protocol.EventKey
+import com.openjump.app.protocol.EventMark
 import com.openjump.app.protocol.EventType
 import com.openjump.app.protocol.HorizontalJumpStage
+import com.openjump.app.protocol.MeasurementDraft
 import com.openjump.app.protocol.MeasurementSide
 import com.openjump.app.protocol.ProtocolId
 import com.openjump.app.protocol.VideoSource
@@ -122,8 +123,10 @@ import com.openjump.app.ui.athletes.PersonalRecordFeedbackBanner
 import com.openjump.app.ui.components.ProtocolFeedbackLevel
 import com.openjump.app.ui.components.QuickAthletePicker
 import com.openjump.app.ui.components.VideoPreparationOverlay
+import com.openjump.app.ui.components.VideoSourceInfoRow
 import com.openjump.app.ui.components.remainingVideoPreparationFeedbackDelayMs
 import com.openjump.app.ui.labs.ExperimentalBadge
+import com.openjump.app.ui.theme.OpenJumpTypes
 import com.openjump.app.ui.theme.ShapeTokens
 import com.openjump.app.ui.titleResource
 import com.openjump.app.ui.theme.Spacing
@@ -277,6 +280,18 @@ fun FrameSelectorScreen(
         )
     }
     val isEncoder = encoderDraft != null
+    // F034 scoped orientation covers the whole analysis entry (selector review
+    // and encoder reference): FULL_SENSOR while visible, PORTRAIT on dispose.
+    // Manifest keeps portrait + configChanges, so rotation never recreates.
+    val analysisActivityEntry = remember(androidContext) { androidContext.findAnalysisActivity() }
+    SideEffect {
+        analysisActivityEntry?.applyAnalysisOrientation(AnalysisOrientationPolicy.onEnter())
+    }
+    DisposableEffect(analysisActivityEntry) {
+        onDispose {
+            analysisActivityEntry?.applyAnalysisOrientation(AnalysisOrientationPolicy.onExit())
+        }
+    }
     // Encoder preparation has a fixed viewport/action pane. The shared selector
     // remains unchanged for jumps and for canonical trajectory review.
     if (encoderDraft != null && !EncoderReviewPolicy.resolve(
@@ -342,7 +357,7 @@ fun FrameSelectorScreen(
     LaunchedEffect(encoderDraft?.timingDecision, encoderDraft?.calibration, plateDetectionState.phase, trackingState.phase) {
         accessibleCursor = null
     }
-    val requiredEvents = draft?.definition?.requiredEvents.orEmpty()
+    val requiredEvents = draft?.markingEvents.orEmpty()
     val completedEvents = requiredEvents.count { EventKey(it) in draft?.events.orEmpty() }
     val frameCount = index?.frameCount ?: 0
     val hasVideoIndex = frameCount > 0
@@ -460,9 +475,8 @@ fun FrameSelectorScreen(
     val displayIndex = if (hasVideoIndex) labelIndex + 1 else 0 // base 1
     val timelineMapper = remember(index) { index?.let { PtsTimelineMapper(it.frameTimesUs) } }
     val markerColor = MaterialTheme.colorScheme.primary
-    val timelineMarkers = remember(draft?.events, markerColor, localizedEventLabels) {
-        draft?.events?.values.orEmpty()
-            .sortedBy { it.ptsUs }
+    val timelineMarkers = remember(draft?.events, draft?.markMovementStart, markerColor, localizedEventLabels) {
+        visibleTimelineMarks(draft)
             .map { mark -> TimelineMarker(mark.ptsUs, localizedEventLabels.getValue(mark.key.type), markerColor) }
     }
     val presentationAspectRatio = remember(index) {
@@ -480,6 +494,10 @@ fun FrameSelectorScreen(
         if (i in 0 until frameCount) index?.timeOf(i)?.let(Formatting::usToClockMs) ?: "--" else "--"
 
     val screenScrollState = rememberScrollState()
+    val landscapeControlsScrollState = rememberScrollState()
+    // Layout mode comes from actual BoxWithConstraints dimensions via
+    // forDimensions (wired in the Scaffold content below); retention lives
+    // in the ViewModel + rememberSaveable (configChanges avoids recreation).
     val jumpTitleResource = draft?.protocolId?.titleResource()
     val encoderTitleResource = encoderDraft?.setup?.exercise?.titleResource()
     val screenTitle = when {
@@ -559,112 +577,14 @@ fun FrameSelectorScreen(
         )
     }
 
-    Scaffold(
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        topBar = {
-            OpenJumpTopAppBar(
-                title = screenTitle,
-                subtitle = screenSubtitle,
-                onNavigationClick = navigateBack,
-                navigationContentDescription = stringResource(R.string.common_back),
-                actions = {
-                    when {
-                        encoderStepPresentation != null -> {
-                            val step = encoderStepPresentation.step
-                            val label = stringResource(
-                                when (step) {
-                                    EncoderProgressStep.CALIBRATE -> R.string.selector_encoder_progress_calibrate
-                                    EncoderProgressStep.TRACK -> R.string.selector_encoder_progress_track
-                                    EncoderProgressStep.REVIEW -> R.string.selector_encoder_progress_review
-                                },
-                            )
-                            val progressText = if (encoderStepPresentation.compact) {
-                                stringResource(
-                                    R.string.selector_encoder_progress_compact,
-                                    step.number,
-                                    ENCODER_STEP_COUNT,
-                                )
-                            } else {
-                                stringResource(
-                                    R.string.selector_encoder_progress,
-                                    step.number,
-                                    ENCODER_STEP_COUNT,
-                                    label,
-                                )
-                            }
-                            val progressDescription = stringResource(
-                                R.string.selector_encoder_progress_accessibility,
-                                step.number,
-                                ENCODER_STEP_COUNT,
-                                label,
-                            )
-                            Text(
-                                progressText,
-                                modifier = Modifier
-                                    .padding(end = Spacing.sm)
-                                    .semantics {
-                                        contentDescription = progressDescription
-                                        liveRegion = LiveRegionMode.Polite
-                                    },
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                style = MaterialTheme.typography.labelMedium,
-                            )
-                        }
-
-                        isTemporalJump || isHorizontal -> {
-                            Text(
-                                stringResource(
-                                    R.string.selector_mark_flow_progress,
-                                    3,
-                                    4,
-                                    stringResource(R.string.jump_flow_mark),
-                                ),
-                                modifier = Modifier.padding(end = Spacing.sm),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                style = MaterialTheme.typography.labelMedium,
-                            )
-                        }
-                    }
-                },
-            )
-        },
-        bottomBar = {
-            if (isEncoder && reviewPolicy.visible) {
-                Button(
-                    onClick = {
-                        if (!resultNavigationInFlight && viewModel.commitEncoderTracking()) {
-                            resultNavigationInFlight = true
-                            viewModel.suspendViewerForResult()
-                            onCompute()
-                        }
-                    },
-                    enabled = reviewPolicy.canAnalyze && !resultNavigationInFlight,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.md, vertical = Spacing.xs).heightIn(min = 54.dp),
-                ) { Text(stringResource(R.string.selector_analyze_trajectory)) }
-            } else if (!terminalErrorWithoutIndex) {
-                JumpMarkingActionBar(
-                    action = effectiveMarkingAction,
-                    seriesPresentation = seriesPresentation,
-                    onMark = viewModel::mark,
-                    onCompute = {
-                        if (!resultNavigationInFlight) {
-                            resultNavigationInFlight = true
-                            viewModel.pausePlayback()
-                            onCompute()
-                        }
-                    },
-                    contextText = screenSubtitle,
-                )
-            }
-        },
-    ) { contentPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(contentPadding)
-                .verticalScroll(screenScrollState, enabled = !effectiveIsCropFraming)
-                .padding(horizontal = Spacing.md, vertical = Spacing.sm),
-        ) {
+    // F034 single production slots: one video implementation + one header +
+    // one controls implementation shared by portrait and landscape. They are
+    // plain recomposed lambdas (not movableContentOf) so they always capture
+    // fresh player/mapper/marks/calibration state; retention itself lives in
+    // the ViewModel + rememberSaveable with configChanges (no recreation).
+    // Landscape video is fit-within via plain aspectRatio in the bounded pane;
+    // FIT/CROP mapping from the existing videoViewport stays untouched.
+    val analysisHeaderPane: @Composable () -> Unit = {
             if (testingPickerVisible) {
                 QuickAthletePicker(
                     athletes = activeAthletes,
@@ -688,6 +608,15 @@ fun FrameSelectorScreen(
             }
             bilateralSession?.let { session ->
                 val currentSide = session.currentSide
+                // Los dos lados se marcan sobre el mismo video: se dice de forma
+                // persistente para que nadie reimporte ni dude al volver a marcar.
+                // Ver F-030.
+                Text(
+                    stringResource(R.string.bilateral_same_video_hint),
+                    style = OpenJumpTypes.Secondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = Spacing.xs),
+                )
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     MeasurementSide.entries.forEach { side ->
                         val count = session.completedCount(side)
@@ -732,15 +661,14 @@ fun FrameSelectorScreen(
                 ExperimentalBadge()
                 Spacer(Modifier.height(Spacing.sm))
             }
-
-            // ── Frame actual: ExoPlayer renderiza directo a SurfaceView/GPU ─────
+    }
+    val analysisVideoPane: @Composable (Modifier) -> Unit = { paneModifier ->
         Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(presentationAspectRatio)
+            modifier = paneModifier
                 .background(Color.Black)
                 .clipToBounds()
-                .onSizeChanged { videoViewport = it },
+                .onSizeChanged { videoViewport = it }
+                .testTag(AnalysisLayout.VIDEO_PANE_TAG),
             contentAlignment = Alignment.Center,
         ) {
             AndroidView(
@@ -1006,24 +934,35 @@ fun FrameSelectorScreen(
                 )
             }
             if (hasVideoIndex && !isCropFraming) {
+                // Frame + PTS time only: the effective PTS rate lives in the
+                // shared source row below, so the FPS text is not duplicated here.
+                val frameLabel = when {
+                    dragIndex != null -> stringResource(R.string.selector_target_frame, displayIndex, frameCount)
+                    displayState.isPlaying -> stringResource(R.string.selector_playing_frame, displayIndex, frameCount)
+                    displayState.isSeeking -> stringResource(R.string.selector_visible_frame, displayIndex, frameCount)
+                    else -> stringResource(R.string.selector_frame, displayIndex, frameCount)
+                }
                 VideoInfoChip(
-                    text = stringResource(
-                        R.string.selector_frame_readout,
-                        when {
-                            dragIndex != null -> stringResource(R.string.selector_target_frame, displayIndex, frameCount)
-                            displayState.isPlaying -> stringResource(R.string.selector_playing_frame, displayIndex, frameCount)
-                            displayState.isSeeking -> stringResource(R.string.selector_visible_frame, displayIndex, frameCount)
-                            else -> stringResource(R.string.selector_frame, displayIndex, frameCount)
-                        },
-                        timeLabel(displayIndex - 1),
-                        stringResource(R.string.selector_fps, index?.detectedFps ?: "--"),
-                    ),
+                    text = "$frameLabel · ${timeLabel(displayIndex - 1)}",
                     modifier = Modifier
                         .align(Alignment.BottomStart)
                         .padding(8.dp)
                         .zIndex(2f),
                 )
             }
+
+        }
+    }
+    val analysisControlsPane: @Composable () -> Unit = {
+        // Compact secondary source row: encoded resolution, effective PTS rate
+        // and real file size, with declared details on demand. Below the
+        // viewport, never over the video; hidden while indexing.
+        if (hasVideoIndex && videoUri != null) {
+            Spacer(Modifier.height(Spacing.xs))
+            VideoSourceInfoRow(
+                videoUri = videoUri?.toString(),
+                index = index,
+            )
         }
         if (isCropFraming && framingEnabled) {
             Text(
@@ -1047,21 +986,8 @@ fun FrameSelectorScreen(
                 )
             }
         }
-        index?.temporalContinuity?.takeIf { it.hasGaps }?.let { continuity ->
-            Spacer(Modifier.height(8.dp))
-            Surface(color = MaterialTheme.colorScheme.tertiaryContainer) {
-                Text(
-                    stringResource(
-                        R.string.selector_video_gaps,
-                        continuity.gapCount,
-                        continuity.largestGapUs / 1_000L,
-                    ),
-                    Modifier.padding(12.dp),
-                    color = MaterialTheme.colorScheme.onTertiaryContainer,
-                )
-            }
-        }
-
+        // Timing quality warnings appear on affected repetitions after analysis,
+        // rather than inferring repetition quality from the video index alone.
         Spacer(Modifier.height(Spacing.md))
 
         if (!terminalErrorWithoutIndex) {
@@ -1114,7 +1040,7 @@ fun FrameSelectorScreen(
             // ── Flujo de eventos definido por el protocolo ─────────────────────
             if (requiredEvents.isNotEmpty()) {
                 EventSection(
-                    requiredEvents = requiredEvents,
+                    markingEvents = requiredEvents,
                     events = draft?.events.orEmpty(),
                     completedEvents = completedEvents,
                     labels = localizedEventLabels,
@@ -1219,7 +1145,125 @@ fun FrameSelectorScreen(
             Spacer(Modifier.height(Spacing.md))
         }
     }
-}
+
+    Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        topBar = {
+            OpenJumpTopAppBar(
+                title = screenTitle,
+                subtitle = screenSubtitle,
+                onNavigationClick = navigateBack,
+                navigationContentDescription = stringResource(R.string.common_back),
+                actions = {
+                    when {
+                        encoderStepPresentation != null -> {
+                            val step = encoderStepPresentation.step
+                            val label = stringResource(
+                                when (step) {
+                                    EncoderProgressStep.CALIBRATE -> R.string.selector_encoder_progress_calibrate
+                                    EncoderProgressStep.TRACK -> R.string.selector_encoder_progress_track
+                                    EncoderProgressStep.REVIEW -> R.string.selector_encoder_progress_review
+                                },
+                            )
+                            val progressText = if (encoderStepPresentation.compact) {
+                                stringResource(
+                                    R.string.selector_encoder_progress_compact,
+                                    step.number,
+                                    ENCODER_STEP_COUNT,
+                                )
+                            } else {
+                                stringResource(
+                                    R.string.selector_encoder_progress,
+                                    step.number,
+                                    ENCODER_STEP_COUNT,
+                                    label,
+                                )
+                            }
+                            val progressDescription = stringResource(
+                                R.string.selector_encoder_progress_accessibility,
+                                step.number,
+                                ENCODER_STEP_COUNT,
+                                label,
+                            )
+                            Text(
+                                progressText,
+                                modifier = Modifier
+                                    .padding(end = Spacing.sm)
+                                    .semantics {
+                                        contentDescription = progressDescription
+                                        liveRegion = LiveRegionMode.Polite
+                                    },
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.labelMedium,
+                            )
+                        }
+
+                        isTemporalJump || isHorizontal -> {
+                            Text(
+                                stringResource(
+                                    R.string.selector_mark_flow_progress,
+                                    3,
+                                    4,
+                                    stringResource(R.string.jump_flow_mark),
+                                ),
+                                modifier = Modifier.padding(end = Spacing.sm),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.labelMedium,
+                            )
+                        }
+                    }
+                },
+            )
+        },
+        bottomBar = {
+            if (isEncoder && reviewPolicy.visible) {
+                Button(
+                    onClick = {
+                        if (!resultNavigationInFlight && viewModel.commitEncoderTracking()) {
+                            resultNavigationInFlight = true
+                            viewModel.suspendViewerForResult()
+                            onCompute()
+                        }
+                    },
+                    enabled = reviewPolicy.canAnalyze && !resultNavigationInFlight,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.md, vertical = Spacing.xs).heightIn(min = 54.dp),
+                ) { Text(stringResource(R.string.selector_analyze_trajectory)) }
+            } else if (!terminalErrorWithoutIndex) {
+                JumpMarkingActionBar(
+                    action = effectiveMarkingAction,
+                    seriesPresentation = seriesPresentation,
+                    onMark = viewModel::mark,
+                    onCompute = {
+                        if (!resultNavigationInFlight) {
+                            resultNavigationInFlight = true
+                            viewModel.pausePlayback()
+                            onCompute()
+                        }
+                    },
+                    contextText = screenSubtitle,
+                )
+            }
+        },
+    ) { contentPadding ->
+        // F034: mode from actual window dimensions (foldables/tablets/
+        // multi-window follow the real BoxWithConstraints, not configuration
+        // orientation). AnalysisPaneLayout holds the exact production
+        // portrait/landscape branches; slots stay fresh lambdas above.
+        BoxWithConstraints(
+            modifier = Modifier.fillMaxSize().padding(contentPadding),
+        ) {
+            AnalysisPaneLayout(
+                mode = AnalysisLayout.forDimensions(maxWidth.value, maxHeight.value),
+                aspectRatio = presentationAspectRatio,
+                portraitScrollState = screenScrollState,
+                landscapeControlsScrollState = landscapeControlsScrollState,
+                controlsScrollEnabled = !effectiveIsCropFraming,
+                header = analysisHeaderPane,
+                video = analysisVideoPane,
+                controls = analysisControlsPane,
+            )
+        }
+    }
 }
 
 /**
@@ -1286,7 +1330,7 @@ private fun VideoOverlayButton(
     }
 }
 
-/** Compact monospace caption chip rendered over the video surface. */
+/** Frame caption chip over the video surface. Sans tabular figures per F-013. */
 @Composable
 private fun VideoInfoChip(
     text: String,
@@ -1295,8 +1339,7 @@ private fun VideoInfoChip(
     Text(
         text,
         color = Color.White,
-        style = MaterialTheme.typography.labelMedium,
-        fontFamily = FontFamily.Monospace,
+        style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
         modifier = modifier
             .background(Color.Black.copy(alpha = 0.65f), ShapeTokens.extraSmall)
             .padding(horizontal = 8.dp, vertical = 4.dp),
@@ -1668,15 +1711,10 @@ internal fun ManualEncoderCalibration(
     val locale = currentAppLocale()
     val quantity = MeasurementQuantity.DISTANCE_M
     val displayUnit = MeasurementFormatting.unit(quantity, unitSystem)
-    val defaultLengthM = 0.45
-    val defaultLengthText = MeasurementFormatting.formatInputValue(
-        defaultLengthM,
-        quantity,
-        unitSystem,
-        locale,
-    )
+    // P1 first use: explicit blank distance. No 0.45 m or diameter-derived preload;
+    // confirmation stays disabled until the user enters a valid explicit value.
     var lengthInput by rememberSaveable(draft.sessionKey, title, stateSaver = UnitAwareNumericInputState.Saver) {
-        mutableStateOf(UnitAwareNumericInputState.initial(defaultLengthText, unitSystem, defaultLengthM))
+        mutableStateOf(UnitAwareNumericInputState.initial("", unitSystem, null))
     }
     LaunchedEffect(unitSystem) {
         lengthInput = UnitAwareNumericInputState.rebase(lengthInput, unitSystem, quantity, locale)
@@ -1700,7 +1738,8 @@ internal fun ManualEncoderCalibration(
             OutlinedTextField(
                 value = lengthText,
                 onValueChange = { value -> lengthInput = UnitAwareNumericInputState.edited(value, unitSystem, quantity, locale); calibrationError = null },
-                label = { Text(stringResource(R.string.selector_length)) },
+                // A blank, unfocused Material field hides its suffix; keep units visible in the label.
+                label = { Text("${stringResource(R.string.selector_length)} (${displayUnit.symbol})") },
                 suffix = { Text(displayUnit.symbol) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
@@ -1744,7 +1783,7 @@ private fun TechnicalDetailsDisclosure(
     var expanded by remember { mutableStateOf(false) }
     TextButton(
         onClick = { expanded = !expanded },
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
     ) {
         Text(stringResource(if (expanded) R.string.selector_hide_technical_details else R.string.selector_show_technical_details))
     }
@@ -1764,8 +1803,7 @@ private fun TechnicalDetailsDisclosure(
                             detection.diameterPx,
                             (detection.confidence * 100).roundToInt(),
                         ),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontFamily = FontFamily.Monospace,
+                        style = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum"),
                     )
                 }
                 current?.let { frame ->
@@ -1779,8 +1817,7 @@ private fun TechnicalDetailsDisclosure(
                             (frame.result.sample.confidence * 100).roundToInt(),
                             frame.result.diagnostics.inlierFeatures,
                         ),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontFamily = FontFamily.Monospace,
+                        style = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum"),
                     )
                 }
                 if (current == null && plate.detection == null) {
@@ -1791,6 +1828,17 @@ private fun TechnicalDetailsDisclosure(
                         stringResource(R.string.selector_technical_samples, tracking.results.size),
                         style = MaterialTheme.typography.labelSmall,
                     )
+                    // F010/F037: raw visible-point count lives here (collapsed), not in
+                    // the main overlay semantics. Graphical trajectory stays on canvas.
+                    val visibleValid = tracking.results.count { it.result.sample.point != null }
+                    Text(
+                        if (visibleValid == 0) {
+                            stringResource(R.string.selector_tracking_trajectory_empty)
+                        } else {
+                            stringResource(R.string.selector_tracking_trajectory_description, visibleValid)
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                    )
                 }
             }
         }
@@ -1798,7 +1846,7 @@ private fun TechnicalDetailsDisclosure(
 }
 
 @Composable
-private fun EncoderCompletedActions(
+internal fun EncoderCompletedActions(
     state: TrackingUiState,
     exportState: TrajectoryExportUiState,
     onExport: () -> Unit,
@@ -1815,18 +1863,46 @@ private fun EncoderCompletedActions(
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.fillMaxWidth(),
     )
+    // LOST partial stays always visible above the export disclosure: only the
+    // tracked portion is available. Existing review instruction below still
+    // requires verifying the SAME chosen zone; no recovery/stitch claim.
+    if (state.phase == TrackingPhase.LOST) {
+        Text(
+            stringResource(R.string.selector_review_lost_partial),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.fillMaxWidth().padding(top = Spacing.xs)
+                .testTag("review-lost-partial")
+                .semantics { liveRegion = LiveRegionMode.Polite },
+        )
+    }
     Text(
         stringResource(R.string.selector_review_instruction),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.xs),
     )
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-        TextButton(onClick = onRequestTargetReselection, modifier = Modifier.weight(1f)) {
-            Text(stringResource(R.string.selector_change_target))
+    // Narrow viewports and large fonts stack the two corrections so neither truncates:
+    // same callbacks/confirmations, Row otherwise. Matches ManualEncoderCalibration
+    // (<360dp||font>1.2) and reference/analysis stacking without a new guard.
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val stacked = maxWidth < 300.dp || LocalDensity.current.fontScale > 1.2f
+        val targetAction: @Composable (Modifier) -> Unit = { modifier ->
+            TextButton(onClick = onRequestTargetReselection, modifier = modifier.heightIn(min = 48.dp)) {
+                Text(stringResource(R.string.selector_change_target))
+            }
         }
-        TextButton(onClick = onRequestRecalibration, modifier = Modifier.weight(1f)) {
-            Text(stringResource(R.string.selector_change_scale))
+        val scaleAction: @Composable (Modifier) -> Unit = { modifier ->
+            TextButton(onClick = onRequestRecalibration, modifier = modifier.heightIn(min = 48.dp)) {
+                Text(stringResource(R.string.selector_change_scale))
+            }
+        }
+        if (stacked) Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+            targetAction(Modifier.fillMaxWidth())
+            scaleAction(Modifier.fillMaxWidth())
+        } else Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+            targetAction(Modifier.weight(1f))
+            scaleAction(Modifier.weight(1f))
         }
     }
     TrajectoryExportControls(
@@ -1840,7 +1916,7 @@ private fun EncoderCompletedActions(
 }
 
 @Composable
-private fun TrajectoryExportControls(
+internal fun TrajectoryExportControls(
     state: TrajectoryExportUiState,
     hasTrajectory: Boolean,
     onExport: () -> Unit,
@@ -1849,14 +1925,33 @@ private fun TrajectoryExportControls(
     onShare: () -> Unit,
 ) {
     Spacer(Modifier.height(8.dp))
+    // IDLE export stays collapsed by default behind a TextButton disclosure so
+    // review warnings keep visual priority. Every other phase (exporting,
+    // validating, saving, error, READY, SAVED) renders directly regardless of
+    // the disclosure so progress, critical errors and save/share/regenerate
+    // are never hidden.
+    var exportExpanded by rememberSaveable { mutableStateOf(false) }
     when (state.phase) {
         TrajectoryExportPhase.IDLE -> {
-            OutlinedButton(
-                onClick = onExport,
-                enabled = hasTrajectory,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+            val showText = stringResource(R.string.selector_export_show_options)
+            val hideText = stringResource(R.string.selector_export_hide_options)
+            val disclosureText = if (exportExpanded) hideText else showText
+            TextButton(
+                onClick = { exportExpanded = !exportExpanded },
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                    .testTag("export-disclosure")
+                    .semantics { stateDescription = disclosureText },
             ) {
-                Text(stringResource(R.string.selector_export_trajectory))
+                Text(disclosureText)
+            }
+            if (exportExpanded) {
+                OutlinedButton(
+                    onClick = onExport,
+                    enabled = hasTrajectory,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("export-action"),
+                ) {
+                    Text(stringResource(R.string.selector_export_trajectory))
+                }
             }
         }
 
@@ -1892,7 +1987,7 @@ private fun TrajectoryExportControls(
             } else {
                 LinearProgressIndicator(Modifier.fillMaxWidth().padding(vertical = 6.dp))
             }
-            OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                 Text(stringResource(R.string.selector_cancel_export))
             }
         }
@@ -1934,6 +2029,7 @@ private fun TrajectoryExportControls(
             TextButton(
                 onClick = onExport,
                 enabled = state.phase != TrajectoryExportPhase.SAVING,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
             ) { Text(stringResource(R.string.selector_regenerate)) }
         }
     }
@@ -1948,9 +2044,8 @@ private fun TrackingStatusContent(state: TrackingUiState) {
             TrackingPhase.INITIALIZING -> stringResource(R.string.selector_tracking_initializing)
             TrackingPhase.READY -> state.message ?: stringResource(R.string.selector_tracking_ready)
             TrackingPhase.PROCESSING -> stringResource(
-                R.string.selector_tracking_progress,
+                R.string.selector_tracking_progress_plain,
                 (state.progress * 100).roundToInt(),
-                state.results.size,
             )
             TrackingPhase.COMPLETED, TrackingPhase.LOST, TrackingPhase.ERROR -> state.message.orEmpty()
         },
@@ -1967,10 +2062,24 @@ private fun TrackingStatusContent(state: TrackingUiState) {
 
 private enum class EventRowState { MARKED, NEXT, PENDING }
 
+/**
+ * Marks drawn on the video timeline. While the mode captured by the draft does not request the
+ * optional movement start, a leftover start mark is hidden so the timeline matches the event list.
+ * Protocols whose start is mandatory keep every mark.
+ */
+internal fun visibleTimelineMarks(draft: MeasurementDraft?): List<EventMark> {
+    draft ?: return emptyList()
+    val hidesOptionalStart = !draft.markMovementStart &&
+        EventType.MOVEMENT_START in draft.definition.optionalEvents
+    return draft.events.values
+        .filterNot { hidesOptionalStart && it.key.type == EventType.MOVEMENT_START }
+        .sortedBy { it.ptsUs }
+}
+
 @Composable
-private fun EventSection(
-    requiredEvents: List<EventType>,
-    events: Map<EventKey, com.openjump.app.protocol.EventMark>,
+internal fun EventSection(
+    markingEvents: List<EventType>,
+    events: Map<EventKey, EventMark>,
     completedEvents: Int,
     labels: Map<EventType, String>,
     canJump: Boolean,
@@ -1995,12 +2104,12 @@ private fun EventSection(
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    stringResource(R.string.selector_events_count, completedEvents, requiredEvents.size),
+                    stringResource(R.string.selector_events_count, completedEvents, markingEvents.size),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            requiredEvents.forEachIndexed { index, type ->
+            markingEvents.forEachIndexed { index, type ->
                 if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 val mark = events[EventKey(type)]
                 val state = when {
@@ -2069,8 +2178,7 @@ private fun EventRow(
                     Text(label, style = MaterialTheme.typography.bodyMedium)
                     Text(
                         stringResource(R.string.selector_event_marked, timestamp),
-                        style = MaterialTheme.typography.bodySmall,
-                        fontFamily = FontFamily.Monospace,
+                        style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }

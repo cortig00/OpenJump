@@ -11,7 +11,13 @@ import android.net.Uri
 import android.os.SystemClock
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -20,19 +26,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -54,7 +55,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
@@ -62,15 +62,21 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.zIndex
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.foundation.layout.windowInsetsBottomHeight
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsStartWidth
+import androidx.compose.foundation.layout.windowInsetsEndWidth
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -78,11 +84,14 @@ import com.openjump.app.R
 import com.openjump.app.OpenJumpApp
 import com.openjump.app.camera.CameraFinalizingExitPolicy
 import com.openjump.app.camera.CameraProductProfile
+import com.openjump.app.camera.CameraProfilePolicy
+import com.openjump.app.camera.CameraResolutionPreference
 import com.openjump.app.camera.JumpCameraController
 import com.openjump.app.camera.JumpCameraState
 import com.openjump.app.camera.RecordingCadencePolicy
 import com.openjump.app.data.anthropometricsSnapshotFor
 import com.openjump.app.settings.CameraSettings
+import com.openjump.app.settings.RecordingFpsPolicy
 import com.openjump.app.ui.components.JumpFlowStep
 import com.openjump.app.ui.components.QuickAthletePicker
 import com.openjump.app.ui.components.VideoPreparationOverlay
@@ -90,7 +99,6 @@ import com.openjump.app.ui.labs.ExperimentalBadge
 import com.openjump.app.video.AppSession
 import com.openjump.app.ui.theme.ShapeTokens
 import com.openjump.app.ui.theme.Spacing
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
@@ -99,6 +107,7 @@ fun CameraScreen(
     onBack: () -> Unit,
     captureGuidance: String,
     jumpFlowStep: JumpFlowStep? = null,
+    onImportVideo: (Uri) -> Unit = {},
 ) {
     val context = LocalContext.current
     val viewportOrientation = LocalConfiguration.current.orientation
@@ -113,17 +122,27 @@ fun CameraScreen(
     val pickerScope = rememberCoroutineScope()
     val roster by AppSession.testingParticipantIds.collectAsState()
     val settings = remember { CameraSettings(context) }
+    // Saved FPS defaults live in Settings, independently per recording use.
+    // Encoder capture reads the Encoder default; Jump (or no draft) reads the Jumps default.
+    val recordingUse = remember(activeEncoderDraft) {
+        RecordingFpsPolicy.useFor(activeEncoderDraft != null)
+    }
     var availableProfiles by remember { mutableStateOf(emptyList<CameraProductProfile>()) }
     var unavailableFps by remember { mutableStateOf(emptySet<Int>()) }
-    val availableFps = remember(availableProfiles) {
-        availableProfiles.map { it.fps }.filter { it in CameraSettings.PRODUCT_FPS }.distinct().sortedDescending()
-    }
-    var selectedFps by remember {
-        mutableStateOf(CameraSettings.normalizePreferredFps(settings.preferredFps, emptyList()))
-    }
+    // Transient per-recording/visit override seeded from the saved default.
+    // Changing it here must never write back to Settings; defaults change only via Settings.
+    var selectedFps by rememberCameraFpsSelection(settings, recordingUse)
+    // Transient per-visit resolution, always AUTO on entry; never persisted.
+    var selectedResolution by rememberCameraResolutionSelection(recordingUse)
     var activeProfile by remember { mutableStateOf<CameraProductProfile?>(null) }
     val mode = activeProfile
     val hasHighSpeed = remember(availableProfiles) { availableProfiles.any { it.fps >= 120 } }
+
+    // Alternativa a la camara: importar un video sin salir del estado de error.
+    // Ver F-032.
+    val importVideoLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia(),
+    ) { uri -> if (uri != null) onImportVideo(uri) }
 
     val storagePermissionRequired = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
     val requiredPermissions = remember(storagePermissionRequired) {
@@ -148,30 +167,9 @@ fun CameraScreen(
     // UI-only timestamp: the selector can honor the same feedback threshold after navigation.
     val recordingStoppedAtElapsedMs = remember { mutableStateOf<Long?>(null) }
     var showFinalizingDiscardDialog by remember { mutableStateOf(false) }
-    var showRecordingGuide by remember { mutableStateOf(false) }
-    var showCaptureHint by remember { mutableStateOf(false) }
+    // Hidden on every visit: no auto-popup, timer or preference writes.
+    var showCaptureHint by rememberCameraInformationVisibility()
     val isJumpCamera = activeDraft != null && activeEncoderDraft == null
-    LaunchedEffect(pipelineState, isJumpCamera) {
-        showCaptureHint = !isJumpCamera && pipelineState == JumpCameraState.READY
-    }
-    LaunchedEffect(showCaptureHint, pipelineState) {
-        if (showCaptureHint && pipelineState == JumpCameraState.READY) {
-            delay(6_000L)
-            showCaptureHint = false
-        }
-    }
-    LaunchedEffect(permissionsGranted, pipelineState, isJumpCamera) {
-        if (
-            shouldOfferJumpRecordingGuide(
-                isJump = isJumpCamera,
-                permissionsGranted = permissionsGranted,
-                state = pipelineState,
-                seen = settings.hasSeenJumpCameraGuide,
-            )
-        ) {
-            showRecordingGuide = true
-        }
-    }
 
     SideEffect {
         activity?.applyRequestedOrientation(
@@ -262,12 +260,14 @@ fun CameraScreen(
     LaunchedEffect(
         permissionsGranted,
         selectedFps,
+        selectedResolution,
+        recordingUse,
         lifecycleStarted,
         lifecycleOwner,
         viewportOrientation,
     ) {
         if (permissionsGranted && lifecycleStarted) {
-            recorder.configure(lifecycleOwner, selectedFps)
+            recorder.configure(lifecycleOwner, selectedFps, selectedResolution)
         } else if (!permissionsGranted) {
             recorder.pause()
         }
@@ -297,7 +297,44 @@ fun CameraScreen(
         JumpCameraState.RECORDING,
         JumpCameraState.FINALIZING,
     )
+    LaunchedEffect(takeActive) {
+        if (takeActive) showCaptureHint = false
+    }
     val view = LocalView.current
+    // Camera chrome is intentionally dark in both themes. Keep system icons readable,
+    // and restore the current app theme when leaving (including theme changes in-place).
+    val appBarColor by rememberUpdatedState(MaterialTheme.colorScheme.background.toArgb())
+    val appBarIconsLight by rememberUpdatedState(!com.openjump.app.ui.theme.OpenJumpTheme.isDark)
+    DisposableEffect(activity, view) {
+        val window = activity?.window
+        val previousContrast = if (Build.VERSION.SDK_INT >= 29) window?.isNavigationBarContrastEnforced else null
+        onDispose {
+            window?.let {
+                @Suppress("DEPRECATION")
+                it.statusBarColor = appBarColor
+                @Suppress("DEPRECATION")
+                it.navigationBarColor = appBarColor
+                WindowCompat.getInsetsController(it, view).apply {
+                    isAppearanceLightStatusBars = appBarIconsLight
+                    isAppearanceLightNavigationBars = appBarIconsLight
+                }
+                if (Build.VERSION.SDK_INT >= 29 && previousContrast != null) it.isNavigationBarContrastEnforced = previousContrast
+            }
+        }
+    }
+    SideEffect {
+        activity?.window?.let {
+            @Suppress("DEPRECATION")
+            it.statusBarColor = CameraChrome.surface.toArgb()
+            @Suppress("DEPRECATION")
+            it.navigationBarColor = CameraChrome.surface.toArgb()
+            WindowCompat.getInsetsController(it, view).apply {
+                isAppearanceLightStatusBars = false
+                isAppearanceLightNavigationBars = false
+            }
+            if (Build.VERSION.SDK_INT >= 29) it.isNavigationBarContrastEnforced = false
+        }
+    }
     DisposableEffect(view, takeActive) {
         view.keepScreenOn = takeActive
         onDispose { view.keepScreenOn = false }
@@ -306,7 +343,38 @@ fun CameraScreen(
     val recordingTime = CameraRecordingClock.format(recordedDurationNanos)
     val hud = CameraHudPolicy.forState(pipelineState)
     val recordControl = CameraRecordControlPolicy.forState(pipelineState)
-    val canRecord = recordControl.canRecord
+    // ERROR recovery: quick FPS/resolution controls stay visible (no REC, no active
+    // caption) so a manual impossible tuple can be changed to Auto/supported before
+    // retry. BLOCKED without camera permission stays hidden via this guard; an
+    // already-Auto request with a fully blocked catalog still goes through retry
+    // without silent FPS/resolution switches or cache resets.
+    val showCaptureControls = hud.showFps && permissionsGranted
+    val errorRecoveryActiveProfile = if (pipelineState == JumpCameraState.ERROR) null else mode
+    // Scoped quality controls: FPS choices are valid only with the selected resolution,
+    // resolution choices only with the exact selected FPS (Auto FPS keeps 120/60/240/30
+    // order inside the chosen resolution via policy). Impossible tuples stay visible but
+    // disabled so a manual request never silently switches FPS or resolution; Auto is
+    // always enabled as recovery. Usable profiles come from the controller snapshot,
+    // already filtered by the process-session incompatibility cache.
+    val fpsChoices = remember { CameraSettings.PRODUCT_FPS.sortedDescending() }
+    val fpsUnavailableForResolution = remember(availableProfiles, selectedResolution) {
+        fpsChoices.filter { fps ->
+            CameraProfilePolicy.candidates(availableProfiles, fps, selectedResolution).isEmpty()
+        }.toSet()
+    }
+    val isResolutionEnabled: (CameraResolutionPreference) -> Boolean = remember(availableProfiles, selectedFps) {
+        { resolution ->
+            if (resolution == CameraResolutionPreference.AUTO) true
+            else CameraProfilePolicy.candidates(availableProfiles, selectedFps, resolution).isNotEmpty()
+        }
+    }
+    // REC requires READY plus a bound profile still compatible with the current request.
+    // Between a manual change and the rebind there is one frame with the old profile:
+    // starting then would record the old tuple. Auto accepts any FPS in the resolution.
+    val isActiveCompatible = remember(mode, selectedFps, selectedResolution) {
+        CameraProfilePolicy.isCompatible(mode, selectedFps, selectedResolution)
+    }
+    val canRecord = recordControl.canRecord && isActiveCompatible
     val canStop = recordControl.canStop
     val rejectedFpsText = unavailableFps.sorted().joinToString(", ")
     val runtimePreviewWarning = when {
@@ -345,9 +413,17 @@ fun CameraScreen(
     }
 
     fun selectFps(value: Int) {
+        // Temporary per-visit override only: keep the saved Settings default untouched.
+        // Never silently change resolution: an impossible tuple stays disabled in the UI.
         selectedFps = value
         continuityWarning = null
-        settings.preferredFps = value
+    }
+
+    fun selectResolution(value: CameraResolutionPreference) {
+        // Transient per-visit override only: never persisted, never touches Settings.
+        // Never silently change FPS: an impossible tuple stays disabled in the UI.
+        selectedResolution = value
+        continuityWarning = null
     }
 
     fun leaveCamera() {
@@ -360,12 +436,15 @@ fun CameraScreen(
     }
 
     fun toggleRecording() {
+        // Re-read the current request at click time: the captured canRecord may predate
+        // the latest selector change by one frame and still reference the old tuple.
+        val compatibleNow = CameraProfilePolicy.isCompatible(mode, selectedFps, selectedResolution)
         when {
             canStop -> {
                 recordingStoppedAtElapsedMs.value = SystemClock.elapsedRealtime()
                 recorder.stopRecording()
             }
-            canRecord -> {
+            canRecord && compatibleNow -> {
                 recordingStoppedAtElapsedMs.value = null
                 activity?.applyRequestedOrientation(CameraOrientationMode.LOCKED)
                 recorder.startRecording()
@@ -373,277 +452,121 @@ fun CameraScreen(
         }
     }
 
-    val previewContent: @Composable (Modifier, Boolean, Int, Int) -> Unit =
-        { modifier, padForStatusBar, topStartOffsetDp, topEndOffsetDp ->
-        Box(modifier = modifier) {
-            AndroidView(
-                factory = { recorder.previewView },
-                modifier = Modifier.fillMaxSize(),
-            )
-            VideoPreparationOverlay(active = pipelineState == JumpCameraState.FINALIZING)
-            if (showQuickAthletePicker && !takeActive) {
-                QuickAthletePicker(
-                    athletes = activeAthletes,
-                    currentAthleteId = activeDraft?.athleteId ?: activeEncoderDraft?.athleteId,
-                    allowedAthleteIds = roster,
-                    enabled = true,
-                    singleLine = true,
-                    onAthleteSelected = { athleteId ->
-                        pickerScope.launch {
-                            val testingId = activeDraft?.testingSessionId ?: activeEncoderDraft?.testingSessionId
-                            if (testingId != null && app.testingRepository.setCurrentAthlete(testingId, athleteId)) {
-                                AppSession.reassignActiveAthlete(
-                                    athleteId,
-                                    activeAthletes.anthropometricsSnapshotFor(athleteId),
-                                )
-                            }
-                        }
-                    },
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .then(if (padForStatusBar) Modifier.statusBarsPadding() else Modifier)
-                        .padding(
-                            start = Spacing.sm,
-                            end = Spacing.sm,
-                            top = if (topStartOffsetDp == 0) Spacing.sm else topStartOffsetDp.dp,
-                            bottom = Spacing.sm,
-                        ),
-                )
-            }
-
-            if (activeEncoderDraft != null && !takeActive) {
-                ExperimentalBadge(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .then(if (padForStatusBar) Modifier.statusBarsPadding() else Modifier)
-                        .padding(
-                            start = Spacing.sm,
-                            end = Spacing.sm,
-                            top = if (topEndOffsetDp == 0) Spacing.sm else topEndOffsetDp.dp,
-                            bottom = Spacing.sm,
-                        ),
-                )
-            }
-        }
+    val blockingTitle = when {
+        error != null -> stringResource(R.string.camera_preview_error)
+        !permissionsGranted -> stringResource(R.string.camera_state_no_permission)
+        availableProfiles.isEmpty() && pipelineState in setOf(JumpCameraState.BLOCKED, JumpCameraState.ERROR) ->
+            stringResource(R.string.camera_modes_query_empty)
+        else -> null
     }
-
+    // El mensaje crudo de la cámara se conserva solo tras "Detalle técnico": nunca
+    // como texto principal (evita jerga tipo "CameraX" en pantalla). Ver F-001.
+    val blockingDetail = error
+    val informationDescription = if (isJumpCamera) R.string.jump_recording_guide_open else R.string.camera_capture_tips
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        if (maxWidth > maxHeight) {
-            Box(modifier = Modifier.fillMaxSize()) {
-                previewContent(
-                    Modifier.fillMaxSize(),
-                    true,
-                    if (showQuickAthletePicker) 80 else 0,
-                    if (activeEncoderDraft != null) 80 else 0,
+        val landscape = maxWidth > maxHeight
+        // Full-frame FIT preview and CameraX are unchanged; only presentation slots move.
+        AndroidView(factory = { recorder.previewView }, modifier = Modifier.fillMaxSize())
+        // System-bar/cutout scrims only, not a toolbar/panel over the captured frame.
+        Surface(Modifier.align(Alignment.CenterStart).fillMaxHeight()
+            .windowInsetsStartWidth(WindowInsets.safeDrawing), color = CameraChrome.surface) {}
+        Surface(Modifier.align(Alignment.CenterEnd).fillMaxHeight()
+            .windowInsetsEndWidth(WindowInsets.safeDrawing), color = CameraChrome.surface) {}
+        Surface(Modifier.align(Alignment.TopCenter).fillMaxWidth()
+            .windowInsetsTopHeight(WindowInsets.statusBars), color = CameraChrome.surface) {}
+        Surface(Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+            .windowInsetsBottomHeight(WindowInsets.navigationBars), color = CameraChrome.surface) {}
+        CameraViewfinderHud(
+            showControls = showCaptureControls,
+            onBack = ::leaveCamera,
+            onInformation = { showCaptureHint = !showCaptureHint },
+            informationDescriptionRes = informationDescription,
+            informationExpanded = showCaptureHint,
+            controls = { includeInformation ->
+                CameraCaptureControlsGroup(
+                    selectedFps = selectedFps,
+                    activeFps = errorRecoveryActiveProfile?.fps,
+                    fpsChoices = fpsChoices,
+                    previewUnavailableFps = unavailableFps,
+                    scopedUnavailableFps = fpsUnavailableForResolution,
+                    selectedResolution = selectedResolution,
+                    isResolutionEnabled = isResolutionEnabled,
+                    activeProfile = errorRecoveryActiveProfile,
+                    onFpsSelect = ::selectFps,
+                    onResolutionSelect = ::selectResolution,
+                    onHintClick = { showCaptureHint = !showCaptureHint },
+                    hintDescriptionRes = informationDescription,
+                    includeInformationButton = includeInformation,
+                    informationExpanded = showCaptureHint,
                 )
-                Surface(
-                    modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth()
-                        .windowInsetsTopHeight(WindowInsets.statusBars),
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.62f),
-                ) {}
-
-                CameraBackControl(
-                    onBack = ::leaveCamera,
-                    modifier = Modifier.align(Alignment.TopStart).statusBarsPadding()
-                        .padding(start = Spacing.sm, top = Spacing.sm),
-                )
-                if (hud.showStep) {
-                    CameraStepBadge(
-                        step = jumpFlowStep,
-                        modifier = Modifier.align(Alignment.TopStart).statusBarsPadding()
-                            .padding(start = 64.dp, top = Spacing.sm),
-                    )
-                }
-                if (hud.showStatus) {
-                    CameraCaptureStatus(
-                        state = pipelineState,
-                        recordingTime = recordingTime,
-                        modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding()
-                            .padding(top = Spacing.sm),
-                    )
-                }
-                if (hud.showRecordControl) {
-                    LandscapeRecordControl(
-                        canStop = canStop,
-                        canRecord = canRecord,
-                        onClick = ::toggleRecording,
-                        modifier = Modifier.align(Alignment.CenterEnd).padding(end = Spacing.xl),
-                    )
-                }
-                if (hud.showFps) {
-                    Row(
-                        modifier = Modifier.align(Alignment.BottomStart).navigationBarsPadding()
-                            .padding(start = Spacing.lg, bottom = Spacing.lg),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-                    ) {
-                        CameraQuickFpsSelector(
-                            selectedFps, mode?.fps, availableFps, unavailableFps, ::selectFps,
-                        )
-                        CameraHintButton(
-                            onClick = {
-                                if (isJumpCamera) showRecordingGuide = true
-                                else showCaptureHint = !showCaptureHint
+            },
+            information = if (shouldShowCameraInformation(showCaptureHint, permissionsGranted, pipelineState)) ({
+                CameraHintOverlay(
+                    guidance = captureGuidance, progress = progressText, warnings = contextWarnings,
+                    profile = errorRecoveryActiveProfile, onDismiss = { showCaptureHint = false },
+                ) {
+                    if (isJumpCamera) {
+                        Text(stringResource(R.string.jump_recording_guide_body), style = MaterialTheme.typography.bodySmall)
+                        listOf(R.string.jump_recording_guide_stable, R.string.jump_recording_guide_framing,
+                            R.string.jump_recording_guide_headroom, R.string.jump_recording_guide_lighting,
+                        ).forEach { Text(stringResource(it), style = MaterialTheme.typography.bodySmall) }
+                    }
+                    CameraStepBadge(jumpFlowStep)
+                    if (activeEncoderDraft != null) ExperimentalBadge()
+                    // Preserve existing testing-session athlete switching, now on demand.
+                    if (showQuickAthletePicker) {
+                        QuickAthletePicker(
+                            athletes = activeAthletes,
+                            currentAthleteId = activeDraft?.athleteId ?: activeEncoderDraft?.athleteId,
+                            allowedAthleteIds = roster, enabled = true, singleLine = true,
+                            onAthleteSelected = { athleteId ->
+                                pickerScope.launch {
+                                    val testingId = activeDraft?.testingSessionId ?: activeEncoderDraft?.testingSessionId
+                                    if (testingId != null && app.testingRepository.setCurrentAthlete(testingId, athleteId)) {
+                                        AppSession.reassignActiveAthlete(athleteId,
+                                            activeAthletes.anthropometricsSnapshotFor(athleteId))
+                                    }
+                                }
                             },
-                            descriptionRes = if (isJumpCamera) R.string.jump_recording_guide_open
-                                else R.string.camera_capture_tips,
                         )
                     }
                 }
-                if (hud.showGuidance && (if (isJumpCamera) contextWarnings.isNotEmpty() else showCaptureHint)) {
-                    CameraHintOverlay(
-                        guidance = if (isJumpCamera) "" else captureGuidance,
-                        progress = if (isJumpCamera) null else progressText,
-                        warnings = contextWarnings,
-                        modifier = Modifier.align(Alignment.BottomStart).navigationBarsPadding()
-                            .padding(start = Spacing.lg, bottom = 80.dp).widthIn(max = 320.dp),
-                    )
-                }
-                val blockingMessage = error ?: when {
-                    !permissionsGranted -> stringResource(R.string.camera_state_no_permission)
-                    availableProfiles.isEmpty() && pipelineState in setOf(
-                        JumpCameraState.BLOCKED, JumpCameraState.ERROR,
-                    ) -> stringResource(R.string.camera_modes_query_empty)
-                    else -> null
-                }
-                blockingMessage?.let { message ->
-                    LandscapeBlockingError(
-                        message = message,
-                        permissionsGranted = permissionsGranted,
+            }) else null,
+            record = if (hud.showRecordControl) ({
+                CameraRecordButton(canStop, canRecord, ::toggleRecording, Modifier.fillMaxSize())
+            }) else null,
+            status = if (hud.showStatus) ({ CameraCaptureStatus(pipelineState, recordingTime) }) else null,
+            blockingError = blockingTitle?.let { title ->
+                {
+                    if (landscape) LandscapeBlockingError(
+                        title, blockingDetail, permissionsGranted,
                         onRetry = {
                             error = null
-                            if (permissionsGranted) recorder.retry(lifecycleOwner, selectedFps)
+                            if (permissionsGranted) recorder.retry(lifecycleOwner, selectedFps, selectedResolution)
                             else requestRequiredPermissions()
                         },
-                        modifier = Modifier.align(Alignment.Center).fillMaxWidth(0.48f),
-                    )
-                }
-            }
-        } else {
-            val portraitMetrics = CameraPortraitOverlayPolicy.calculate(
-                widthDp = maxWidth.value,
-                heightDp = maxHeight.value,
-                fontScale = LocalDensity.current.fontScale,
-                hasQuickAthletePicker = showQuickAthletePicker,
-                hasExperimentalBadge = activeEncoderDraft != null,
-            )
-            val blockingMessage = error ?: when {
-                !permissionsGranted -> stringResource(R.string.camera_state_no_permission)
-                availableProfiles.isEmpty() && pipelineState in setOf(
-                    JumpCameraState.BLOCKED, JumpCameraState.ERROR,
-                ) -> stringResource(R.string.camera_modes_query_empty)
-                else -> null
-            }
-
-            Box(modifier = Modifier.fillMaxSize()) {
-                previewContent(
-                    Modifier.fillMaxSize(),
-                    true,
-                    if (showQuickAthletePicker) portraitMetrics.quickAthleteTopOffsetDp.toInt() else 0,
-                    if (activeEncoderDraft != null) {
-                        portraitMetrics.experimentalBadgeTopOffsetDp.toInt()
-                    } else {
-                        0
-                    },
-                )
-
-                Surface(
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .fillMaxWidth()
-                        .windowInsetsTopHeight(WindowInsets.statusBars),
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
-                ) {}
-
-                CameraBackControl(
-                    onBack = ::leaveCamera,
-                    modifier = Modifier.align(Alignment.TopStart).statusBarsPadding()
-                        .padding(start = Spacing.sm, top = Spacing.xs),
-                )
-                if (hud.showStep) {
-                    CameraStepBadge(
-                        step = jumpFlowStep,
-                        modifier = Modifier.align(Alignment.TopEnd).statusBarsPadding()
-                            .padding(end = portraitMetrics.topOverlayEndPaddingDp.dp, top = Spacing.sm)
-                            .widthIn(max = portraitMetrics.topOverlayWidthDp.dp),
-                    )
-                }
-                if (hud.showStatus) {
-                    CameraCaptureStatus(
-                        state = pipelineState,
-                        recordingTime = recordingTime,
-                        modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding()
-                            .padding(top = 64.dp),
-                    )
-                }
-
-                blockingMessage?.let { message ->
-                    PortraitBlockingError(
-                        message = message,
-                        permissionsGranted = permissionsGranted,
+                        onImportVideo = {
+                            importVideoLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly),
+                            )
+                        },
+                    ) else PortraitBlockingError(
+                        title, blockingDetail, permissionsGranted,
                         onRetry = {
                             error = null
-                            if (permissionsGranted) recorder.retry(lifecycleOwner, selectedFps)
+                            if (permissionsGranted) recorder.retry(lifecycleOwner, selectedFps, selectedResolution)
                             else requestRequiredPermissions()
                         },
-                        modifier = Modifier
-                            .align(Alignment.Center)
-                            .zIndex(1f)
-                            .width(portraitMetrics.bottomOverlayWidthDp.dp)
-                            .padding(horizontal = portraitMetrics.horizontalPaddingDp.dp),
+                        onImportVideo = {
+                            importVideoLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly),
+                            )
+                        },
                     )
                 }
-
-                if (hud.showGuidance && (if (isJumpCamera) contextWarnings.isNotEmpty() else showCaptureHint)) {
-                    CameraHintOverlay(
-                        guidance = if (isJumpCamera) "" else captureGuidance,
-                        progress = if (isJumpCamera) null else progressText,
-                        warnings = contextWarnings,
-                        modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding()
-                            .padding(horizontal = portraitMetrics.horizontalPaddingDp.dp)
-                            .padding(bottom = 168.dp)
-                            .widthIn(max = portraitMetrics.bottomOverlayWidthDp.dp),
-                    )
-                }
-                if (hud.showFps) {
-                    Row(
-                        modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding()
-                            .padding(bottom = if (portraitMetrics.compactControls) 88.dp else 100.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-                    ) {
-                        CameraQuickFpsSelector(
-                            selectedFps, mode?.fps, availableFps, unavailableFps, ::selectFps,
-                        )
-                        CameraHintButton(
-                            onClick = {
-                                if (isJumpCamera) showRecordingGuide = true
-                                else showCaptureHint = !showCaptureHint
-                            },
-                            descriptionRes = if (isJumpCamera) R.string.jump_recording_guide_open
-                                else R.string.camera_capture_tips,
-                        )
-                    }
-                }
-                if (hud.showRecordControl) {
-                    CameraRecordButton(
-                        canStop = canStop,
-                        canRecord = canRecord,
-                        onClick = ::toggleRecording,
-                        modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding()
-                            .padding(bottom = Spacing.sm)
-                            .size(portraitMetrics.recordButtonSizeDp.dp),
-                    )
-                }
-            }
-        }
-    }
-
-    if (showRecordingGuide && isJumpCamera && !takeActive) {
-        JumpRecordingGuideDialog {
-            settings.hasSeenJumpCameraGuide = true
-            showRecordingGuide = false
-        }
+            },
+        )
+        VideoPreparationOverlay(active = pipelineState == JumpCameraState.FINALIZING)
     }
 
     if (showFinalizingDiscardDialog) {
@@ -675,12 +598,13 @@ fun CameraScreen(
 }
 
 @Composable
-private fun CameraBackControl(onBack: () -> Unit, modifier: Modifier = Modifier) {
+internal fun CameraBackControl(onBack: () -> Unit, modifier: Modifier = Modifier) {
     Surface(
-        modifier = modifier.size(48.dp),
+        modifier = modifier.size(48.dp).testTag("camera-back-control"),
         shape = CircleShape,
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.90f),
-        contentColor = MaterialTheme.colorScheme.onSurface,
+        color = CameraChrome.surface,
+        contentColor = CameraChrome.content,
+        border = BorderStroke(1.dp, CameraChrome.outline),
     ) {
         IconButton(onClick = onBack) {
             Icon(
@@ -787,36 +711,15 @@ private fun CameraCaptureStatus(
 }
 
 @Composable
-private fun LandscapeRecordControl(
-    canStop: Boolean,
-    canRecord: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier.size(88.dp),
-        shape = CircleShape,
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.78f),
-        shadowElevation = 8.dp,
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            CameraRecordButton(
-                canStop = canStop,
-                canRecord = canRecord,
-                onClick = onClick,
-                modifier = Modifier.size(72.dp),
-            )
-        }
-    }
-}
-
-@Composable
 private fun LandscapeBlockingError(
-    message: String,
+    title: String,
+    detail: String?,
     permissionsGranted: Boolean,
     onRetry: () -> Unit,
+    onImportVideo: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var showDetail by remember { mutableStateOf(false) }
     Surface(
         modifier = modifier,
         shape = ShapeTokens.medium,
@@ -828,14 +731,29 @@ private fun LandscapeBlockingError(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
-            Text(
-                text = message,
-                modifier = Modifier.weight(1f),
-                color = MaterialTheme.colorScheme.onErrorContainer,
-                style = MaterialTheme.typography.bodySmall,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                Text(
+                    text = title,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (detail != null) {
+                    TextButton(onClick = { showDetail = !showDetail }) {
+                        Text(stringResource(R.string.camera_preview_error_detail), maxLines = 1)
+                    }
+                    if (showDetail) {
+                        Text(
+                            text = detail,
+                            color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f),
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
             Button(onClick = onRetry) {
                 Text(
                     stringResource(
@@ -845,17 +763,23 @@ private fun LandscapeBlockingError(
                     maxLines = 1,
                 )
             }
+            TextButton(onClick = onImportVideo) {
+                Text(stringResource(R.string.common_import_video), maxLines = 1)
+            }
         }
     }
 }
 
 @Composable
 private fun PortraitBlockingError(
-    message: String,
+    title: String,
+    detail: String?,
     permissionsGranted: Boolean,
     onRetry: () -> Unit,
+    onImportVideo: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var showDetail by remember { mutableStateOf(false) }
     Surface(
         modifier = modifier,
         shape = ShapeTokens.medium,
@@ -870,12 +794,26 @@ private fun PortraitBlockingError(
             verticalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             Text(
-                text = message,
+                text = title,
                 color = MaterialTheme.colorScheme.onErrorContainer,
                 style = MaterialTheme.typography.bodySmall,
                 maxLines = 3,
                 overflow = TextOverflow.Ellipsis,
             )
+            if (detail != null) {
+                TextButton(onClick = { showDetail = !showDetail }) {
+                    Text(stringResource(R.string.camera_preview_error_detail), maxLines = 1)
+                }
+                if (showDetail) {
+                    Text(
+                        text = detail,
+                        color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f),
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 4,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
             Button(onClick = onRetry) {
                 Text(
                     stringResource(
@@ -885,12 +823,15 @@ private fun PortraitBlockingError(
                     maxLines = 1,
                 )
             }
+            TextButton(onClick = onImportVideo) {
+                Text(stringResource(R.string.common_import_video), maxLines = 1)
+            }
         }
     }
 }
 
 @Composable
-private fun CameraRecordButton(
+internal fun CameraRecordButton(
     canStop: Boolean,
     canRecord: Boolean,
     onClick: () -> Unit,
@@ -903,26 +844,45 @@ private fun CameraRecordButton(
             else -> R.string.camera_preparing
         },
     )
-    FloatingActionButton(
-        onClick = onClick,
+    Surface(
+        modifier = modifier.size(88.dp)
+            .clickable(enabled = canStop || canRecord, role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = description },
         shape = CircleShape,
-        modifier = modifier.semantics {
-            contentDescription = description
-            if (!canStop && !canRecord) disabled()
-        },
-        containerColor = when {
-            canStop -> MaterialTheme.colorScheme.error
-            canRecord -> MaterialTheme.colorScheme.error
-            else -> MaterialTheme.colorScheme.surfaceVariant
-        },
+        color = CameraChrome.surface,
+        border = BorderStroke(3.dp, CameraChrome.content.copy(alpha = if (canStop || canRecord) 0.92f else 0.4f)),
     ) {
-        Text(
-            if (canStop) "■" else if (canRecord) "●" else "…",
-            color = if (canStop || canRecord) MaterialTheme.colorScheme.onError
-                else MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.headlineMedium,
-        )
+        Box(Modifier.padding(6.dp).background(
+            CameraChrome.recording.copy(alpha = if (canStop || canRecord) 1f else 0.38f), CircleShape,
+        ), contentAlignment = Alignment.Center) {
+            when {
+                canStop -> Box(Modifier.size(24.dp).background(CameraChrome.content, ShapeTokens.extraSmall))
+                canRecord -> Box(Modifier.size(8.dp).background(CameraChrome.content, CircleShape))
+                else -> CircularProgressIndicator(
+                    modifier = Modifier.size(24.dp), color = CameraChrome.content, strokeWidth = 2.dp,
+                )
+            }
+        }
     }
+}
+
+/**
+ * F033 production information gate: the on-demand tips panel is available only when the
+ * user asked for it, permission-gated quick controls are visible, and no take is active.
+ * READY and ERROR expose it (both keep quick controls); STARTING/RECORDING/FINALIZING hide
+ * it and force-close any open panel; BLOCKED/BINDING have no quick controls so it stays hidden.
+ */
+internal fun shouldShowCameraInformation(
+    showCaptureHint: Boolean,
+    permissionsGranted: Boolean,
+    state: JumpCameraState,
+): Boolean {
+    if (!showCaptureHint || !permissionsGranted) return false
+    if (state == JumpCameraState.STARTING ||
+        state == JumpCameraState.RECORDING ||
+        state == JumpCameraState.FINALIZING
+    ) return false
+    return CameraHudPolicy.forState(state).showFps
 }
 
 /**

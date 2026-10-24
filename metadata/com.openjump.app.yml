@@ -1,3 +1,6 @@
+# Snapshot of the official fdroiddata recipe at initial inclusion (1.0 / code 7).
+# Stable updates, including 1.2.0 / code 9, are detected automatically from
+# annotated tags and version.properties; no manual MR is required for them.
 Categories:
   - Sports & Health
 License: GPL-3.0-or-later

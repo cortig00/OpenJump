@@ -18,6 +18,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -47,6 +48,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
@@ -59,6 +61,7 @@ import androidx.compose.ui.unit.dp
 import com.openjump.app.R
 import com.openjump.app.encoder.EncoderExercise
 import com.openjump.app.encoder.EncoderSetup
+import com.openjump.app.settings.EncoderSettings
 import com.openjump.app.ui.LocalUnitSystem
 import com.openjump.app.ui.MeasurementFormatting
 import com.openjump.app.ui.MeasurementQuantity
@@ -82,10 +85,20 @@ fun EncoderSetupScreen(
     onAthleteSelected: (Long) -> Unit,
     onImport: (Uri, EncoderSetup, Long) -> Unit,
     onRecord: (EncoderSetup, Long) -> Unit,
+    initialDefaultLoadsKg: Map<EncoderExercise, Double>? = null,
 ) {
+    val context = LocalContext.current
+    val unitSystem = LocalUnitSystem.current
+    val locale = currentAppLocale()
+    // Read once for this setup visit, never overwrite a user's session edit on recomposition.
+    val defaultsKg = remember(context, initialDefaultLoadsKg) {
+        initialDefaultLoadsKg ?: EncoderSettings(context).let { settings ->
+            EncoderExercise.entries.associateWith(settings::defaultLoadKg)
+        }
+    }
     var exerciseName by rememberSaveable { mutableStateOf(EncoderExercise.BENCH_PRESS.name) }
-    var loadInput by rememberSaveable(stateSaver = UnitAwareNumericInputState.Saver) {
-        mutableStateOf(UnitAwareNumericInputState.initial("", com.openjump.app.settings.UnitProfile.METRIC))
+    var loadDrafts by rememberSaveable(stateSaver = EncoderLoadDrafts.Saver) {
+        mutableStateOf(EncoderLoadDrafts.initial(defaultsKg, unitSystem, locale))
     }
     var setupAthleteId by rememberSaveable(selectedAthleteId) { mutableStateOf(selectedAthleteId) }
     // Blocks repeated taps only while this setup destination is actively composed.
@@ -97,12 +110,11 @@ fun EncoderSetupScreen(
         }
     }
     val exercise = EncoderExercise.valueOf(exerciseName)
-    val unitSystem = LocalUnitSystem.current
-    val locale = currentAppLocale()
     val loadQuantity = MeasurementQuantity.MASS_KG
     LaunchedEffect(unitSystem) {
-        loadInput = UnitAwareNumericInputState.rebase(loadInput, unitSystem, loadQuantity, locale)
+        loadDrafts = loadDrafts.rebase(unitSystem, locale)
     }
+    val loadInput = loadDrafts.input(exercise)
     val loadText = loadInput.text
     val loadUnit = MeasurementFormatting.unit(loadQuantity, unitSystem)
     val load = UnitAwareNumericInputState.canonical(loadInput, loadQuantity, locale, unitSystem)
@@ -215,6 +227,16 @@ fun EncoderSetupScreen(
                 ) {
                     Button(
                         onClick = {
+                            setup?.let { setupValue -> setupAthleteId?.let {
+                                startDispatched = true
+                                onRecord(setupValue, it)
+                            } }
+                        },
+                        enabled = canStart,
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag("encoder-setup-record"),
+                    ) { Text(stringResource(R.string.common_record_camera)) }
+                    OutlinedButton(
+                        onClick = {
                             val importSetup = setup
                             val importAthleteId = setupAthleteId
                             if (!startDispatched && athleteSelected && importSetup != null && importAthleteId != null) {
@@ -232,19 +254,6 @@ fun EncoderSetupScreen(
                         enabled = canStart,
                         modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag("encoder-setup-import"),
                     ) { Text(stringResource(R.string.common_import_video)) }
-                    TextButton(
-                        onClick = {
-                            setup?.let { setupValue -> setupAthleteId?.let {
-                                startDispatched = true
-                                onRecord(setupValue, it)
-                            } }
-                        },
-                        enabled = canStart,
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("encoder-setup-record"),
-                        colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
-                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        ),
-                    ) { Text(stringResource(R.string.common_record_camera)) }
                 }
             }
         },
@@ -310,7 +319,7 @@ fun EncoderSetupScreen(
             }
             TextField(
                 value = loadText,
-                onValueChange = { loadInput = UnitAwareNumericInputState.edited(it, unitSystem, loadQuantity, locale) },
+                onValueChange = { loadDrafts = loadDrafts.edited(exercise, it, unitSystem, locale) },
                 label = {
                     Text(stringResource(R.string.encoder_total_load))
                 },
@@ -324,10 +333,11 @@ fun EncoderSetupScreen(
                         when {
                             loadInput.requiresReview -> stringResource(R.string.unit_input_review_required)
                             loadInvalid -> stringResource(R.string.unit_input_invalid)
-                            else -> stringResource(
+                            exercise == EncoderExercise.PULL_UP -> stringResource(
                             R.string.encoder_load_help,
                             MeasurementFormatting.format(0.0, loadQuantity, unitSystem, locale),
                         )
+                            else -> stringResource(R.string.encoder_load_help_loaded)
                         }
                     )
                 },

@@ -163,15 +163,18 @@ internal fun FrameStepButton(
         }
     }
 
+    // F034 scoped style: idle frame-step uses a neutral container so the only
+    // saturated surface in analysis stays the primary play control. Hold
+    // repeat keeps the primaryContainer flash, animation/semantics/hold intact.
     val targetContainer = when {
         !enabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
         repeating -> MaterialTheme.colorScheme.primaryContainer
-        else -> MaterialTheme.colorScheme.secondaryContainer
+        else -> MaterialTheme.colorScheme.surfaceContainerHigh
     }
     val targetContent = when {
         !enabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
         repeating -> MaterialTheme.colorScheme.onPrimaryContainer
-        else -> MaterialTheme.colorScheme.onSecondaryContainer
+        else -> MaterialTheme.colorScheme.onSurface
     }
     val container by animateColorAsState(
         targetValue = targetContainer,

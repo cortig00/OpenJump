@@ -48,8 +48,13 @@ fun PrivacyPolicyScreen(onBack: () -> Unit) {
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
             contentPadding = PaddingValues(
-                horizontal = Spacing.screenHorizontal,
-                vertical = Spacing.lg,
+                start = Spacing.screenHorizontal,
+                end = Spacing.screenHorizontal,
+                top = Spacing.lg,
+                // El último párrafo debe poder desplazarse por encima del límite del
+                // área de contenido (la bottom-nav queda fuera del NavHost): sin este
+                // respiro, la última línea se corta a media altura. Ver hallazgo F-021.
+                bottom = Spacing.xxl,
             ),
             verticalArrangement = Arrangement.spacedBy(Spacing.xl),
         ) {

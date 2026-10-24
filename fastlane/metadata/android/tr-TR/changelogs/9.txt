@@ -1,0 +1,1 @@
+OpenJump 1.2.0: altı protokolle video sıçrama analizi, sporcu profilleri, geçmiş, karşılaştırmalar ve manuel yedekler. Kamera, kare seçici ve dışa aktarma iyileştirmeleri. F-V-P profili bu sürümde kullanılamaz. İşlemler cihazınızda çevrimdışı yapılır.

@@ -3,6 +3,7 @@ package com.openjump.app.ui.components
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -262,21 +263,36 @@ fun OpenJumpTopAppBar(
 fun StatusPill(
     text: String,
     modifier: Modifier = Modifier,
-    containerColor: Color = MaterialTheme.colorScheme.secondaryContainer,
-    contentColor: Color = MaterialTheme.colorScheme.onSecondaryContainer,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    contentColor: Color = MaterialTheme.colorScheme.onSurface,
+    leadingDot: Color? = null,
 ) {
     Surface(
         modifier = modifier,
         shape = ShapeTokens.full,
         color = containerColor,
         contentColor = contentColor,
+        border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+        ),
     ) {
-        Text(
-            text,
+        Row(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.SemiBold,
-        )
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            if (leadingDot != null) {
+                Box(
+                    modifier = Modifier.size(8.dp).clip(CircleShape).background(leadingDot),
+                )
+            }
+            Text(
+                text,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
     }
 }
 
@@ -402,13 +418,16 @@ fun InfoBanner(
     modifier: Modifier = Modifier,
     warning: Boolean = false,
 ) {
+    // Non-warning banners stay on the shared neutral surface so result screens
+    // keep at most two main surfaces (primary hero + neutral). The lavender
+    // secondaryContainer role stays reserved for data/nav tokens, not banners.
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = ShapeTokens.medium,
         color = if (warning) {
             MaterialTheme.colorScheme.tertiaryContainer
         } else {
-            MaterialTheme.colorScheme.secondaryContainer
+            MaterialTheme.colorScheme.surfaceContainerLow
         },
     ) {
         Column(Modifier.padding(16.dp)) {

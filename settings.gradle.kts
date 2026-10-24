@@ -16,3 +16,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "OpenJump"
 include(":app")
+include(":fvp")
+include(":fvp-lab")

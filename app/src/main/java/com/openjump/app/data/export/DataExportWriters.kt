@@ -35,7 +35,7 @@ object CsvDataExportWriter {
     fun observations(document: DataExportDocument): List<CsvObservation> {
         val canonical = document.validated().canonicalized()
         val athleteById = canonical.athletes.associateBy { it.id }
-        return canonical.measurements.flatMap { measurement ->
+        val measurements = canonical.measurements.flatMap { measurement ->
             val athlete = measurement.athleteId?.let(athleteById::get)
             val common: (String, ExportJumpContext?, Int?, String?, String?, ExportMetric) -> CsvObservation =
                 { type, context, repetitionOrdinal, quality, reasons, metric ->
@@ -56,6 +56,149 @@ object CsvDataExportWriter {
             roots + jumps + summaries + repetitions
         }.sortedWith(compareBy<CsvObservation>({ it.dateTimeUtc }, { it.measurementFamily }, { it.measurementId },
             { observationOrder(it.observationType) }, { it.attemptOrdinal ?: -1 }, { it.repetitionOrdinal ?: -1 }, { it.metricKey }, { it.metricUnit }))
+        // La familia F-V-P se pagina con su propio cursor, así que sus filas van después de
+        // jump/encoder (mismo orden en el escritor streaming y en este camino canónico).
+        return measurements + canonical.fvp.flatMap { fvpObservations(it) }
+    }
+
+    /**
+     * Filas F-V-P en formato largo: la cabecera de 29 columnas no cambia, así que cada atributo es
+     * una observación. `measurement_family = "fvp"` y `observation_type` es FVP_ASSESSMENT,
+     * FVP_CONDITION o FVP_ATTEMPT. Los atributos numéricos usan `metric_key`/`metric_value`/
+     * `metric_unit`; los textuales usan `metric_key` con el texto en `metric_reason` y
+     * `metric_unit = "TEXT"`. `repetition_ordinal` lleva el ordinal de la condición y
+     * `attempt_ordinal` el del intento; las filas de condición/intento propagan en `load_kg` la
+     * carga añadida de su condición y en `notes` las notas de la evaluación.
+     */
+    internal fun fvpObservations(assessment: ExportFvpAssessment): List<CsvObservation> {
+        fun row(
+            type: String,
+            key: String,
+            value: Double? = null,
+            unit: String? = null,
+            validity: String? = null,
+            reason: String? = null,
+            attemptOrdinal: Int? = null,
+            repetitionOrdinal: Int? = null,
+            loadKg: Double? = null,
+            longValue: Long? = null,
+        ) = CsvObservation(
+            observationType = type,
+            measurementFamily = FVP_MEASUREMENT_FAMILY,
+            measurementId = assessment.id,
+            dateTimeUtc = assessment.dateTimeUtc,
+            athleteId = assessment.athleteId,
+            athleteName = null,
+            athleteBirthDate = null,
+            athleteSex = null,
+            testingSessionId = assessment.testingSessionId,
+            testingGroupName = null,
+            protocolId = assessment.protocolId,
+            exercise = null,
+            attemptOrdinal = attemptOrdinal,
+            repetitionOrdinal = repetitionOrdinal,
+            side = null,
+            loadKg = loadKg,
+            dropHeightCm = null,
+            distanceCm = null,
+            analysisVersion = null,
+            repetitionQuality = null,
+            qualityReasons = null,
+            metricKey = key,
+            metricValue = value,
+            metricUnit = unit ?: FVP_TEXT_UNIT,
+            metricValidity = validity,
+            metricReason = reason,
+            isPrimary = false,
+            notes = assessment.notes,
+            metricLongValue = longValue,
+        )
+        fun text(type: String, key: String, value: String, attemptOrdinal: Int? = null, repetitionOrdinal: Int? = null, loadKg: Double? = null) =
+            row(type, key, reason = value, attemptOrdinal = attemptOrdinal, repetitionOrdinal = repetitionOrdinal, loadKg = loadKg)
+        /** Fila de un PTS [µs] exacto: viaja por `metricLongValue`, nunca por `metricValue`. */
+        fun pts(type: String, key: String, value: Long, attemptOrdinal: Int? = null, repetitionOrdinal: Int? = null, loadKg: Double? = null) =
+            row(type, key, unit = FVP_MICROSECOND_UNIT, attemptOrdinal = attemptOrdinal, repetitionOrdinal = repetitionOrdinal, loadKg = loadKg, longValue = value)
+
+        val assessmentRows = buildList {
+            add(row("FVP_ASSESSMENT", "BODY_MASS", assessment.bodyMassKg, "KILOGRAM"))
+            add(row("FVP_ASSESSMENT", "PUSH_OFF", assessment.pushOffM, "METER"))
+            assessment.sourceFps?.let { add(row("FVP_ASSESSMENT", "SOURCE_FPS", it, "FRAMES_PER_SECOND")) }
+            add(row("FVP_ASSESSMENT", "CONDITION_COUNT", assessment.conditionCount.toDouble(), "COUNT"))
+            add(row("FVP_ASSESSMENT", "F0", assessment.f0N, "NEWTON"))
+            assessment.f0RelNPerKg?.let { add(row("FVP_ASSESSMENT", "F0_REL", it, "NEWTON_PER_KILOGRAM")) }
+            add(row("FVP_ASSESSMENT", "SLOPE_FV", assessment.slopeFv, "NEWTON_PER_METER_PER_SECOND"))
+            add(row("FVP_ASSESSMENT", "SFV", assessment.sfvNsPerM, "NEWTON_PER_METER_PER_SECOND"))
+            assessment.v0Mps?.let { add(row("FVP_ASSESSMENT", "V0", it, "METER_PER_SECOND")) }
+            assessment.pmaxW?.let { add(row("FVP_ASSESSMENT", "PMAX", it, "WATT")) }
+            assessment.pmaxRelWPerKg?.let { add(row("FVP_ASSESSMENT", "PMAX_REL", it, "WATT_PER_KILOGRAM")) }
+            assessment.r2?.let { add(row("FVP_ASSESSMENT", "R2", it, "RATIO")) }
+            add(row("FVP_ASSESSMENT", "V_MIN", assessment.vMinMps, "METER_PER_SECOND"))
+            add(row("FVP_ASSESSMENT", "V_MAX", assessment.vMaxMps, "METER_PER_SECOND"))
+            add(row("FVP_ASSESSMENT", "F_MIN", assessment.fMinN, "NEWTON"))
+            add(row("FVP_ASSESSMENT", "F_MAX", assessment.fMaxN, "NEWTON"))
+            assessment.pushOffLandmarkHeightCm?.let { add(row("FVP_ASSESSMENT", "PUSH_OFF_LANDMARK_HEIGHT", it, "CENTIMETER")) }
+            assessment.pushOffCrouchCm?.let { add(row("FVP_ASSESSMENT", "PUSH_OFF_CROUCH", it, "CENTIMETER")) }
+            assessment.pushOffExtendedCm?.let { add(row("FVP_ASSESSMENT", "PUSH_OFF_EXTENDED", it, "CENTIMETER")) }
+            add(text("FVP_ASSESSMENT", "SESSION_KEY", assessment.sessionKey))
+            add(text("FVP_ASSESSMENT", "BODY_MASS_SOURCE", assessment.bodyMassSource))
+            add(text("FVP_ASSESSMENT", "PUSH_OFF_MODE", assessment.pushOffMode))
+            add(text("FVP_ASSESSMENT", "PUSH_OFF_SOURCE", assessment.pushOffSource))
+            assessment.pushOffLandmark?.let { add(text("FVP_ASSESSMENT", "PUSH_OFF_LANDMARK", it)) }
+            assessment.pushOffProtocol?.let { add(text("FVP_ASSESSMENT", "PUSH_OFF_PROTOCOL", it)) }
+            assessment.pushOffMeasuredAtUtc?.let { add(text("FVP_ASSESSMENT", "PUSH_OFF_MEASURED_AT", it)) }
+            add(text("FVP_ASSESSMENT", "ALGORITHM_VERSION", assessment.algorithmVersion))
+            add(text("FVP_ASSESSMENT", "METHOD_VERSION", assessment.methodVersion))
+            add(text("FVP_ASSESSMENT", "WARNINGS", assessment.warningsCsv))
+            // Procedencia B0 (esquema 5): una fila por columna Room. Los enums se emiten siempre
+            // (`UNKNOWN` es un valor declarado, no ausencia); solo se omiten los nullable null.
+            assessment.acquiredAtUtc?.let { add(text("FVP_ASSESSMENT", "ACQUIRED_AT", it)) }
+            add(text("FVP_ASSESSMENT", "ACQUISITION_CONTEXT_KIND", assessment.acquisitionContextKind))
+            assessment.acquisitionContextKey?.let { add(text("FVP_ASSESSMENT", "ACQUISITION_CONTEXT_KEY", it)) }
+            add(text("FVP_ASSESSMENT", "BODY_MASS_MEASUREMENT", assessment.bodyMassMeasurement))
+            assessment.bodyMassMeasuredAtUtc?.let { add(text("FVP_ASSESSMENT", "BODY_MASS_MEASURED_AT", it)) }
+        }
+        val conditionRows = assessment.conditions.sortedBy { it.ordinal }.flatMap { condition ->
+            val ordinal = condition.ordinal
+            val load = condition.addedLoadKg
+            buildList {
+                add(text("FVP_CONDITION", "CONDITION_KEY", condition.conditionKey, repetitionOrdinal = ordinal, loadKg = load))
+                add(row("FVP_CONDITION", "ORDINAL", ordinal.toDouble(), "COUNT", repetitionOrdinal = ordinal, loadKg = load))
+                add(row("FVP_CONDITION", "ADDED_LOAD", load, "KILOGRAM", repetitionOrdinal = ordinal, loadKg = load))
+                add(row("FVP_CONDITION", "TOTAL_MASS", condition.totalMassKg, "KILOGRAM", repetitionOrdinal = ordinal, loadKg = load))
+                add(row("FVP_CONDITION", "PUSH_OFF", condition.pushOffM, "METER", repetitionOrdinal = ordinal, loadKg = load))
+                add(row("FVP_CONDITION", "SELECTED_HEIGHT", condition.selectedHeightM, "METER", repetitionOrdinal = ordinal, loadKg = load))
+                condition.selectedAttemptOrdinal?.let { add(row("FVP_CONDITION", "SELECTED_ATTEMPT_ORDINAL", it.toDouble(), "COUNT", repetitionOrdinal = ordinal, loadKg = load)) }
+                add(text("FVP_CONDITION", "ADDED_LOAD_SOURCE", condition.addedLoadSource, repetitionOrdinal = ordinal, loadKg = load))
+                condition.addedLoadMeasuredAtUtc?.let { add(text("FVP_CONDITION", "ADDED_LOAD_MEASURED_AT", it, repetitionOrdinal = ordinal, loadKg = load)) }
+                condition.attempts.sortedBy { it.ordinal }.forEach { attempt ->
+                    val attemptOrdinal = attempt.ordinal
+                    add(row("FVP_ATTEMPT", "HEIGHT", attempt.heightM, "METER", attemptOrdinal = attemptOrdinal, repetitionOrdinal = ordinal, loadKg = load))
+                    add(text("FVP_ATTEMPT", "METHOD", attempt.method, attemptOrdinal = attemptOrdinal, repetitionOrdinal = ordinal, loadKg = load))
+                    attempt.flightTimeS?.let { add(row("FVP_ATTEMPT", "FLIGHT_TIME", it, "SECOND", attemptOrdinal = attemptOrdinal, repetitionOrdinal = ordinal, loadKg = load)) }
+                    attempt.sourceFps?.let { add(row("FVP_ATTEMPT", "SOURCE_FPS", it, "FRAMES_PER_SECOND", attemptOrdinal = attemptOrdinal, repetitionOrdinal = ordinal, loadKg = load)) }
+                    add(row("FVP_ATTEMPT", "VALID", unit = "BOOLEAN", validity = if (attempt.valid) "VALID" else "INVALID", attemptOrdinal = attemptOrdinal, repetitionOrdinal = ordinal, loadKg = load))
+                    attempt.exclusionReason?.let { add(text("FVP_ATTEMPT", "EXCLUSION_REASON", it, attemptOrdinal = attemptOrdinal, repetitionOrdinal = ordinal, loadKg = load)) }
+                    attempt.sourceAssessmentId?.let { add(text("FVP_ATTEMPT", "SOURCE_ASSESSMENT_ID", it, attemptOrdinal = attemptOrdinal, repetitionOrdinal = ordinal, loadKg = load)) }
+                    attempt.sourceAttemptOrdinal?.let { add(row("FVP_ATTEMPT", "SOURCE_ATTEMPT_ORDINAL", it.toDouble(), "COUNT", attemptOrdinal = attemptOrdinal, repetitionOrdinal = ordinal, loadKg = load)) }
+                    attempt.sourceProtocolId?.let { add(text("FVP_ATTEMPT", "SOURCE_PROTOCOL", it, attemptOrdinal = attemptOrdinal, repetitionOrdinal = ordinal, loadKg = load)) }
+                    attempt.notes?.let { add(text("FVP_ATTEMPT", "ATTEMPT_NOTES", it, attemptOrdinal = attemptOrdinal, repetitionOrdinal = ordinal, loadKg = load)) }
+                    attempt.sourceRecordedAtUtc?.let { add(text("FVP_ATTEMPT", "SOURCE_RECORDED_AT", it, attemptOrdinal = attemptOrdinal, repetitionOrdinal = ordinal, loadKg = load)) }
+                    attempt.sourceAthleteId?.let { add(text("FVP_ATTEMPT", "SOURCE_ATHLETE_ID", it, attemptOrdinal = attemptOrdinal, repetitionOrdinal = ordinal, loadKg = load)) }
+                    attempt.acquiredAtUtc?.let { add(text("FVP_ATTEMPT", "ATTEMPT_ACQUIRED_AT", it, attemptOrdinal = attemptOrdinal, repetitionOrdinal = ordinal, loadKg = load)) }
+                    attempt.reuseConfirmedAtUtc?.let { add(text("FVP_ATTEMPT", "REUSE_CONFIRMED_AT", it, attemptOrdinal = attemptOrdinal, repetitionOrdinal = ordinal, loadKg = load)) }
+                    attempt.reuseConfirmationVersion?.let { add(text("FVP_ATTEMPT", "REUSE_CONFIRMATION_VERSION", it, attemptOrdinal = attemptOrdinal, repetitionOrdinal = ordinal, loadKg = load)) }
+                    attempt.takeoffPtsUs?.let { add(pts("FVP_ATTEMPT", "TAKE_OFF_PTS", it, attemptOrdinal = attemptOrdinal, repetitionOrdinal = ordinal, loadKg = load)) }
+                    attempt.takeoffPreviousPtsUs?.let { add(pts("FVP_ATTEMPT", "TAKE_OFF_PREVIOUS_PTS", it, attemptOrdinal = attemptOrdinal, repetitionOrdinal = ordinal, loadKg = load)) }
+                    attempt.takeoffNextPtsUs?.let { add(pts("FVP_ATTEMPT", "TAKE_OFF_NEXT_PTS", it, attemptOrdinal = attemptOrdinal, repetitionOrdinal = ordinal, loadKg = load)) }
+                    attempt.landingPtsUs?.let { add(pts("FVP_ATTEMPT", "LANDING_PTS", it, attemptOrdinal = attemptOrdinal, repetitionOrdinal = ordinal, loadKg = load)) }
+                    attempt.landingPreviousPtsUs?.let { add(pts("FVP_ATTEMPT", "LANDING_PREVIOUS_PTS", it, attemptOrdinal = attemptOrdinal, repetitionOrdinal = ordinal, loadKg = load)) }
+                    attempt.landingNextPtsUs?.let { add(pts("FVP_ATTEMPT", "LANDING_NEXT_PTS", it, attemptOrdinal = attemptOrdinal, repetitionOrdinal = ordinal, loadKg = load)) }
+                    add(text("FVP_ATTEMPT", "TIME_MAPPING", attempt.timeMapping, attemptOrdinal = attemptOrdinal, repetitionOrdinal = ordinal, loadKg = load))
+                    attempt.timeMappingEvidenceKey?.let { add(text("FVP_ATTEMPT", "TIME_MAPPING_EVIDENCE_KEY", it, attemptOrdinal = attemptOrdinal, repetitionOrdinal = ordinal, loadKg = load)) }
+                }
+            }
+        }
+        return assessmentRows + conditionRows
     }
 
     private fun observationOrder(type: String) = when (type) {
@@ -65,13 +208,20 @@ object CsvDataExportWriter {
         else -> 3
     }
 
-    private fun CsvObservation.toCsv(): String = listOf(
+    private fun CsvObservation.internalRow(): List<Any?> = listOf(
         DATA_EXPORT_SCHEMA_VERSION, observationType, measurementFamily, measurementId, dateTimeUtc,
         athleteId, athleteName, athleteBirthDate, athleteSex, testingSessionId, testingGroupName,
         protocolId, exercise, attemptOrdinal, repetitionOrdinal, side, loadKg, dropHeightCm,
-        distanceCm, analysisVersion, repetitionQuality, qualityReasons, metricKey, metricValue,
+        distanceCm, analysisVersion, repetitionQuality, qualityReasons, metricKey,
+        // Entero exacto si existe (PTS µs); el Double solo cubre las magnitudes fisicas.
+        metricLongValue ?: metricValue,
         metricUnit, metricValidity, metricReason, isPrimary, notes,
-    ).joinToString(",", transform = ::csvCell)
+    )
+
+    internal fun CsvObservation.toCsv(): String = internalRow().joinToString(",", transform = ::csvCell)
+
+    /** Línea CSV de una observación ya construida (la usa el escritor streaming). */
+    internal fun csvLine(observation: CsvObservation): String = observation.toCsv()
 
     internal fun cell(value: Any?): String = csvCell(value)
     private fun csvCell(value: Any?): String {
@@ -111,6 +261,9 @@ internal interface DataExportStreamWriter {
     suspend fun encoderMetric(row: ExportEncoderDetailRow)
     suspend fun endEncoderRepetition()
     suspend fun endEncoder()
+
+    /** Raíz F-V-P completa (condiciones e intentos incluidos), ya ensamblada por el repositorio. */
+    suspend fun fvp(assessment: ExportFvpAssessment)
     suspend fun finish()
 }
 
@@ -121,6 +274,8 @@ internal class StreamingJsonDataExportWriter(delegate: java.io.Writer) : DataExp
     private var firstAttempt = true
     private var firstMetric = true
     private var firstRepetition = true
+    private var firstFvp = true
+    private var measurementsClosed = false
     private var pendingMetric: String? = null
     private var measurementOpen = false
     private var currentNotes: String? = null
@@ -255,7 +410,34 @@ internal class StreamingJsonDataExportWriter(delegate: java.io.Writer) : DataExp
         prop(12, "notes", str(currentNotes), comma = false)
         raw("        }")
     }
-    override suspend fun finish() { if (firstMeasurement) raw("    \"measurements\": []\n}") else raw("\n    ]\n}"); out.flush() }
+
+    /**
+     * Cierra `measurements` (si seguía abierta) y emite la raíz F-V-P. El objeto se produce con el
+     * mismo `Json` configurado del camino canónico y se re-indenta 8 espacios, de modo que un
+     * documento con datos F-V-P es byte a byte idéntico entre el camino legacy y el streaming.
+     */
+    override suspend fun fvp(assessment: ExportFvpAssessment) {
+        if (!measurementsClosed) {
+            raw(if (firstMeasurement) "    \"measurements\": [],\n" else "\n    ],\n")
+            measurementsClosed = true
+        }
+        if (firstFvp) { raw("    \"fvp\": [\n"); firstFvp = false } else raw(",\n")
+        raw(
+            exportJson.encodeToString(ExportFvpAssessment.serializer(), assessment)
+                .lineSequence().joinToString("\n") { "        $it" },
+        )
+    }
+
+    override suspend fun finish() {
+        if (!measurementsClosed) {
+            raw(if (firstMeasurement) "    \"measurements\": []\n" else "\n    ]\n")
+            measurementsClosed = true
+        } else if (!firstFvp) {
+            raw("\n    ]\n")
+        }
+        raw("}")
+        out.flush()
+    }
 }
 
 internal class StreamingCsvDataExportWriter(delegate: java.io.Writer) : DataExportStreamWriter {
@@ -331,8 +513,23 @@ internal class StreamingCsvDataExportWriter(delegate: java.io.Writer) : DataExpo
         }
         row = null
     }
+    override suspend fun fvp(assessment: ExportFvpAssessment) {
+        CsvDataExportWriter.fvpObservations(assessment).forEach { observation ->
+            out.write(CsvDataExportWriter.csvLine(observation))
+            out.write("\r\n")
+        }
+    }
     override suspend fun finish() { out.flush() }
 }
+
+/** Valor de `measurement_family` de las observaciones F-V-P. */
+internal const val FVP_MEASUREMENT_FAMILY = "fvp"
+
+/** `metric_unit` de las observaciones F-V-P textuales (el texto viaja en `metric_reason`). */
+internal const val FVP_TEXT_UNIT = "TEXT"
+
+/** `metric_unit` de los PTS F-V-P [µs] (el entero exacto viaja en `metric_value`). */
+internal const val FVP_MICROSECOND_UNIT = "MICROSECOND"
 
 private fun Long.toUtcString(): String = java.time.Instant.ofEpochMilli(this).toString()
 private fun CsvObservation.toCsvLegacy() = ""

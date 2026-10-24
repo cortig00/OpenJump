@@ -36,28 +36,32 @@ object ProtocolCalculator {
     }
 
     private fun computeCountermovement(draft: MeasurementDraft): ProtocolResult {
-        val result = JumpMath.compute(
-            movementStartUs = draft.pts(EventType.MOVEMENT_START),
-            takeoffUs = draft.pts(EventType.TAKEOFF),
-            landingUs = draft.pts(EventType.LANDING),
-        )
-        return ProtocolResult(
-            protocolId = draft.protocolId,
-            primaryMetric = MetricValue(MetricKey.HEIGHT_CM, result.heightCm, MetricUnit.CENTIMETER),
-            secondaryMetrics = listOf(
-                MetricValue(MetricKey.FLIGHT_TIME_MS, result.flightTimeMs, MetricUnit.MILLISECOND),
+        val takeoffUs = draft.pts(EventType.TAKEOFF)
+        val flight = JumpMath.computeFlight(takeoffUs, draft.pts(EventType.LANDING))
+        // The start is optional: only a real, earlier mark unlocks time to take-off and RSI-mod.
+        val movementStartUs = draft.pts(EventType.MOVEMENT_START)
+            ?.takeIf { start -> takeoffUs != null && start < takeoffUs }
+        val secondary = buildList {
+            add(MetricValue(MetricKey.FLIGHT_TIME_MS, flight.flightTimeMs, MetricUnit.MILLISECOND))
+            add(
                 MetricValue(
                     MetricKey.TAKEOFF_VELOCITY_MPS,
-                    result.takeoffVelocityMS,
+                    flight.takeoffVelocityMS,
                     MetricUnit.METER_PER_SECOND,
                 ),
-                MetricValue(
-                    MetricKey.TIME_TO_TAKEOFF_MS,
-                    result.timeToTakeoffMs,
-                    MetricUnit.MILLISECOND,
-                ),
-                MetricValue(MetricKey.RSI_MOD, result.rsiMod, MetricUnit.METER_PER_SECOND),
-            ),
+            )
+            if (movementStartUs != null && takeoffUs != null) {
+                // Same arithmetic as JumpMath.compute so three-event measurements stay identical.
+                val timeToTakeoffUs = takeoffUs - movementStartUs
+                val timeToTakeoffS = JumpMath.usToSeconds(timeToTakeoffUs)
+                add(MetricValue(MetricKey.TIME_TO_TAKEOFF_MS, timeToTakeoffUs / 1000.0, MetricUnit.MILLISECOND))
+                add(MetricValue(MetricKey.RSI_MOD, flight.heightM / timeToTakeoffS, MetricUnit.METER_PER_SECOND))
+            }
+        }
+        return ProtocolResult(
+            protocolId = draft.protocolId,
+            primaryMetric = MetricValue(MetricKey.HEIGHT_CM, flight.heightCm, MetricUnit.CENTIMETER),
+            secondaryMetrics = secondary,
         )
     }
 

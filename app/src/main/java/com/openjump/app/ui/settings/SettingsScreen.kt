@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -35,6 +36,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -66,10 +68,13 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.openjump.app.OpenJumpApp
 import com.openjump.app.R
+import com.openjump.app.encoder.EncoderExercise
 import com.openjump.app.settings.AppLanguage
 import com.openjump.app.settings.AppLanguageManager
 import com.openjump.app.settings.CameraSettings
+import com.openjump.app.settings.RecordingUse
 import com.openjump.app.settings.EncoderSettings
+import com.openjump.app.settings.JumpSettings
 import com.openjump.app.settings.ThemeMode
 import com.openjump.app.settings.UnitProfile
 import com.openjump.app.ui.LocalUnitSystem
@@ -87,7 +92,7 @@ import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
-private enum class SettingsPicker { LANGUAGE, THEME, FPS }
+private enum class SettingsPicker { LANGUAGE, THEME, FPS_JUMPS, FPS_ENCODER }
 
 private val exportFileDateFormatter: DateTimeFormatter =
     DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'").withZone(ZoneOffset.UTC)
@@ -108,23 +113,33 @@ fun SettingsScreen(
     onAboutSelected: () -> Unit,
     onUnitsSelected: () -> Unit,
     onOnboardingSelected: () -> Unit = {},
+    cameraSettingsOverride: CameraSettings? = null,
+    jumpSettingsOverride: JumpSettings? = null,
 ) {
     val context = LocalContext.current
     val app = context.applicationContext as OpenJumpApp
     val displayPreferences by app.displayPreferencesStore.state.collectAsState()
     val unitSystem = LocalUnitSystem.current
     val locale = currentAppLocale()
-    val cameraSettings = remember(context) { CameraSettings(context) }
+    val cameraSettings = cameraSettingsOverride ?: remember(context) { CameraSettings(context) }
     val encoderSettings = remember(context) { EncoderSettings(context) }
+    // Tests inject sandboxed preferences so the production file is never read or written.
+    val jumpSettings = jumpSettingsOverride ?: remember(context) { JumpSettings(context) }
+    var markMovementStart by remember { mutableStateOf(jumpSettings.markMovementStart) }
     // Settings exposes product profiles only; CameraX validates the selected profile before READY.
     val availableFps = CameraSettings.PRODUCT_FPS
-    var preferredFps by remember {
-        mutableStateOf(CameraSettings.normalizePreferredFps(cameraSettings.preferredFps, availableFps))
+    var jumpFps by remember {
+        mutableStateOf(CameraSettings.normalizePreferredFps(cameraSettings.jumpPreferredFps, availableFps))
+    }
+    var encoderFps by remember {
+        mutableStateOf(CameraSettings.normalizePreferredFps(cameraSettings.encoderPreferredFps, availableFps))
     }
     var language by remember { mutableStateOf(AppLanguageManager.current()) }
     var picker by rememberSaveable { mutableStateOf<SettingsPicker?>(null) }
     var editPlateDiameter by rememberSaveable { mutableStateOf(false) }
     var plateDiameterCm by remember { mutableStateOf(encoderSettings.defaultPlateDiameterCm) }
+    var editDefaultLoads by rememberSaveable { mutableStateOf(false) }
+    var defaultLoadsKg by remember { mutableStateOf(EncoderExercise.entries.associateWith(encoderSettings::defaultLoadKg)) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val exportViewModel: DataExportViewModel = viewModel(factory = DataExportViewModel.Factory)
@@ -192,10 +207,15 @@ fun SettingsScreen(
         }
     }
 
-    val cameraSummary = if (preferredFps == CameraSettings.AUTO) {
+    val jumpSummary = if (jumpFps == CameraSettings.AUTO) {
         stringResource(R.string.settings_fps_auto)
     } else {
-        stringResource(R.string.settings_fps_value, preferredFps)
+        stringResource(R.string.settings_fps_value, jumpFps)
+    }
+    val encoderSummary = if (encoderFps == CameraSettings.AUTO) {
+        stringResource(R.string.settings_fps_auto)
+    } else {
+        stringResource(R.string.settings_fps_value, encoderFps)
     }
     val plateSummary = MeasurementFormatting.format(
         plateDiameterCm,
@@ -257,10 +277,36 @@ fun SettingsScreen(
                 SettingsGroup(stringResource(R.string.settings_camera_section)) {
                     SettingsRow(
                         icon = R.drawable.ic_videocam,
-                        title = stringResource(R.string.settings_fps_title),
-                        summary = cameraSummary,
+                        title = stringResource(R.string.settings_fps_title_jumps),
+                        summary = jumpSummary,
                         supporting = stringResource(R.string.settings_fps_row_description),
-                        onClick = { picker = SettingsPicker.FPS },
+                        onClick = { picker = SettingsPicker.FPS_JUMPS },
+                        modifier = Modifier.testTag("settings-fps-jumps"),
+                    )
+                    SettingsDivider()
+                    SettingsRow(
+                        icon = R.drawable.ic_videocam,
+                        title = stringResource(R.string.settings_fps_title_encoder),
+                        summary = encoderSummary,
+                        supporting = stringResource(R.string.settings_fps_row_description),
+                        onClick = { picker = SettingsPicker.FPS_ENCODER },
+                        modifier = Modifier.testTag("settings-fps-encoder"),
+                    )
+                }
+            }
+
+            item {
+                SettingsGroup(stringResource(R.string.settings_jump_section)) {
+                    SettingsSwitchRow(
+                        icon = R.drawable.ic_jumps,
+                        title = stringResource(R.string.settings_jump_mark_start_title),
+                        description = stringResource(R.string.settings_jump_mark_start_description),
+                        checked = markMovementStart,
+                        onCheckedChange = { checked ->
+                            markMovementStart = checked
+                            jumpSettings.markMovementStart = checked
+                        },
+                        modifier = Modifier.testTag("settings-jump-mark-start"),
                     )
                 }
             }
@@ -273,6 +319,17 @@ fun SettingsScreen(
                         summary = plateSummary,
                         supporting = stringResource(R.string.settings_plate_row_description),
                         onClick = { editPlateDiameter = true },
+                    )
+                    SettingsDivider()
+                    SettingsRow(
+                        icon = R.drawable.ic_encoder,
+                        title = stringResource(R.string.settings_default_loads_title),
+                        summary = stringResource(R.string.settings_default_loads_summary),
+                        onClick = {
+                            defaultLoadsKg = EncoderExercise.entries.associateWith(encoderSettings::defaultLoadKg)
+                            editDefaultLoads = true
+                        },
+                        modifier = Modifier.testTag("settings-default-loads"),
                     )
                 }
             }
@@ -395,22 +452,34 @@ fun SettingsScreen(
                 picker = null
             },
         )
-        SettingsPicker.FPS -> {
+        SettingsPicker.FPS_JUMPS, SettingsPicker.FPS_ENCODER -> {
+            val use = if (picker == SettingsPicker.FPS_JUMPS) RecordingUse.JUMPS else RecordingUse.ENCODER
             val options = buildList {
                 add(SettingsOption(CameraSettings.AUTO, stringResource(R.string.settings_fps_auto)))
                 availableFps.forEach { fps ->
                     add(SettingsOption(fps, stringResource(R.string.settings_fps_value, fps)))
                 }
             }
+            val sheetTitle = if (use == RecordingUse.JUMPS) {
+                stringResource(R.string.settings_fps_title_jumps)
+            } else {
+                stringResource(R.string.settings_fps_title_encoder)
+            }
+            val selectedFps = if (use == RecordingUse.JUMPS) jumpFps else encoderFps
             SettingsSelectionSheet(
-                title = stringResource(R.string.settings_fps_title),
+                title = sheetTitle,
+                titleTestTag = "settings-fps-picker-title",
                 description = stringResource(R.string.settings_fps_description),
                 options = options,
-                selected = preferredFps,
+                selected = selectedFps,
                 onDismiss = { picker = null },
                 onSelected = { selected ->
-                    preferredFps = selected
-                    cameraSettings.preferredFps = selected
+                    if (use == RecordingUse.JUMPS) {
+                        jumpFps = selected
+                    } else {
+                        encoderFps = selected
+                    }
+                    cameraSettings.setPreferredFps(use, selected)
                     picker = null
                 },
             )
@@ -472,6 +541,22 @@ fun SettingsScreen(
         )
     }
 
+    if (editDefaultLoads) {
+        EncoderDefaultLoadsSheet(
+            defaultsKg = defaultLoadsKg,
+            unitProfile = unitSystem,
+            onDismiss = { editDefaultLoads = false },
+            onSave = { exercise, loadKg ->
+                encoderSettings.setDefaultLoadKg(exercise, loadKg)
+                defaultLoadsKg = defaultLoadsKg + (exercise to loadKg)
+            },
+            onReset = {
+                encoderSettings.resetDefaultLoads()
+                defaultLoadsKg = EncoderExercise.entries.associateWith { EncoderSettings.DEFAULT_LOAD_KG }
+            },
+        )
+    }
+
     if (editPlateDiameter) {
         PlateDiameterEditor(
             initialCanonicalCm = plateDiameterCm,
@@ -512,10 +597,11 @@ private fun SettingsRow(
     onClick: () -> Unit,
     supporting: String? = null,
     enabled: Boolean = true,
+    modifier: Modifier = Modifier,
 ) {
     val semanticsLabel = listOfNotNull(title, summary, supporting).joinToString(". ")
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 72.dp)
             .clip(MaterialTheme.shapes.medium)
@@ -567,6 +653,60 @@ private fun SettingsRow(
     }
 }
 
+/**
+ * Row plus switch as one toggleable target. The switch itself is not clickable, so a single tap
+ * always fires exactly one state change and the whole 72 dp row stays the accessible hit area.
+ */
+@Composable
+private fun SettingsSwitchRow(
+    @DrawableRes icon: Int,
+    title: String,
+    description: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 72.dp)
+            .clip(MaterialTheme.shapes.medium)
+            .toggleable(
+                value = checked,
+                role = Role.Switch,
+                onValueChange = onCheckedChange,
+            )
+            .padding(horizontal = Spacing.lg, vertical = Spacing.md),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+    ) {
+        Surface(
+            modifier = Modifier.size(40.dp),
+            shape = ShapeTokens.small,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        ) {
+            Icon(
+                painter = painterResource(icon),
+                contentDescription = null,
+                modifier = Modifier.padding(Spacing.sm),
+                tint = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(Spacing.xs),
+        ) {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            Text(
+                description,
+                style = OpenJumpTypes.Secondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Switch(checked = checked, onCheckedChange = null)
+    }
+}
+
 @Composable
 private fun SettingsDivider() {
     HorizontalDivider(
@@ -584,6 +724,7 @@ private fun <T> SettingsSelectionSheet(
     selected: T,
     onDismiss: () -> Unit,
     onSelected: (T) -> Unit,
+    titleTestTag: String? = null,
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -594,7 +735,11 @@ private fun <T> SettingsSelectionSheet(
                 modifier = Modifier.padding(horizontal = Spacing.screenHorizontal),
                 verticalArrangement = Arrangement.spacedBy(Spacing.xs),
             ) {
-                Text(title, style = MaterialTheme.typography.headlineSmall)
+                Text(
+                    title,
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = if (titleTestTag != null) Modifier.testTag(titleTestTag) else Modifier,
+                )
                 Text(
                     description,
                     style = OpenJumpTypes.Secondary,

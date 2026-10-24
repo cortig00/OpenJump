@@ -47,7 +47,10 @@ class OfflineVideoTracker(
 ) : Closeable {
 
     private val mutableResults = mutableListOf<TrackingFrameResult>()
-    val results: List<TrackingFrameResult> get() = mutableResults.toList()
+    val results: List<TrackingFrameResult>
+        get() = performanceProfiler.measureDetailed(TrackingPerformanceProfiler.Stage.RESULTS_SNAPSHOT) {
+            mutableResults.toList()
+        }
     val samples: List<TrackingSample> get() = mutableResults.map { it.result.sample }
 
     private var seedFrameIndex: Int? = null

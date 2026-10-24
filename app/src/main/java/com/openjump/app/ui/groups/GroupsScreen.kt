@@ -34,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -57,7 +58,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class GroupsViewModel(private val groups: GroupRepository, private val athletes: com.openjump.app.data.AthleteRepository) : ViewModel() {
-    val groupList: StateFlow<List<GroupEntity>> = groups.all().stateIn(
+    // Con miembros cargados: la tarjeta muestra cuantos atletas tiene cada grupo (F-031).
+    val groupList: StateFlow<List<com.openjump.app.data.GroupWithMembers>> = groups.allWithMembers().stateIn(
         viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList(),
     )
     val activeAthletes: StateFlow<List<AthleteEntity>> = athletes.active().stateIn(
@@ -106,7 +108,7 @@ fun GroupsScreen(
     var editing by remember { mutableStateOf<GroupEntity?>(null) }
     var creating by remember { mutableStateOf(false) }
     var archiveCandidate by remember { mutableStateOf<GroupEntity?>(null) }
-    val visible = groups.filter { (it.archivedAt != null) == showArchived }
+    val visible = groups.filter { (it.group.archivedAt != null) == showArchived }
 
     if (archiveCandidate != null) {
         AlertDialog(
@@ -168,11 +170,21 @@ fun GroupsScreen(
                         contentPadding = PaddingValues(horizontal = Spacing.screenHorizontal),
                         verticalArrangement = Arrangement.spacedBy(Spacing.xs),
                     ) {
-                        items(visible, key = { it.id }) { group ->
+                        items(visible, key = { it.group.id }) { entry ->
+                            val group = entry.group
+                            val activeMembers = entry.members.count { it.archivedAt == null }
                             ListItem(
                                 modifier = Modifier.fillMaxWidth().clickable(role = Role.Button) { onGroupSelected(group.id) },
                                 headlineContent = { Text(group.name, style = OpenJumpTypes.SectionTitle) },
-                                supportingContent = { Text(group.notes ?: stringResource(R.string.group_members_hint)) },
+                                supportingContent = {
+                                    Text(
+                                        group.notes ?: pluralStringResource(
+                                            R.plurals.group_members_count,
+                                            activeMembers,
+                                            activeMembers,
+                                        ),
+                                    )
+                                },
                             )
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                                 if (showArchived) {

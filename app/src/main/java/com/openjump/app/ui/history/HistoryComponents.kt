@@ -10,6 +10,7 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
@@ -40,6 +41,10 @@ fun HistoryEntryRow(
     modifier: Modifier = Modifier,
     showDivider: Boolean = false,
     recent: Boolean = false,
+    // F035: non-null only for empty Encoder rows (see isDeletableEmptyEncoderRow).
+    // The row stays listed until a confirmed deletion; cancel never calls this.
+    onDelete: (() -> Unit)? = null,
+    deleting: Boolean = false,
 ) {
     val presentation = historyEntryPresentation(item, recent)
     Column(modifier = modifier.fillMaxWidth()) {
@@ -79,7 +84,35 @@ fun HistoryEntryRow(
                 }
             },
             trailingContent = presentation.value?.let { value ->
-                { Text(value, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium) }
+                {
+                    Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {
+                        if (presentation.valuePlaceholder) {
+                            // Los estados sin dato no deben competir con las cifras reales:
+                            // texto secundario en vez de guion grande y en negrita. Ver F-011.
+                            Text(
+                                value,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = OpenJumpTypes.Secondary,
+                            )
+                        } else {
+                            Text(value, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                        }
+                        // F035: Delete lives next to the empty value so the row keeps its
+                        // existing tokens/layout; reuse of result_delete_action copy.
+                        if (onDelete != null) {
+                            TextButton(
+                                onClick = onDelete,
+                                enabled = !deleting,
+                                modifier = Modifier.heightIn(min = 48.dp),
+                            ) {
+                                Text(
+                                    stringResource(R.string.result_delete_action),
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                            }
+                        }
+                    }
+                }
             },
         )
         if (showDivider) {
@@ -98,6 +131,7 @@ private data class HistoryEntryPresentation(
     val value: String?,
     val hasNotes: Boolean,
     val supportingDetail: String? = null,
+    val valuePlaceholder: Boolean = false,
 )
 
 @Composable
@@ -160,7 +194,8 @@ private fun historyEntryPresentation(item: MeasurementHistoryItem, recent: Boole
                     unitSystem,
                     locale,
                 )
-            } ?: stringResource(R.string.common_value_unavailable),
+            } ?: stringResource(R.string.common_no_valid_reps),
+            valuePlaceholder = session.bestMcv == null,
             hasNotes = session.hasNotes,
         )
     }

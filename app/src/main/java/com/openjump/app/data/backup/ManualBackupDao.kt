@@ -29,6 +29,9 @@ interface ManualBackupDao {
     @Query("SELECT * FROM encoder_samples ORDER BY sessionId, ordinal") suspend fun encoderSamples(): List<BackupEncoderSample>
     @Query("SELECT * FROM encoder_repetitions ORDER BY sessionId, ordinal, id") suspend fun encoderRepetitions(): List<BackupEncoderRepetition>
     @Query("SELECT * FROM encoder_rep_metrics ORDER BY repetitionId, key") suspend fun encoderRepMetrics(): List<BackupEncoderRepMetric>
+    @Query("SELECT * FROM fvp_assessments ORDER BY id") suspend fun fvpAssessments(): List<BackupFvpAssessment>
+    @Query("SELECT * FROM fvp_conditions ORDER BY assessmentId, ordinal") suspend fun fvpConditions(): List<BackupFvpCondition>
+    @Query("SELECT * FROM fvp_attempts ORDER BY conditionId, ordinal") suspend fun fvpAttempts(): List<BackupFvpAttempt>
 
     @Transaction
     suspend fun snapshot(): ManualBackupDocument = ManualBackupDocument(
@@ -39,9 +42,24 @@ interface ManualBackupDao {
         mediaIncluded = false,
         preferencesIncluded = false,
         tables = ManualBackupTables(
-            athletes(), groups(), memberships(), testingSessions(), testingParticipants(), assessments(), attempts(),
-            attemptEvents(), attemptMetrics(), attemptCalibrations(), attemptSpatialMarks(), encoderSessions(),
-            encoderSamples(), encoderRepetitions(), encoderRepMetrics(),
+            athletes = athletes(),
+            athleteGroups = groups(),
+            athleteGroupCrossRef = memberships(),
+            testingSessions = testingSessions(),
+            testingParticipants = testingParticipants(),
+            assessments = assessments(),
+            attempts = attempts(),
+            attemptEvents = attemptEvents(),
+            attemptMetrics = attemptMetrics(),
+            attemptCalibrations = attemptCalibrations(),
+            attemptSpatialMarks = attemptSpatialMarks(),
+            encoderSessions = encoderSessions(),
+            encoderSamples = encoderSamples(),
+            encoderRepetitions = encoderRepetitions(),
+            encoderRepMetrics = encoderRepMetrics(),
+            fvpAssessments = fvpAssessments(),
+            fvpConditions = fvpConditions(),
+            fvpAttempts = fvpAttempts(),
         ),
     )
 
@@ -60,12 +78,18 @@ interface ManualBackupDao {
     @Insert(onConflict = OnConflictStrategy.ABORT) suspend fun insertEncoderSamples(rows: List<EncoderSampleEntity>)
     @Insert(onConflict = OnConflictStrategy.ABORT) suspend fun insertEncoderRepetitions(rows: List<EncoderRepetitionEntity>)
     @Insert(onConflict = OnConflictStrategy.ABORT) suspend fun insertEncoderRepMetrics(rows: List<EncoderRepMetricEntity>)
+    @Insert(onConflict = OnConflictStrategy.ABORT) suspend fun insertFvpAssessments(rows: List<FvpAssessmentEntity>)
+    @Insert(onConflict = OnConflictStrategy.ABORT) suspend fun insertFvpConditions(rows: List<FvpConditionEntity>)
+    @Insert(onConflict = OnConflictStrategy.ABORT) suspend fun insertFvpAttempts(rows: List<FvpAttemptEntity>)
 
     @Query("DELETE FROM assessments") suspend fun clearAssessments()
     @Query("DELETE FROM encoder_sessions") suspend fun clearEncoderSessions()
     @Query("DELETE FROM testing_sessions") suspend fun clearTestingSessions()
     @Query("DELETE FROM athlete_group_cross_ref") suspend fun clearMemberships()
     @Query("DELETE FROM athlete_groups") suspend fun clearGroups()
+    @Query("DELETE FROM fvp_attempts") suspend fun clearFvpAttempts()
+    @Query("DELETE FROM fvp_conditions") suspend fun clearFvpConditions()
+    @Query("DELETE FROM fvp_assessments") suspend fun clearFvpAssessments()
     @Query("DELETE FROM athletes") suspend fun clearAthletes()
 
     @RawQuery
@@ -75,6 +99,10 @@ interface ManualBackupDao {
     suspend fun replaceAll(snapshot: ManualBackupDocument) {
         val document = snapshot.validate()
         val t = document.tables
+        // El recolector F-V-P cuelga de `athletes` con NO_ACTION: hay que vaciarlo antes del atleta.
+        clearFvpAttempts()
+        clearFvpConditions()
+        clearFvpAssessments()
         clearAssessments()
         clearEncoderSessions()
         clearTestingSessions()
@@ -96,6 +124,9 @@ interface ManualBackupDao {
         insertEncoderSamples(t.encoderSamples.map { it.entity() })
         insertEncoderRepetitions(t.encoderRepetitions.map { it.entity() })
         insertEncoderRepMetrics(t.encoderRepMetrics.map { it.entity() })
+        insertFvpAssessments(t.fvpAssessments.map { it.entity() })
+        insertFvpConditions(t.fvpConditions.map { it.entity() })
+        insertFvpAttempts(t.fvpAttempts.map { it.entity() })
         check(foreignKeyCheck(SimpleSQLiteQuery("PRAGMA foreign_key_check")).isEmpty()) { "Restored data has foreign-key violations" }
         check(counts() == t.counts()) { "Restored data counts do not match backup" }
     }
@@ -115,9 +146,12 @@ interface ManualBackupDao {
     @Query("SELECT COUNT(*) FROM encoder_samples") suspend fun encoderSampleCount(): Int
     @Query("SELECT COUNT(*) FROM encoder_repetitions") suspend fun encoderRepetitionCount(): Int
     @Query("SELECT COUNT(*) FROM encoder_rep_metrics") suspend fun encoderRepMetricCount(): Int
+    @Query("SELECT COUNT(*) FROM fvp_assessments") suspend fun fvpAssessmentCount(): Int
+    @Query("SELECT COUNT(*) FROM fvp_conditions") suspend fun fvpConditionCount(): Int
+    @Query("SELECT COUNT(*) FROM fvp_attempts") suspend fun fvpAttemptCount(): Int
 
-    private suspend fun counts() = listOf(athleteCount(), groupCount(), membershipCount(), testingSessionCount(), testingParticipantCount(), assessmentCount(), attemptCount(), attemptEventCount(), attemptMetricCount(), attemptCalibrationCount(), attemptSpatialMarkCount(), encoderSessionCount(), encoderSampleCount(), encoderRepetitionCount(), encoderRepMetricCount())
-    private fun ManualBackupTables.counts() = listOf(athletes.size, athleteGroups.size, athleteGroupCrossRef.size, testingSessions.size, testingParticipants.size, assessments.size, attempts.size, attemptEvents.size, attemptMetrics.size, attemptCalibrations.size, attemptSpatialMarks.size, encoderSessions.size, encoderSamples.size, encoderRepetitions.size, encoderRepMetrics.size)
+    private suspend fun counts() = listOf(athleteCount(), groupCount(), membershipCount(), testingSessionCount(), testingParticipantCount(), assessmentCount(), attemptCount(), attemptEventCount(), attemptMetricCount(), attemptCalibrationCount(), attemptSpatialMarkCount(), encoderSessionCount(), encoderSampleCount(), encoderRepetitionCount(), encoderRepMetricCount(), fvpAssessmentCount(), fvpConditionCount(), fvpAttemptCount())
+    private fun ManualBackupTables.counts() = listOf(athletes.size, athleteGroups.size, athleteGroupCrossRef.size, testingSessions.size, testingParticipants.size, assessments.size, attempts.size, attemptEvents.size, attemptMetrics.size, attemptCalibrations.size, attemptSpatialMarks.size, encoderSessions.size, encoderSamples.size, encoderRepetitions.size, encoderRepMetrics.size, fvpAssessments.size, fvpConditions.size, fvpAttempts.size)
 }
 
 data class ForeignKeyViolation(val table: String, val rowid: Long, val parent: String, val fkid: Int)

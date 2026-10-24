@@ -14,7 +14,7 @@ val uploadSigningProperties = listOf(
 ).associateWith { providers.gradleProperty(it).orNull }
 
 require(uploadSigningProperties.values.count { it != null } in setOf(0, uploadSigningProperties.size)) {
-    "Provide all OPENJUMP_UPLOAD_* Gradle properties or none of them. See README.md."
+    "Provide all OPENJUMP_UPLOAD_* Gradle properties or none of them. See RELEASE.md."
 }
 val uploadSigningConfigured = uploadSigningProperties.values.all { it != null }
 
@@ -81,7 +81,7 @@ android {
 
     androidResources {
         generateLocaleConfig = true
-        localeFilters += listOf("es", "en", "fr", "de", "pt-rBR", "pt-rPT", "it", "tr")
+        localeFilters += listOf("es", "en", "fr", "de", "pt-rBR", "pt-rPT", "it", "tr", "b+es+419", "pl", "ja", "ko")
     }
 
     signingConfigs {
@@ -96,7 +96,19 @@ android {
     }
 
     buildTypes {
+        // Separate sandbox: no demo code/data is included in debug or release.
+        create("demo") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".fvpdemo"
+            versionNameSuffix = "-fvp-demo"
+            matchingFallbacks += listOf("debug")
+            buildConfigField("boolean", "FVP_ENABLED", "true")
+        }
+        debug {
+            buildConfigField("boolean", "FVP_ENABLED", "true")
+        }
         release {
+            buildConfigField("boolean", "FVP_ENABLED", "false")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -114,8 +126,14 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
+    sourceSets.getByName("test").java.srcDir("src/jumpValidationTest/java")
+    sourceSets.getByName("test").resources.srcDir("$rootDir/testdata/jump_video/catalog")
+    sourceSets.getByName("androidTest").java.srcDir("src/jumpValidationTest/java")
+    sourceSets.getByName("androidTest").assets.srcDir("$projectDir/schemas")
+    sourceSets.getByName("androidTest").assets.srcDir("$rootDir/testdata/jump_video/catalog")
 }
 
 kotlin {
@@ -128,6 +146,14 @@ ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
 }
 
+// FvpStringsParityTest lee src/main/res/values*/strings.xml directamente; declara esos
+// ficheros como entrada para que un cambio solo de strings no quede cacheado como UP-TO-DATE.
+tasks.withType<Test>().configureEach {
+    inputs.files(fileTree("src/main/res") { include("values*/strings.xml") })
+        .withPropertyName("stringResources")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -135,6 +161,7 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.appcompat)
     implementation(libs.kotlinx.serialization.json)
+    implementation(project(":fvp"))
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
@@ -163,4 +190,12 @@ dependencies {
 
     implementation(libs.boofcv.feature)
 
+    testImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
+    androidTestImplementation(libs.androidx.room.testing)
+    androidTestImplementation(libs.androidx.datastore.preferences)
 }

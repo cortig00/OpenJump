@@ -30,15 +30,15 @@ rates—provide the timing used in calculations.
 
 ## Install
 
-The official Android package is **`com.openjump.app`**. Google Play is the current official
-user distribution channel. Official F-Droid inclusion is being prepared; do not
-confuse this preparation with an accepted F-Droid listing.
+The official Android package is **`com.openjump.app`**. Google Play is the current
+official user distribution channel. The F-Droid recipe is in the official
+`fdroiddata` repository; stable releases are detected from annotated tags.
 
 [OpenJump on Google Play](https://play.google.com/store/apps/details?id=com.openjump.app)
 
-This repository contains the source for **OpenJump 1.0 (`versionCode 7`)**. It does
-not contain signed APKs, bundles or signing credentials. You can build a debug APK
-locally using the steps below.
+This repository contains the source for **OpenJump 1.2.0 (`versionCode 9`)**. It
+does not contain signed APKs, bundles or signing credentials. You can build a
+debug APK locally using the steps below.
 
 ## Build from source
 
@@ -128,8 +128,9 @@ License texts and runtime attributions are bundled in the APK.
 See [F-Droid preparation](docs/FDROID.md) for the audited dependencies, shared
 Fastlane metadata, build recipe, signing differences and future release workflow.
 [Local validation](docs/FDROID_VALIDATION.md) and the
-[ready-to-submit instructions](docs/FDROID_SUBMISSION.md) record what passed and
-what still requires F-Droid review.
+[first-inclusion record](docs/FDROID_SUBMISSION.md) document the original 1.0
+submission. Updates are detected from stable tags; F-Droid's own build and
+signature remain independent of Play.
 There is no special flavor and no removal of the analysis features. F-Droid and
 Play use different signing certificates: switching channels requires a manual
 backup and reinstall; neither channel can install an update over the other.
@@ -174,5 +175,5 @@ python tools/check_store_metadata.py
    and videos outside the app; backups do not restore video links or preferences.
 
 See [the release workflow](docs/FDROID.md#future-simultaneous-releases) for details
-and [the first-inclusion checklist](docs/FDROID_SUBMISSION.md) for the still-pending
-submission. Local validation is not official F-Droid acceptance.
+and [the first-inclusion record](docs/FDROID_SUBMISSION.md). Local validation is
+not official F-Droid acceptance.

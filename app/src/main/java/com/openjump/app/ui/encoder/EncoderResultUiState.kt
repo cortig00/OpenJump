@@ -3,6 +3,11 @@ package com.openjump.app.ui.encoder
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.listSaver
 import com.openjump.app.encoder.EncoderRepetition
+import com.openjump.app.encoder.RepetitionQuality
+
+/** Use canonical ordinals (not filtered-list positions), matching rows and analysis. */
+internal fun uncertainRepetitionNumbers(repetitions: List<EncoderRepetition>): List<Int> =
+    repetitions.filter { it.quality == RepetitionQuality.UNCERTAIN }.map { it.ordinal + 1 }
 
 internal enum class EncoderResultView {
     SUMMARY,

@@ -30,19 +30,32 @@ data class MeasurementDraft(
     val horizontalJump: HorizontalJumpDraft? = null,
     /** Optional root note; persistence normalizes it at the repository boundary. */
     val notes: String? = null,
+    /**
+     * Snapshot of the "mark movement start" preference taken when the session began. It only
+     * decides which events the selector asks for; data validation never trusts it.
+     */
+    val markMovementStart: Boolean = false,
 ) {
     val definition: ProtocolDefinition
         get() = ProtocolCatalog.find(protocolId)
 
+    /**
+     * Events the selector must request under the captured marking mode, in canonical order.
+     * With the preference off the optional start is not requested; it is still accepted if marked.
+     */
+    val markingEvents: List<EventType>
+        get() = if (markMovementStart) definition.requiredEvents else definition.mandatoryEvents
+
     fun nextRequiredEvent(): EventType? =
-        definition.requiredEvents.firstOrNull { EventKey(it) !in events }
+        markingEvents.firstOrNull { EventKey(it) !in events }
 
     fun isComplete(): Boolean = if (protocolId == ProtocolId.HORIZONTAL) {
         horizontalJump?.stage == HorizontalJumpStage.COMPLETE && horizontalJump.validationError() == null
     } else {
-        definition.requiredEvents.all { EventKey(it) in events }
+        definition.mandatoryEvents.all { EventKey(it) in events }
     }
 
+    /** Real marks in canonical order, including an optional start when one was actually marked. */
     fun orderedMarks(): List<EventMark> = definition.requiredEvents.mapNotNull { events[EventKey(it)] }
 
     fun validationIssue(): MeasurementValidationIssue? {
