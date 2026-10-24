@@ -1,3 +1,5 @@
+> **STATUS: NOT COMPLETE.** Source, tag, GitHub Release and F-Droid preparation are done for 1.2.2 / code 10. Google Play upload is blocked because the upload key and Play API/Fastlane credentials are unavailable; the AAB is unsigned. F-Droid has not yet published 1.2.2 in its official repository. Do not describe 1.2.2 as published on either store.
+
 # OpenJump 1.2.2 — final release report
 
 Date: 2026-10-25 (Europe/Madrid)
@@ -108,6 +110,24 @@ first run in the temporary checkout logged non-blocking `serverwebroot`
 configuration errors; after configuring a dummy local repo, the checkupdates
 rerun was clean. F-Droid signs and publishes its own APK; that cycle is
 independent and still pending.
+
+
+## Completion audit
+
+| Requirement | Evidence | Status |
+| --- | --- | --- |
+| F–V–P hidden in production, code/data retained | `FVP_ENABLED=false` release, Home smoke, guarded routes, release flag test, F–V–P 10/10 | DONE |
+| Valid next version above Play | Play 1.2.1 observed; prior handoff code 9; 1.2.2 / code 10, strict policy PASS | DONE |
+| F-Droid inclusion history preserved | `v1.0` and `8cd1fea` intact; public `v1.2.2` tag; no historical tag moved | DONE |
+| Changelog ES/EN + Fastlane metadata | eight `changelogs/10.txt`, `PLAY_RELEASE_NOTES_1.2.2.txt`, metadata check PASS | DONE |
+| Local build/lint/unit/instrumented validation | pre-push, 1200+1200 JVM, 50/17, 0 lint errors, AVD suites | DONE |
+| Independent GPT 6.1 High review | A GO with notes; B NO-GO for Play | DONE |
+| GitHub tag and Release | `v1.2.2` → `c9e4177`; Release published | DONE |
+| F-Droid detection and build | checkupdates 1.2.2/10, fresh build, lint/scanner 0/0 | DONE locally |
+| F-Droid official distribution | f-droid.org still shows 1.0/7 | PENDING (external) |
+| Signed AAB and Play production submission | AAB unsigned; no key/credentials; Play still 1.2.1 | **BLOCKED** |
+
+The task is not complete until the signed AAB is accepted by Google Play production and F-Droid independently builds/publishes 1.2.2. The only local blocker is the missing upload key and Play API/Fastlane authorization; code 10 must also be confirmed unused in every Play track/draft.
 
 ## Incidents and pending actions
 
