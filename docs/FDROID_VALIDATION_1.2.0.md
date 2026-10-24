@@ -42,9 +42,22 @@ Instrumented checks executed on the authorized `OpenJump_API35` AVD
 
 - F-V-P guided navigation + recovery: 10/10 PASS.
 - F-V-P DAO, Room migration and athlete DAO: 43/43 PASS.
-- Encoder reference video suite (v2 fixture, light, font 1.5): 4/4 PASS,
-  including first-surface non-black sampling and the manual-review/precision
-  snapshot assertion.
+- Encoder reference video class with the 720x1280 fixture (light, font 1.5):
+  **3 PASS + 1 fixture-dependent SKIP**. The skipped known-distance test requires
+  a 540x960 fixture and **passes 1/1** when run separately with a generated
+  540x960 fixture. The first-surface non-black check and the manual-review/
+  precision snapshot assertion pass.
+- The first full Encoder class run had 2 failures while a "System UI isn't
+  responding" overlay was present; the precision evidence screenshot shows that
+  overlay. After dismissing it, the class passed 3 tests (the fourth still skipped
+  for the fixture reason) and the two previously failing tests passed
+  individually. The overlay is a compatible explanation, not a conclusively
+  proven root cause for both failures; the decisive evidence is the clean reruns
+  and the manual release screenshot.
+- **Residual gap:** no release-mode instrumentation of a restored F-V-P back stack
+  or direct route access. The release APK is non-debuggable and the five routes
+  have no deep links. Code review + release Home smoke + `FVP_ENABLED=false`
+  unit test cover the OFF path; no defect was observed.
 
 The release build hides the F-V-P entry and does not create its ViewModel. The
 debug build keeps it enabled for the existing instrumented F-V-P suites.

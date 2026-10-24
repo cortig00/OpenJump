@@ -38,8 +38,13 @@ The full evidence summary, test counts, AVD runs and artifact hashes are in
 - 1200 debug + 1200 release JVM tests, 0 failures/errors/skips.
 - `:fvp` 50 and `:fvp-lab` 17 tests, 0 failures.
 - Debug/release lint: 0 errors.
-- 10/10 F-V-P navigation/recovery, 43/43 data/migration and 4/4 Encoder
-  reference instrumented tests on the authorized AVD.
+- 10/10 F-V-P navigation/recovery and 43/43 data/migration instrumented tests.
+- Encoder reference: first-surface and precision tests pass; the class run is
+  3 PASS + 1 fixture-dependent skip, and the skipped known-distance test passes
+  1/1 with a 540x960 fixture.
+- Residual gap: the OFF release path was verified by Home smoke, release flag
+  unit test and code review, but not by a restored F-V-P back stack in a
+  non-debuggable release build.
 - Final release APK cold-start Encoder preview measured at mean luminance
   186.66 (pre-fix cold start: 1.14) and the manual-review/precision snapshot
   regression passed at font scale 1.5.
