@@ -5,6 +5,7 @@ Status: **blocked on credentials**. Do not upload the unsigned AAB.
 Google Play already advertises 1.2.1 (prior handoff: versionCode 9), so this
 release uses **1.2.2 / versionCode 10**. Confirm code 10 is unused in every Play
 track/draft before uploading. If it is consumed, stop and choose a higher code.
+The independent review also requires this confirmation before any Play upload.
 
 ## Build and verify
 
