@@ -3,8 +3,8 @@
 OpenJump uses a **single application and release variant**, not an `fdroid` flavor.
 Its identity stays `com.openjump.app`. Initial F-Droid inclusion is the historical
 **1.0 / versionCode 7** build (MR !51299, merged into `fdroiddata` master); the
-current release is **1.2.0 / versionCode 9**, detected automatically from the
-annotated `v1.2.0` tag. The Google Play AAB and upload key are not modified or
+current release is **1.2.2 / versionCode 10**, detected automatically from the
+annotated `v1.2.2` tag. The Google Play AAB and upload key are not modified or
 rebuilt by this work. See the measured [validation results](FDROID_VALIDATION.md)
 and [submission package](FDROID_SUBMISSION.md).
 
@@ -84,8 +84,8 @@ Do not use `--force`, `--skip-scan` or `novcheck` to hide failures.
 
 ## Version provenance and first inclusion
 
-The current automatic update is `1.2.0` / code `9`. It keeps the same application
-ID, the same source tree and a single release variant. The `v1.2.0` tag must point
+The current automatic update is `1.2.2` / code `10`. It keeps the same application
+ID, the same source tree and a single release variant. The `v1.2.2` tag must point
 to the exact published source commit; the recipe's pin for the 1.0 build stays
 immutable. No manual `fdroiddata` MR is needed for this stable version because the
 existing `AutoUpdateMode`/`UpdateCheckMode`/`UpdateCheckData` already cover it.

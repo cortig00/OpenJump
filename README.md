@@ -36,7 +36,7 @@ official user distribution channel. The F-Droid recipe is in the official
 
 [OpenJump on Google Play](https://play.google.com/store/apps/details?id=com.openjump.app)
 
-This repository contains the source for **OpenJump 1.2.0 (`versionCode 9`)**. It
+This repository contains the source for **OpenJump 1.2.2 (`versionCode 10`)**. It
 does not contain signed APKs, bundles or signing credentials. You can build a
 debug APK locally using the steps below.
 

@@ -1,0 +1,24 @@
+<en-US>
+OpenJump 1.2.2: video jump analysis with six protocols, athlete profiles, history, comparisons and manual backups. Camera, frame selector and Encoder improvements. The F-V-P profile is not available in this release. Offline processing on your device.
+</en-US>
+<es-ES>
+OpenJump 1.2.2: análisis de saltos por vídeo con seis protocolos, perfiles de atleta, historial, comparaciones y copias manuales. Mejoras de cámara, selector de fotogramas y Encoder. El perfil F-V-P no está disponible en esta versión. Procesamiento local sin conexión.
+</es-ES>
+<de-DE>
+OpenJump 1.2.2: Video-Sprunganalyse mit sechs Protokollen, Athletenprofilen, Verlauf, Vergleichen und manuellen Sicherungen. Verbesserte Kamera, Frame-Auswahl und Encoder. Das F-V-P-Profil ist in dieser Version nicht verfügbar. Offline-Verarbeitung auf deinem Gerät.
+</de-DE>
+<fr-FR>
+OpenJump 1.2.2 : analyse des sauts par vidéo avec six protocoles, profils d'athlètes, historique, comparaisons et sauvegardes manuelles. Améliorations de la caméra, du sélecteur d'images et de l'Encoder. Le profil F-V-P n'est pas disponible dans cette version. Traitement hors ligne sur votre appareil.
+</fr-FR>
+<it-IT>
+OpenJump 1.2.2: analisi dei salti tramite video con sei protocolli, profili atleta, cronologia, confronti e backup manuali. Miglioramenti a fotocamera, selettore fotogrammi ed Encoder. Il profilo F-V-P non è disponibile in questa versione. Elaborazione offline sul dispositivo.
+</it-IT>
+<pt-BR>
+OpenJump 1.2.2: análise de saltos por vídeo com seis protocolos, perfis de atletas, histórico, comparações e backups manuais. Melhorias na câmera, no seletor de quadros e no Encoder. O perfil F-V-P não está disponível nesta versão. Processamento offline no seu dispositivo.
+</pt-BR>
+<pt-PT>
+OpenJump 1.2.2: análise de saltos por vídeo com seis protocolos, perfis de atleta, histórico, comparações e cópias manuais. Melhorias na câmara, no seletor de fotogramas e no Encoder. O perfil F-V-P não está disponível nesta versão. Processamento offline no teu dispositivo.
+</pt-PT>
+<tr-TR>
+OpenJump 1.2.2: altı protokolle video sıçrama analizi, sporcu profilleri, geçmiş, karşılaştırmalar ve manuel yedekler. Kamera, kare seçici ve Encoder iyileştirmeleri. F-V-P profili bu sürümde kullanılamaz. İşlemler cihazınızda çevrimdışı yapılır.
+</tr-TR>

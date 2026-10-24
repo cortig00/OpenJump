@@ -1,3 +1,8 @@
+> **SUPERSEDED by 1.2.2 / code 10.** This report remains as historical evidence.
+> Google Play already advertises 1.2.1 (code 9 handoff), so the 1.2.0/code9
+> release was a downgrade and reused a consumed code. See
+> `RELEASE_1.2.2_CODE10.md` and the 1.2.2 final report.
+
 # OpenJump 1.2.0 — final release report
 
 Date: 2026-10-25 (Europe/Madrid)

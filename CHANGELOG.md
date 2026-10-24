@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.2.2 (versionCode 10) — Production release candidate
+
+- Supersedes the 1.2.0 / code 9 checkpoint. Google Play already advertises
+  **1.2.1**, whose handoff used **versionCode 9**; reusing that code would be
+  rejected and publishing 1.2.0 would be a downgrade. Code 10 is the next valid
+  code and 1.2.2 is the next version name.
+- Keeps the F-V-P profile hidden in production: `FVP_ENABLED=false` for release,
+  the Home entry removed, all five routes guarded, and no flow ViewModel or draft
+  recovery created when OFF. Module, tables and calculations are retained.
+- Keeps the Encoder cold-start first-frame fix: a SurfaceView created after the
+  initial seek restarts the source instead of issuing a no-op seek.
+- Includes all 1.2.1-era work present on main (camera/viewfinder, adaptive
+  landscape analysis, UI/UX remediation, clearer Encoder messages, bilateral
+  saving and empty-Encoder deletion) plus optional movement-start marking and
+  the es-419/pl/ja/ko locales.
+
 ## 1.2.0 (versionCode 9) — Production release candidate
 
 - Feature flag `FVP_ENABLED` hides the experimental F-V-P profile from the

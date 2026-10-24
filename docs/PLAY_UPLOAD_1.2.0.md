@@ -1,3 +1,7 @@
+> **SUPERSEDED by 1.2.2 / code 10.** Play already advertises 1.2.1 and the prior
+> handoff used versionCode 9. Use `PLAY_UPLOAD_1.2.2.md`; do not upload this
+> 1.2.0/code9 checkpoint.
+
 # Google Play upload handoff — OpenJump 1.2.0 (code 9)
 
 Status: **blocked on credentials**. The release source/tag and unsigned AAB are
