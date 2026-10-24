@@ -100,7 +100,7 @@ Play or F-Droid distribution artifact.
 
 ## Google Play status
 
-**Prepared, not uploaded.** The Play listing is live
+**Prepared, not uploaded.** See [the Play upload handoff](PLAY_UPLOAD_1.2.0.md) for the exact signing/upload steps. The Play listing is live
 (<https://play.google.com/store/apps/details?id=com.openjump.app>) and the last
 publicly confirmed Play version was 1.0 / code 7. Version 1.2.0 / code 9 could
 not be signed or submitted because the upload keystore and Play API/Fastlane
