@@ -1,1 +1,4 @@
-OpenJump 1.2.2: altı protokolle video sıçrama analizi, sporcu profilleri, geçmiş, karşılaştırmalar ve manuel yedekler. Kamera, kare seçici ve Encoder iyileştirmeleri. F-V-P profili bu sürümde kullanılamaz. İşlemler cihazınızda çevrimdışı yapılır.
+• Encoder’da video açılırken ilk karenin siyah kalmasına yol açabilen bir sorun düzeltildi.
+• Desteklenen sıçrama protokollerinde hareket başlangıcını işaretlemek artık isteğe bağlı.
+• Latin Amerika İspanyolcası, Lehçe, Japonca ve Korece eklendi.
+• Kuvvet-hız profili bu sürümde devre dışı kalmaya devam ediyor.

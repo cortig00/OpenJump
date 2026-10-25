@@ -1,1 +1,4 @@
-OpenJump 1.2.2: video jump analysis with six protocols, athlete profiles, history, comparisons and manual backups. Camera, frame selector and Encoder improvements. The F-V-P profile is not available in this release. Offline processing on your device.
+• Fixed an issue that could show a black first frame when opening a video in Encoder.
+• Marking movement start is now optional for supported jump protocols.
+• Added Latin American Spanish, Polish, Japanese and Korean.
+• The force-velocity profile remains disabled in this release.

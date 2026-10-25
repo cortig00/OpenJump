@@ -25,8 +25,9 @@ rates—provide the timing used in calculations.
 - **Experimental video Encoder:** scale calibration, visual tracking, repetition
   analysis, velocity/trajectory charts and trajectory-video export.
 - User-initiated JSON/CSV exports and restorable manual backups.
-- Spanish, English, French, German, Italian, Turkish, Brazilian Portuguese and
-  European Portuguese; configurable units and light/dark appearance.
+- Spanish (including Latin American Spanish), English, French, German, Italian,
+  Turkish, Brazilian Portuguese, European Portuguese, Polish, Japanese and
+  Korean; configurable units and light/dark appearance.
 
 ## Install
 
@@ -39,6 +40,12 @@ official user distribution channel. The F-Droid recipe is in the official
 This repository contains the source for **OpenJump 1.2.2 (`versionCode 10`)**. It
 does not contain signed APKs, bundles or signing credentials. You can build a
 debug APK locally using the steps below.
+
+Current status (2026-10-25): production on Play is 1.2.1 / code 8; 1.2.2 / code 10
+is a user-reported manual submission (see [publication record](docs/RELEASE_1.2.2_PUBLICATION.md)),
+not verified review/publication. F-Droid still lists 1.0 / code 7; official 1.2.2
+publication is pending. Store release notes cover eight locales (en-US, es-ES,
+de-DE, fr-FR, it-IT, pt-BR, pt-PT, tr-TR).
 
 ## Build from source
 

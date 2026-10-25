@@ -1,4 +1,9 @@
-> **STATUS: NOT COMPLETE.** Source, tag, GitHub Release and F-Droid preparation are done for 1.2.2 / code 10. Google Play upload is blocked because the upload key and Play API/Fastlane credentials are unavailable; the AAB is unsigned. F-Droid has not yet published 1.2.2 in its official repository. Do not describe 1.2.2 as published on either store.
+> **SUPERSEDED by [1.2.2 publication record](RELEASE_1.2.2_PUBLICATION.md) (2026-10-25).**
+> This final report is historical evidence only. Source/tag identity 1.2.2 / code 10
+> (`v1.2.2` → `c9e4177c6ad4d3e6c8c1e9eb14796e714fb61bc2`) is preserved; current Play
+> submission and F-Droid status are in the publication record.
+>
+> **HISTORICAL PRE-SIGNING STATUS — SUPERSEDED.** At this report's original checkpoint the AAB was unsigned and Play submission was blocked. It has since been signed locally and the maintainer reports submitting it. See the [current publication record](RELEASE_1.2.2_PUBLICATION.md); neither store's public availability is claimed here.
 
 # OpenJump 1.2.2 — final release report
 
@@ -16,11 +21,12 @@ Date: 2026-10-25 (Europe/Madrid)
 
 ### Why 1.2.2 / code 10
 
-Google Play advertises **1.2.1**, and the prior handoff for that build used
-**versionCode 9**. The earlier 1.2.0/code9 checkpoint therefore reused a consumed
-code and was a downgrade; it is marked **SUPERSEDED** (tag and release retained
-as history, not moved). Code 10 is the next valid code and 1.2.2 the next
-version name.
+Production is **1.2.1 / versionCode 8**, not 9; the earlier assertion that the
+prior handoff for that build used code 9 was mistaken, and consumption of code 9
+is unknown — do not claim it was consumed or reused. The earlier 1.2.0/code9
+checkpoint was a downgrade; it is marked **SUPERSEDED** (tag and release retained
+as history, not moved). The prepared 1.2.2 / code 10 identity is retained,
+and tag `v1.2.2` → `c9e4177c6ad4d3e6c8c1e9eb14796e714fb61bc2` is preserved.
 
 ## Functional changes
 
@@ -102,13 +108,14 @@ absent on this machine; the AAB is unsigned. Play currently advertises 1.2.1;
 
 ## F-Droid status
 
-**Tag published; update detected; official build passed; F-Droid publication
+**Tag published; update detected; local build passed; F-Droid publication
 pending.** `fdroid checkupdates --auto` detected 1.2.2/10 and generated the build
 block with `c9e4177`; a fresh `fdroid build` from the GitHub tag succeeded and
 `fdroid lint`/`fdroid scanner` were clean (scanner 0 warnings / 0 errors). The
 first run in the temporary checkout logged non-blocking `serverwebroot`
 configuration errors; after configuring a dummy local repo, the checkupdates
-rerun was clean. F-Droid signs and publishes its own APK; that cycle is
+rerun was clean. These were local runs in a temporary checkout, not official
+F-Droid acceptance. F-Droid signs and publishes its own APK; that cycle is
 independent and still pending.
 
 
@@ -117,7 +124,7 @@ independent and still pending.
 | Requirement | Evidence | Status |
 | --- | --- | --- |
 | F–V–P hidden in production, code/data retained | `FVP_ENABLED=false` release, Home smoke, guarded routes, release flag test, F–V–P 10/10 | DONE |
-| Valid next version above Play | Play 1.2.1 observed; prior handoff code 9; 1.2.2 / code 10, strict policy PASS | DONE |
+| Valid next version above Play | Historical version-policy PASS (not jarsigner strict). Correction: production 1.2.1/code8; code9 consumption unknown; retained 1.2.2/code10 | DONE; [correction](RELEASE_1.2.2_PUBLICATION.md) |
 | F-Droid inclusion history preserved | `v1.0` and `8cd1fea` intact; public `v1.2.2` tag; no historical tag moved | DONE |
 | Changelog ES/EN + Fastlane metadata | eight `changelogs/10.txt`, `PLAY_RELEASE_NOTES_1.2.2.txt`, metadata check PASS | DONE |
 | Local build/lint/unit/instrumented validation | pre-push, 1200+1200 JVM, 50/17, 0 lint errors, AVD suites | DONE |
@@ -125,7 +132,7 @@ independent and still pending.
 | GitHub tag and Release | `v1.2.2` → `c9e4177`; Release published | DONE |
 | F-Droid detection and build | checkupdates 1.2.2/10, fresh build, lint/scanner 0/0 | DONE locally |
 | F-Droid official distribution | f-droid.org still shows 1.0/7 | PENDING (external) |
-| Signed AAB and Play production submission | AAB unsigned; no key/credentials; Play still 1.2.1 | **BLOCKED** |
+| Signed AAB and Play production submission | Originally blocked at this checkpoint; later signed locally and submission reported by maintainer | Historical blocker superseded; [current record](RELEASE_1.2.2_PUBLICATION.md) |
 
 The task is not complete until the signed AAB is accepted by Google Play production and F-Droid independently builds/publishes 1.2.2. The only local blocker is the missing upload key and Play API/Fastlane authorization; code 10 must also be confirmed unused in every Play track/draft.
 
@@ -135,9 +142,10 @@ The task is not complete until the signed AAB is accepted by Google Play product
    in every Play track/draft, provide the upload key and Play API/Fastlane
    access, build and verify the signed AAB from `c9e4177`, upload to production,
    add the eight-locale code-10 notes and complete review.
-2. **1.2.0/code9 superseded.** It reused the code of the published 1.2.1 and was
-   a downgrade. Its tag/release are retained but marked superseded; no historical
-   tag was moved.
+2. **1.2.0/code9 superseded.** The original diagnosis that it reused production's
+   code was incorrect: production is 1.2.1/code8 and code9 consumption is unknown.
+   The lower version name was a downgrade; tags/releases remain historical and
+   unmoved. See the [current correction](RELEASE_1.2.2_PUBLICATION.md).
 3. **Encoder class skip.** One test requires a 540×960 fixture and is skipped in
    the 720×1280 class run; it passes separately. Do not claim "4/4 without skips".
 4. **Release OFF restoration not instrumented.** Documented residual gap.

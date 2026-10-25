@@ -2,10 +2,12 @@
 
 ## 1.2.2 (versionCode 10) — Production release candidate
 
-- Supersedes the 1.2.0 / code 9 checkpoint. Google Play already advertises
-  **1.2.1**, whose handoff used **versionCode 9**; reusing that code would be
-  rejected and publishing 1.2.0 would be a downgrade. Code 10 is the next valid
-  code and 1.2.2 is the next version name.
+- Supersedes the historical 1.2.0 / code 9 checkpoint (retained as history;
+  consumption of code 9 is unknown — do not claim it was consumed or reused).
+  Production is **1.2.1 / versionCode 8**, not 9; the earlier assertion that
+  the 1.2.1 handoff used code 9 was mistaken. Publishing 1.2.0 would be a
+  downgrade. The prepared 1.2.2 / code 10 identity is retained,
+  and tag `v1.2.2` → `c9e4177c6ad4d3e6c8c1e9eb14796e714fb61bc2` is preserved.
 - Keeps the F-V-P profile hidden in production: `FVP_ENABLED=false` for release,
   the Home entry removed, all five routes guarded, and no flow ViewModel or draft
   recovery created when OFF. Module, tables and calculations are retained.

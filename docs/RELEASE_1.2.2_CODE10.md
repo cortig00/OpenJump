@@ -1,11 +1,18 @@
+> **SUPERSEDED by [1.2.2 publication record](RELEASE_1.2.2_PUBLICATION.md) (2026-10-25).**
+> This development release record is historical evidence only. Source/tag identity
+> 1.2.2 / code 10 (`v1.2.2` → `c9e4177c6ad4d3e6c8c1e9eb14796e714fb61bc2`) is preserved;
+> current Play submission and F-Droid status are in the publication record.
+
 # OpenJump 1.2.2 — release record (versionCode 10)
 
 ## Why 1.2.2 / code 10
 
-The live Google Play listing advertises **1.2.1**, and the prior release handoff
-for that build used **versionCode 9**. The earlier 1.2.0 / code 9 checkpoint is
-therefore a downgrade and reuses a consumed code; it is **superseded** and must
-not be uploaded to Play. The next valid identity is **1.2.2 / versionCode 10**.
+Production is **1.2.1 / versionCode 8**, not 9; the earlier assertion that the
+1.2.1 handoff used code 9 was mistaken, and consumption of code 9 is unknown —
+do not claim it was consumed or reused. The historical 1.2.0 / code 9 checkpoint
+is superseded and must not be uploaded to Play; publishing 1.2.0 would be a
+downgrade. The prepared identity remains **1.2.2 / versionCode 10**, with tag
+`v1.2.2` → `c9e4177c6ad4d3e6c8c1e9eb14796e714fb61bc2` preserved.
 
 ## Identity and source
 

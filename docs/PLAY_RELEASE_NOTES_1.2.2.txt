@@ -1,24 +1,48 @@
-<en-US>
-OpenJump 1.2.2: video jump analysis with six protocols, athlete profiles, history, comparisons and manual backups. Camera, frame selector and Encoder improvements. The F-V-P profile is not available in this release. Offline processing on your device.
-</en-US>
 <es-ES>
-OpenJump 1.2.2: análisis de saltos por vídeo con seis protocolos, perfiles de atleta, historial, comparaciones y copias manuales. Mejoras de cámara, selector de fotogramas y Encoder. El perfil F-V-P no está disponible en esta versión. Procesamiento local sin conexión.
+• Corregido un problema que podía dejar negro el primer fotograma al abrir un vídeo en Encoder.
+• El marcado del inicio del movimiento ahora es opcional en los protocolos de salto compatibles.
+• Añadidos español latinoamericano, polaco, japonés y coreano.
+• El perfil fuerza-velocidad permanece desactivado en esta versión.
 </es-ES>
+<en-US>
+• Fixed an issue that could show a black first frame when opening a video in Encoder.
+• Marking movement start is now optional for supported jump protocols.
+• Added Latin American Spanish, Polish, Japanese and Korean.
+• The force-velocity profile remains disabled in this release.
+</en-US>
 <de-DE>
-OpenJump 1.2.2: Video-Sprunganalyse mit sechs Protokollen, Athletenprofilen, Verlauf, Vergleichen und manuellen Sicherungen. Verbesserte Kamera, Frame-Auswahl und Encoder. Das F-V-P-Profil ist in dieser Version nicht verfügbar. Offline-Verarbeitung auf deinem Gerät.
+• Ein Fehler wurde behoben, durch den beim Öffnen eines Videos im Encoder das erste Bild schwarz bleiben konnte.
+• Das Markieren des Bewegungsbeginns ist bei unterstützten Sprungprotokollen jetzt optional.
+• Lateinamerikanisches Spanisch, Polnisch, Japanisch und Koreanisch hinzugefügt.
+• Das Kraft-Geschwindigkeits-Profil bleibt in dieser Version deaktiviert.
 </de-DE>
 <fr-FR>
-OpenJump 1.2.2 : analyse des sauts par vidéo avec six protocoles, profils d'athlètes, historique, comparaisons et sauvegardes manuelles. Améliorations de la caméra, du sélecteur d'images et de l'Encoder. Le profil F-V-P n'est pas disponible dans cette version. Traitement hors ligne sur votre appareil.
+• Correction d’un problème pouvant afficher une première image noire à l’ouverture d’une vidéo dans Encoder.
+• Le marquage du début du mouvement est désormais facultatif pour les protocoles de saut compatibles.
+• Ajout de l’espagnol latino-américain, du polonais, du japonais et du coréen.
+• Le profil force-vitesse reste désactivé dans cette version.
 </fr-FR>
 <it-IT>
-OpenJump 1.2.2: analisi dei salti tramite video con sei protocolli, profili atleta, cronologia, confronti e backup manuali. Miglioramenti a fotocamera, selettore fotogrammi ed Encoder. Il profilo F-V-P non è disponibile in questa versione. Elaborazione offline sul dispositivo.
+• Corretto un problema che poteva mostrare un primo fotogramma nero aprendo un video in Encoder.
+• La selezione dell’inizio del movimento è ora facoltativa per i protocolli di salto compatibili.
+• Aggiunti spagnolo latinoamericano, polacco, giapponese e coreano.
+• Il profilo forza-velocità resta disattivato in questa versione.
 </it-IT>
 <pt-BR>
-OpenJump 1.2.2: análise de saltos por vídeo com seis protocolos, perfis de atletas, histórico, comparações e backups manuais. Melhorias na câmera, no seletor de quadros e no Encoder. O perfil F-V-P não está disponível nesta versão. Processamento offline no seu dispositivo.
+• Corrigido um problema que podia deixar o primeiro quadro preto ao abrir um vídeo no Encoder.
+• A marcação do início do movimento agora é opcional nos protocolos de salto compatíveis.
+• Adicionados espanhol latino-americano, polonês, japonês e coreano.
+• O perfil força-velocidade permanece desativado nesta versão.
 </pt-BR>
 <pt-PT>
-OpenJump 1.2.2: análise de saltos por vídeo com seis protocolos, perfis de atleta, histórico, comparações e cópias manuais. Melhorias na câmara, no seletor de fotogramas e no Encoder. O perfil F-V-P não está disponível nesta versão. Processamento offline no teu dispositivo.
+• Corrigido um problema que podia deixar o primeiro fotograma preto ao abrir um vídeo no Encoder.
+• A marcação do início do movimento é agora opcional nos protocolos de salto compatíveis.
+• Adicionados espanhol latino-americano, polaco, japonês e coreano.
+• O perfil força-velocidade permanece desativado nesta versão.
 </pt-PT>
 <tr-TR>
-OpenJump 1.2.2: altı protokolle video sıçrama analizi, sporcu profilleri, geçmiş, karşılaştırmalar ve manuel yedekler. Kamera, kare seçici ve Encoder iyileştirmeleri. F-V-P profili bu sürümde kullanılamaz. İşlemler cihazınızda çevrimdışı yapılır.
+• Encoder’da video açılırken ilk karenin siyah kalmasına yol açabilen bir sorun düzeltildi.
+• Desteklenen sıçrama protokollerinde hareket başlangıcını işaretlemek artık isteğe bağlı.
+• Latin Amerika İspanyolcası, Lehçe, Japonca ve Korece eklendi.
+• Kuvvet-hız profili bu sürümde devre dışı kalmaya devam ediyor.
 </tr-TR>

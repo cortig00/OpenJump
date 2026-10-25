@@ -1,1 +1,4 @@
-OpenJump 1.2.2: analisi dei salti tramite video con sei protocolli, profili atleta, cronologia, confronti e backup manuali. Miglioramenti a fotocamera, selettore fotogrammi ed Encoder. Il profilo F-V-P non è disponibile in questa versione. Elaborazione offline sul dispositivo.
+• Corretto un problema che poteva mostrare un primo fotogramma nero aprendo un video in Encoder.
+• La selezione dell’inizio del movimento è ora facoltativa per i protocolli di salto compatibili.
+• Aggiunti spagnolo latinoamericano, polacco, giapponese e coreano.
+• Il profilo forza-velocità resta disattivato in questa versione.

@@ -1,1 +1,4 @@
-OpenJump 1.2.2: Video-Sprunganalyse mit sechs Protokollen, Athletenprofilen, Verlauf, Vergleichen und manuellen Sicherungen. Verbesserte Kamera, Frame-Auswahl und Encoder. Das F-V-P-Profil ist in dieser Version nicht verfügbar. Offline-Verarbeitung auf deinem Gerät.
+• Ein Fehler wurde behoben, durch den beim Öffnen eines Videos im Encoder das erste Bild schwarz bleiben konnte.
+• Das Markieren des Bewegungsbeginns ist bei unterstützten Sprungprotokollen jetzt optional.
+• Lateinamerikanisches Spanisch, Polnisch, Japanisch und Koreanisch hinzugefügt.
+• Das Kraft-Geschwindigkeits-Profil bleibt in dieser Version deaktiviert.

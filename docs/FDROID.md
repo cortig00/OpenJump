@@ -8,6 +8,21 @@ annotated `v1.2.2` tag. The Google Play AAB and upload key are not modified or
 rebuilt by this work. See the measured [validation results](FDROID_VALIDATION.md)
 and [submission package](FDROID_SUBMISSION.md).
 
+## Current official status (2026-10-25)
+
+- Official repository (`https://f-droid.org/api/v1/packages/com.openjump.app`):
+  `suggestedVersionCode` 7, only 1.0 / 7 listed. Official 1.2.2 publication is
+  **pending**.
+- Official recipe
+  (`https://gitlab.com/fdroid/fdroiddata/-/raw/master/metadata/com.openjump.app.yml`)
+  already contains 1.2.2 / code 10 at `c9e4177...` with `CurrentVersion: 1.2.2 / 10`.
+  Do **not** propose a duplicate build/version/recipe MR.
+- The monitor's code10 build-log URL returned 404: no log was available there.
+  This is not proof that the official build failed or succeeded.
+- Prior `checkupdates` / `build` / `scanner` PASS results were **local** runs in a
+  temporary checkout, not official F-Droid acceptance. See
+  [publication record](RELEASE_1.2.2_PUBLICATION.md).
+
 ## Audited eligibility
 
 - Project license: GPL-3.0-or-later; dependency licenses retained. See
@@ -42,7 +57,8 @@ and [submission package](FDROID_SUBMISSION.md).
 `fastlane/metadata/android/` is the single reusable listing source for Play/F-Droid:
 
 - `en-US`, `es-ES`, `de-DE`, `fr-FR`, `it-IT`, `pt-BR`, `pt-PT`, `tr-TR`;
-- localized name, short/full descriptions and `changelogs/7.txt`;
+- localized name, short/full descriptions and versioned changelogs, including
+  `changelogs/7.txt` and `changelogs/10.txt`;
 - the existing eight-language Play release notes, reused verbatim;
 - one common 512x512 launcher icon in the default `en-US` listing;
 - two existing protocol screenshots each in English, Spanish, German and French.
@@ -87,8 +103,22 @@ Do not use `--force`, `--skip-scan` or `novcheck` to hide failures.
 The current automatic update is `1.2.2` / code `10`. It keeps the same application
 ID, the same source tree and a single release variant. The `v1.2.2` tag must point
 to the exact published source commit; the recipe's pin for the 1.0 build stays
-immutable. No manual `fdroiddata` MR is needed for this stable version because the
-existing `AutoUpdateMode`/`UpdateCheckMode`/`UpdateCheckData` already cover it.
+immutable. No manual `fdroiddata` version/recipe MR is needed for this stable
+version because the existing `AutoUpdateMode`/`UpdateCheckMode`/`UpdateCheckData`
+already cover it; the official recipe already lists 1.2.2 / 10, so a duplicate
+proposal must not be opened.
+
+### Post-tag store-notes exception (2026-10-25)
+
+Per <https://f-droid.org/docs/All_About_Descriptions_Graphics_and_Screenshots/>,
+F-Droid takes descriptions/graphics/screenshots from the latest known release
+checkout, not from arbitrary `main`, and `fdroiddata` overrides take precedence.
+Because `v1.2.2` is immutable, updating `main` notes alone does not guarantee new
+code-10 notes on F-Droid. A **metadata-only** `fdroiddata` override MR carrying the
+eight canonical `changelogs/10.txt` (no recipe/source/tag change) is prepared
+separately; GitLab is not authenticated and the MR is **not submitted**. Do not
+promise that official F-Droid has imported the new notes. For future releases,
+commit store notes **before** the stable tag.
 
 The stable `v1.0` tag identifies the original public Play source snapshot
 `5c47e887dc06b294f9b9a1f6458df6b670f854aa` (1.0 / code7). The original Play binary
