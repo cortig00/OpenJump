@@ -61,9 +61,14 @@ and [submission package](FDROID_SUBMISSION.md).
   `changelogs/7.txt` and `changelogs/10.txt`;
 - the existing eight-language Play release notes, reused verbatim;
 - one common 512x512 launcher icon in the default `en-US` listing;
-- two existing protocol screenshots each in English, Spanish, German and French.
-  Other locales use the default graphics, not falsely labeled translated images.
-  There are no real athlete records or identifiable video frames in these images.
+- locale-specific store compositions for `en-US`, `es-ES`, `de-DE`, `fr-FR`,
+  `it-IT` and `pt-BR`; `pt-PT` and `tr-TR` fall back to the default `en-US`
+  graphics;
+- six phone screenshots in each localized set (JPEG, 1080x1920). The marketing
+  copy is localized; some supplied `de-DE`/`fr-FR` masters show the app's English UI.
+  The `de-DE` frame-by-frame composition corrects the supplied master's demo
+  timing total to 1200 + 566 = 1766 ms. All compositions use demo data; there
+  are no real athlete records or identifiable video frames in these images.
 
 No Fastlane/Ruby plugin or Play Publisher SDK is required. Validate with:
 

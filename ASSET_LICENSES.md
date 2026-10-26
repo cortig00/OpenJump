@@ -10,7 +10,7 @@ licenses below; this declaration does not claim ownership of third-party marks.
 | Material-derived interface icon geometry in `res/drawable/ic_*.xml` | Google Material icons, Apache-2.0. OpenJump-specific modifications and custom icons form part of the GPL project. [Upstream](https://github.com/google/material-design-icons), [license](https://github.com/google/material-design-icons/blob/master/LICENSE). |
 | `ic_buy_me_a_coffee.xml` in the F-Droid preparation | Original generic coffee pictogram, GPL-3.0-or-later; **not** the service's branded SVG. The donation button and destination are unchanged. |
 | `encoder_formula_*.xml` | Generated from the editable `.tex` files under `tools/encoder-formulas/src/`; project equations/resources under GPL-3.0-or-later. The optional generator uses freely licensed LaTeX/dvisvgm/AGP tools. No font binary or formula-rendering SDK is shipped. |
-| Fastlane screenshots | Existing maintainer-produced OpenJump protocol/catalog screenshots, GPL-3.0-or-later. No real athlete video frames, athlete records or signing information are included. |
+| Fastlane screenshots | Maintainer-produced OpenJump protocol/catalog screenshots and localized store compositions, GPL-3.0-or-later. They use demo data only; no real athlete video frames, athlete records or signing information are included. |
 | Fastlane icon | Derived from the project's launcher foreground and the existing launcher-background color, GPL-3.0-or-later. |
 
 The runtime's third-party licenses and notices are in

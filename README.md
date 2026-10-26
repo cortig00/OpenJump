@@ -29,6 +29,17 @@ rates—provide the timing used in calculations.
   Turkish, Brazilian Portuguese, European Portuguese, Polish, Japanese and
   Korean; configurable units and light/dark appearance.
 
+## Screenshots
+
+<p align="center">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/1.jpg" alt="Jump result with height, flight time and timing structure" width="240">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/2.jpg" alt="Frame-by-frame takeoff and landing marking" width="240">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/4.jpg" alt="Encoder repetition analysis with velocity curve" width="240">
+</p>
+
+Localized store graphics are kept under
+[`fastlane/metadata/android/`](fastlane/metadata/android/) for the F-Droid listing.
+
 ## Install
 
 The official Android package is **`com.openjump.app`**. Google Play is the current
