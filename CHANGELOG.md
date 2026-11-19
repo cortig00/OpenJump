@@ -1,7 +1,8 @@
 # Changelog
 
-## 1.3 (versionCode 11) — Prepared source
+## 1.3 (versionCode 12) — Prepared source
 
+- Do not require portrait screen hardware to install the app. The main Android activity retains its portrait preference.
 - Save multi-frame angle analyses and view or share their images from History.
 - Zoom while marking jumps without changing the selected frame or result.
 - Refresh History without losing the current position.

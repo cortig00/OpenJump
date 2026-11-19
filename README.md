@@ -47,12 +47,12 @@ The official Android package is **`com.openjump.app`**. Install OpenJump from
 [F-Droid](https://f-droid.org/packages/com.openjump.app/). The two channels use
 different app signing certificates; switching channels is not an in-place update.
 
-This source snapshot prepares **OpenJump 1.3 (`versionCode 11`)**. It does not
+This source snapshot prepares **OpenJump 1.3 (`versionCode 12`)**. It does not
 contain signed APKs, bundles or signing credentials. As checked on 2026-11-19,
 F-Droid lists 1.2.2 / code 10; 1.3 is not published there. A commit on a branch
 does not trigger an F-Droid update: the official updater watches stable tags.
 See the [F-Droid handoff](docs/FDROID_1.3_HANDOFF.md) and
-[1.3 changelog](CHANGELOG.md#13-versioncode-11--prepared-source).
+[1.3 changelog](CHANGELOG.md#13-versioncode-12--prepared-source).
 
 ## Build from source
 
