@@ -1,18 +1,19 @@
 package com.openjump.app.ui.fvp
 
+import com.openjump.app.testsupport.ResourceCatalogs
+import com.openjump.app.testsupport.androidUnescapeForFormat
+import com.openjump.app.testsupport.formatArguments
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import org.w3c.dom.Element
-import java.io.File
-import javax.xml.parsers.DocumentBuilderFactory
 
 /**
  * Guard de paridad i18n de la sección F–V–P.
  *
  * Referencias: `.pi/plans/fvp-ui-contract.md` (tabla i18n) y
  * `docs/research/fvp/09-INTEGRATION_GATE_ADDENDUM.md` (condición 8, etiqueta primaria y avisos
- * en los 8 locales). El test es JVM puro: solo lee los ficheros de recursos del módulo `app`.
+ * en los 8 locales). El test es JVM puro: solo lee los ficheros de recursos del módulo `app` a
+ * través del snapshot compartido [ResourceCatalogs] (un parseo por fichero y suite).
  *
  * Comprueba:
  * 1. toda clave `fvp_*` de la base (`values/strings.xml`, es) existe exactamente una vez en cada
@@ -20,122 +21,84 @@ import javax.xml.parsers.DocumentBuilderFactory
  * 2. no hay nombres `fvp_*` duplicados en ningún fichero;
  * 3. ningún valor `fvp_*` está vacío;
  * 4. las discrepancias de recuento fuera de `fvp_` se imprimen, pero NO hacen fallar el test
- *    (son preexistentes y ajenas a esta sección).
+ *    (son preexistentes y ajenas a esta sección);
+ * 5. los argumentos de formato (`%1$s`, `%d`, ...) son idénticos a la base y el patrón es
+ *    realmente formateable en el locale del catálogo.
  *
  * Si un fichero no se puede localizar o parsear, el test falla con un mensaje explícito: nunca
  * pasa por omisión.
  */
 class FvpStringsParityTest {
 
-    private data class LocaleStrings(
-        val locale: String,
-        val path: String,
-        val byName: Map<String, List<String>>,
-    ) {
-        val fvp: Map<String, List<String>> get() = byName.filterKeys { it.startsWith(FVP_PREFIX) }
-        val nonFvpCount: Int get() = byName.size - fvp.size
-    }
-
-    /** Resuelve el fichero relativo al directorio de trabajo; falla con contexto si no existe. */
-    private fun resolve(path: String): File {
-        val candidates = listOf(File(path), File("app/$path"))
-        return candidates.firstOrNull { it.isFile }
-            ?: throw AssertionError(
-                "No se encuentra '$path' (locales F–V–P). Directorio de trabajo: " +
-                    "${File(".").absolutePath}. Rutas probadas: " +
-                    candidates.joinToString { it.absolutePath },
-            )
-    }
-
-    private fun parse(locale: String, path: String): LocaleStrings {
-        val file = resolve(path)
-        val factory = DocumentBuilderFactory.newInstance()
-        factory.isNamespaceAware = false
-        try {
-            // Endurecimiento local: los strings.xml del proyecto no usan DTD.
-            factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
-        } catch (_: Exception) {
-            // Parser sin soporte para esta feature: el parseo normal sigue siendo válido aquí.
-        }
-        val document = try {
-            factory.newDocumentBuilder().parse(file)
-        } catch (failure: Exception) {
-            throw AssertionError(
-                "No se pudo parsear $path (${file.absolutePath}): ${failure.message}",
-                failure,
-            )
-        }
-        val byName = LinkedHashMap<String, MutableList<String>>()
-        val nodes = document.getElementsByTagName("string")
-        for (index in 0 until nodes.length) {
-            val element = nodes.item(index) as? Element ?: continue
-            val name = element.getAttribute("name")
-            byName.getOrPut(name) { mutableListOf() }.add(element.textContent ?: "")
-        }
-        return LocaleStrings(locale, path, byName)
-    }
-
     @Test
     fun `todos los locales tienen exactamente las mismas claves fvp que la base`() {
-        val base = parse(BASE_LOCALE, locales.getValue(BASE_LOCALE))
-        val baseKeys = base.fvp.keys
+        val base = catalogs.catalog(BASE_LOCALE)
+        val baseKeys = base.namesWithPrefix(FVP_PREFIX).keys
         assertTrue(
-            "La base debe contener la sección F–V–P completa (>= ${MIN_EXPECTED_FVP_KEYS} claves fvp_*), " +
+            "La base debe contener la sección F–V–P completa (>= $MIN_EXPECTED_FVP_KEYS claves fvp_*), " +
                 "encontradas: ${baseKeys.size}",
             baseKeys.size >= MIN_EXPECTED_FVP_KEYS,
         )
-        for ((locale, path) in locales) {
-            if (locale == BASE_LOCALE) continue
-            val parsed = parse(locale, path)
-            val missing = (baseKeys - parsed.fvp.keys).sorted()
-            val extra = (parsed.fvp.keys - baseKeys).sorted()
+        for (parsed in catalogs.ordered) {
+            if (parsed.label == BASE_LOCALE) continue
+            val locale = parsed.label
+            val localeFvp = parsed.namesWithPrefix(FVP_PREFIX)
+            val missing = (baseKeys - localeFvp.keys).sorted()
+            val extra = (localeFvp.keys - baseKeys).sorted()
             assertTrue("[$locale] faltan claves fvp_* presentes en la base: $missing", missing.isEmpty())
             assertTrue("[$locale] claves fvp_* que no existen en la base: $extra", extra.isEmpty())
             for (key in baseKeys) {
-                val values = parsed.fvp.getValue(key)
-                assertEquals("[$locale] '$key' debe aparecer exactamente una vez", 1, values.size)
+                assertEquals(
+                    "[$locale] '$key' debe aparecer exactamente una vez",
+                    1,
+                    localeFvp.getValue(key).size,
+                )
             }
         }
     }
 
     @Test
     fun `no hay claves fvp duplicadas en ningun locale`() {
-        for ((locale, path) in locales) {
-            val parsed = parse(locale, path)
-            val duplicated = parsed.fvp.filterValues { it.size > 1 }.keys.sorted()
-            assertTrue("[$locale] claves fvp_* duplicadas: $duplicated", duplicated.isEmpty())
+        for (parsed in catalogs.ordered) {
+            val duplicated = parsed.namesWithPrefix(FVP_PREFIX)
+                .filterValues { it.size > 1 }
+                .keys
+                .sorted()
+            assertTrue("[${parsed.label}] claves fvp_* duplicadas: $duplicated", duplicated.isEmpty())
         }
     }
 
     @Test
     fun `ningun valor fvp esta vacio`() {
-        for ((locale, path) in locales) {
-            val parsed = parse(locale, path)
-            val blank = parsed.fvp.filterValues { values -> values.any { it.isBlank() } }.keys.sorted()
-            assertTrue("[$locale] claves fvp_* con valor vacío: $blank", blank.isEmpty())
+        for (parsed in catalogs.ordered) {
+            val blank = parsed.namesWithPrefix(FVP_PREFIX)
+                .filterValues { values -> values.any { it.isBlank() } }
+                .keys
+                .sorted()
+            assertTrue("[${parsed.label}] claves fvp_* con valor vacío: $blank", blank.isEmpty())
         }
     }
 
     @Test
     fun `las discrepancias de recuento fuera de fvp se imprimen sin fallar`() {
-        val parsed = locales.entries.map { (locale, path) -> parse(locale, path) }
+        val parsed = catalogs.ordered
         assertEquals("deben parsearse los ${locales.size} ficheros de locale", locales.size, parsed.size)
 
-        val counts = parsed.associate { it.locale to it.nonFvpCount }
+        val counts = parsed.associate { it.label to (it.stringCount - it.namesWithPrefix(FVP_PREFIX).size) }
         println("[FvpStringsParityTest] claves no fvp por locale: $counts")
 
-        val baseNonFvp = parsed.first { it.locale == BASE_LOCALE }
-            .byName.keys.filterNot { it.startsWith(FVP_PREFIX) }.toSet()
+        val baseNonFvp = catalogs.catalog(BASE_LOCALE).namesWithoutPrefix(FVP_PREFIX).keys
         for (entry in parsed) {
-            if (entry.locale == BASE_LOCALE) continue
-            val localeNonFvp = entry.byName.keys.filterNot { it.startsWith(FVP_PREFIX) }.toSet()
-            if (entry.nonFvpCount != baseNonFvp.size) {
+            if (entry.label == BASE_LOCALE) continue
+            val localeNonFvp = entry.namesWithoutPrefix(FVP_PREFIX).keys
+            val nonFvpCount = entry.stringCount - entry.namesWithPrefix(FVP_PREFIX).size
+            if (nonFvpCount != baseNonFvp.size) {
                 println(
-                    "[FvpStringsParityTest] AVISO (no bloqueante): ${entry.locale} tiene " +
-                        "${entry.nonFvpCount} claves no fvp frente a ${baseNonFvp.size} en la base",
+                    "[FvpStringsParityTest] AVISO (no bloqueante): ${entry.label} tiene " +
+                        "$nonFvpCount claves no fvp frente a ${baseNonFvp.size} en la base",
                 )
                 println("[FvpStringsParityTest]   solo en la base: ${(baseNonFvp - localeNonFvp).sorted()}")
-                println("[FvpStringsParityTest]   solo en ${entry.locale}: ${(localeNonFvp - baseNonFvp).sorted()}")
+                println("[FvpStringsParityTest]   solo en ${entry.label}: ${(localeNonFvp - baseNonFvp).sorted()}")
             }
         }
     }
@@ -149,14 +112,13 @@ class FvpStringsParityTest {
      */
     @Test
     fun `los argumentos de formato fvp son consistentes entre locales y formateables`() {
-        val base = parse(BASE_LOCALE, locales.getValue(BASE_LOCALE))
-        for ((locale, path) in locales) {
-            val parsed = parse(locale, path)
-            for ((key, values) in parsed.fvp) {
-                val baseValue = base.fvp[key]?.singleOrNull() ?: continue
-                val value = values.single()
+        val base = catalogs.catalog(BASE_LOCALE)
+        for (parsed in catalogs.ordered) {
+            for (key in parsed.namesWithPrefix(FVP_PREFIX).keys) {
+                val baseValue = base.values(key).singleOrNull() ?: continue
+                val value = parsed.onlyValue(key)
                 assertEquals(
-                    "[$locale] '$key' no puede cambiar los argumentos de formato",
+                    "[${parsed.label}] '$key' no puede cambiar los argumentos de formato",
                     formatArguments(baseValue),
                     formatArguments(value),
                 )
@@ -174,10 +136,14 @@ class FvpStringsParityTest {
                     }
                 }
                 try {
-                    String.format(java.util.Locale.forLanguageTag(localeTag(locale)), androidUnescape(value), *args)
+                    String.format(
+                        java.util.Locale.forLanguageTag(localeTag(parsed.label)),
+                        androidUnescapeForFormat(value),
+                        *args,
+                    )
                 } catch (failure: java.util.IllegalFormatException) {
                     throw AssertionError(
-                        "[$locale] '$key' no es formateable con sus argumentos " +
+                        "[${parsed.label}] '$key' no es formateable con sus argumentos " +
                             "${arguments.map { "%${it.first}\$${it.second}" }}: ${failure.message}",
                         failure,
                     )
@@ -185,25 +151,6 @@ class FvpStringsParityTest {
             }
         }
     }
-
-    /** Indices y conversiones de los placeholders, en orden de aparicion (ignora `%%`). */
-    private fun formatArguments(value: String): List<Pair<Int, Char>> {
-        val pattern = Regex("%(\\d+\\$)?([a-zA-Z%])")
-        val result = mutableListOf<Pair<Int, Char>>()
-        var sequential = 1
-        for (match in pattern.findAll(value)) {
-            val conversion = match.groupValues[2].single()
-            if (conversion == '%') continue
-            val explicit = match.groupValues[1]
-            val index = explicit.removeSuffix("$").toIntOrNull() ?: sequential
-            result += index to conversion
-            if (explicit.isEmpty()) sequential += 1
-        }
-        return result.sortedBy { it.first }
-    }
-
-    /** Deshace los escapes de Android que no entiende `String.format` de la JVM. */
-    private fun androidUnescape(value: String): String = value.replace("\\'", "'")
 
     private fun localeTag(locale: String): String = when (locale) {
         "pt-rBR" -> "pt-BR"
@@ -230,5 +177,11 @@ class FvpStringsParityTest {
             "ja" to "src/main/res/values-ja/strings.xml",
             "ko" to "src/main/res/values-ko/strings.xml",
         )
+
+        /**
+         * Snapshot único de la suite: cada fichero se parsea una vez y ningún otro test puede
+         * enmascarar un cambio de recursos con una caché global.
+         */
+        val catalogs: ResourceCatalogs by lazy { ResourceCatalogs.load(locales) }
     }
 }

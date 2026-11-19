@@ -3,6 +3,7 @@ package com.openjump.app.data
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.openjump.app.angles.AnglePoint
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -256,8 +257,9 @@ class AthleteDaoInstrumentedTest {
     /**
      * W3.2: el borrado definitivo de un atleta purga su familia F-V-P COMPLETA (raiz + condiciones +
      * intentos por CASCADE) sin tocar la de otro atleta ni sus saltos, y `persistedRootCount`
-     * (atletas + assessments + encoder_sessions + fvp_assessments) refleja el cambio. Sin cambios de
-     * esquema: la cascada y el borrado por atleta ya existen y aqui se cubren con datos reales.
+     * (atletas + assessments + encoder_sessions + fvp_assessments + angle_analyses) refleja el
+     * cambio. Sin cambios de esquema: la cascada y el borrado por atleta ya existen y aqui se
+     * cubren con datos reales.
      */
     @Test
     fun permanentDeletePurgesTheFvpFamilyOfTheRemovedAthleteOnly() = runBlocking {
@@ -310,6 +312,59 @@ class AthleteDaoInstrumentedTest {
         assertEquals(3, repository.persistedRootCount())
     }
 
+    /**
+     * Un atleta con analisis de angulos propios se puede borrar definitivamente: las raices de
+     * angulos se purgan ANTES del atleta (FK NO_ACTION) y sus marcas caen por CASCADE, mientras el
+     * otro atleta conserva intacto su analisis. `persistedRootCount` cuenta las raices de angulos
+     * como estado persistido.
+     */
+    @Test
+    fun permanentDeletePurgesTheAngleRootsOfTheRemovedAthleteOnly() = runBlocking {
+        val removable = repository.create("Removable angles", now = 1L)
+        val survivor = repository.create("Survivor angles", now = 2L)
+        val angles = AngleRepository(database)
+        val removedAngleId = angles.saveNew(angleDraft("delete-athlete-angle", removable))
+        val keptAngleId = angles.saveNew(angleDraft("delete-athlete-angle-kept", survivor))
+        assertEquals(2, countRows("angle_analyses"))
+        assertEquals(2, countRows("angle_marks"))
+        // 2 atletas + 2 raices de angulos.
+        assertEquals(4, repository.persistedRootCount())
+
+        assertEquals(AthletePermanentDeleteResult.DELETED, repository.permanentlyDelete(removable))
+
+        assertNull(repository.byId(removable))
+        assertNull(angles.snapshot(removedAngleId))
+        // La marca del analisis borrado no sobrevive colgando de una raiz inexistente.
+        assertEquals(0, countRowsForIds("angle_marks", "analysisId", listOf(removedAngleId)))
+        assertEquals(1, countRows("angle_analyses"))
+        assertEquals(1, countRows("angle_marks"))
+        // El otro atleta conserva su analisis y su marca: ids, geometria y revision intactos.
+        val kept = requireNotNull(angles.snapshot(keptAngleId))
+        assertEquals(survivor, kept.analysis.athleteId)
+        assertEquals(1, kept.marks.size)
+        assertTrue(database.openHelper.writableDatabase.query("PRAGMA foreign_key_check").use { !it.moveToFirst() })
+        // 1 atleta + 1 raiz de angulos.
+        assertEquals(2, repository.persistedRootCount())
+    }
+
+    /**
+     * La proteccion del ultimo atleta activo sigue ganando a la cascada de angulos: no se borra ni el
+     * atleta ni sus raices/marcas de angulos.
+     */
+    @Test
+    fun permanentDeleteOfTheLastActiveAthleteKeepsItsAngleRoots() = runBlocking {
+        val only = repository.create("Only angles", now = 1L)
+        val angles = AngleRepository(database)
+        val angleId = angles.saveNew(angleDraft("delete-last-athlete-angle", only))
+
+        assertEquals(AthletePermanentDeleteResult.LAST_ACTIVE_ATHLETE, repository.permanentlyDelete(only))
+
+        assertNotNull(repository.byId(only))
+        assertNotNull(angles.snapshot(angleId))
+        assertEquals(1, countRows("angle_analyses"))
+        assertEquals(1, countRows("angle_marks"))
+    }
+
     private fun countRows(table: String): Int =
         database.openHelper.writableDatabase.query("SELECT COUNT(*) FROM $table").use { cursor ->
             cursor.moveToFirst()
@@ -328,6 +383,29 @@ class AthleteDaoInstrumentedTest {
                     cursor.getInt(0)
                 }
         }
+
+    /** Analisis de angulos persistible por la via real (`AngleRepository.saveNew`) con una marca. */
+    private fun angleDraft(sessionKey: String, athleteId: Long): AngleAnalysisDraft = AngleAnalysisDraft(
+        sessionKey = sessionKey,
+        athleteId = athleteId,
+        encodedWidth = 1920,
+        encodedHeight = 1080,
+        presentationWidth = 1920,
+        presentationHeight = 1080,
+        rotationDegrees = 0,
+        frameIndex = 42,
+        sourcePtsUs = 1_400_000L,
+        marks = listOf(
+            AngleMarkDraft(
+                ordinal = 0,
+                name = "Cadera",
+                colorArgb = 0xFF3366CC.toInt(),
+                pointA = AnglePoint(100.0, 100.0),
+                pointB = AnglePoint(200.0, 200.0),
+                pointC = AnglePoint(300.0, 100.0),
+            ),
+        ),
+    )
 
     /**
      * Serie F-V-P persistible con 2 condiciones y 2 intentos por la via real (`FvpRepository.save`

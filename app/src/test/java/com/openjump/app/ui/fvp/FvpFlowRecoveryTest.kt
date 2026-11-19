@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.openjump.app.testsupport.awaitValueBlocking
 import com.openjump.fvp.FvpProtocol
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
@@ -1433,13 +1434,16 @@ class FvpFlowRecoveryTest {
      * dependen de ella esperan de forma acotada en vez de asumir que ya termino.
      */
     private fun awaitReconciliationResolved(owner: OwnerUnderTest, timeoutMs: Long = 5_000L) {
-        val deadline = System.currentTimeMillis() + timeoutMs
-        while (owner.viewModel.reconciliationPending.value && System.currentTimeMillis() < deadline) {
-            Thread.sleep(5)
-        }
+        // Condicion POSITIVA: la bandera publicada deja de estar pendiente. El helper observa las
+        // emisiones reales del `StateFlow` con su cota (sin sondeo) y solo el timeout se convierte
+        // en fallo con el ultimo valor observado. La asercion final conserva la evidencia del estado.
+        val pending = owner.viewModel.reconciliationPending.awaitValueBlocking(
+            what = "la reconciliacion se resuelva",
+            timeoutMillis = timeoutMs,
+        ) { pendingValue -> !pendingValue }
         assertFalse(
             "la reconciliacion debe resolverse dentro de la cota de la prueba",
-            owner.viewModel.reconciliationPending.value,
+            pending,
         )
     }
 

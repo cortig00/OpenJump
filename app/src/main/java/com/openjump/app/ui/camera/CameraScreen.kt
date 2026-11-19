@@ -4,7 +4,6 @@ import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
-import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.os.Build
 import android.net.Uri
@@ -51,6 +50,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.State
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
@@ -91,7 +91,6 @@ import com.openjump.app.camera.JumpCameraState
 import com.openjump.app.camera.RecordingCadencePolicy
 import com.openjump.app.data.anthropometricsSnapshotFor
 import com.openjump.app.settings.CameraSettings
-import com.openjump.app.settings.RecordingFpsPolicy
 import com.openjump.app.ui.components.JumpFlowStep
 import com.openjump.app.ui.components.QuickAthletePicker
 import com.openjump.app.ui.components.VideoPreparationOverlay
@@ -99,6 +98,8 @@ import com.openjump.app.ui.labs.ExperimentalBadge
 import com.openjump.app.video.AppSession
 import com.openjump.app.ui.theme.ShapeTokens
 import com.openjump.app.ui.theme.Spacing
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 @Composable
@@ -108,24 +109,31 @@ fun CameraScreen(
     captureGuidance: String,
     jumpFlowStep: JumpFlowStep? = null,
     onImportVideo: (Uri) -> Unit = {},
+    captureContext: CameraCaptureContext = CameraCaptureContext.ProtocolFlow,
+    canStartNewVideo: () -> Boolean = { true },
 ) {
     val context = LocalContext.current
     val viewportOrientation = LocalConfiguration.current.orientation
     val activity = remember(context) { context.findActivity() }
     val lifecycleOwner = LocalLifecycleOwner.current
     val app = context.applicationContext as OpenJumpApp
-    val activeAthletes by app.athleteRepository.active().collectAsState(initial = emptyList())
-    val activeDraft by AppSession.draft.collectAsState()
-    val bilateralSession by AppSession.bilateral.collectAsState()
-    val activeEncoderDraft by AppSession.encoderDraft.collectAsState()
-    val seriesTargetAttempts by AppSession.seriesTargetAttempts.collectAsState()
+    // Standalone must not even subscribe to protocol session state: a stale global draft,
+    // roster or encoder draft stays present for the protocol flow but is never observed here.
+    val usesProtocolSession = captureContext.usesProtocolSession
+    val activeAthletes by appSessionFlowOr(usesProtocolSession, app.athleteRepository.active(), emptyList())
+    val activeDraft by appSessionFlowOrNull(usesProtocolSession, AppSession.draft)
+    val bilateralSession by appSessionFlowOrNull(usesProtocolSession, AppSession.bilateral)
+    val activeEncoderDraft by appSessionFlowOrNull(usesProtocolSession, AppSession.encoderDraft)
+    val seriesTargetAttempts by appSessionFlowOr(usesProtocolSession, AppSession.seriesTargetAttempts, 1)
     val pickerScope = rememberCoroutineScope()
-    val roster by AppSession.testingParticipantIds.collectAsState()
+    val roster by appSessionFlowOr(usesProtocolSession, AppSession.testingParticipantIds, emptySet())
     val settings = remember { CameraSettings(context) }
     // Saved FPS defaults live in Settings, independently per recording use.
     // Encoder capture reads the Encoder default; Jump (or no draft) reads the Jumps default.
-    val recordingUse = remember(activeEncoderDraft) {
-        RecordingFpsPolicy.useFor(activeEncoderDraft != null)
+    // Standalone always reads the existing normal Jump default; it never inherits a
+    // stale encoder draft and adds no third preference or settings migration.
+    val recordingUse = remember(captureContext, activeEncoderDraft) {
+        CameraCaptureContextPolicy.recordingUse(captureContext, hasEncoderDraft = activeEncoderDraft != null)
     }
     var availableProfiles by remember { mutableStateOf(emptyList<CameraProductProfile>()) }
     var unavailableFps by remember { mutableStateOf(emptySet<Int>()) }
@@ -169,16 +177,25 @@ fun CameraScreen(
     var showFinalizingDiscardDialog by remember { mutableStateOf(false) }
     // Hidden on every visit: no auto-popup, timer or preference writes.
     var showCaptureHint by rememberCameraInformationVisibility()
-    val isJumpCamera = activeDraft != null && activeEncoderDraft == null
+    val isJumpCamera = usesProtocolSession && activeDraft != null && activeEncoderDraft == null
+    val orientationHost = remember(activity) { activity?.let(::ActivityOrientationHost) }
+    val orientationLease = remember(orientationHost) { orientationHost?.let(::CameraOrientationLease) }
+    // Read by the lifecycle observer below: resuming must re-apply the *current* target,
+    // never a target captured when the observer was registered.
+    val orientationTarget by rememberUpdatedState(CameraOrientationPolicy.forState(pipelineState))
 
     SideEffect {
-        activity?.applyRequestedOrientation(
-            CameraOrientationPolicy.forState(pipelineState),
-        )
+        if (captureContext.usesOrientationLease) {
+            // Scoped ownership: nothing is written while paused or after a foreign change.
+            orientationLease?.update(orientationTarget)
+        } else {
+            activity?.applyRequestedOrientation(orientationTarget)
+        }
     }
 
     val currentOnSaved by rememberUpdatedState(onSaved)
     val currentOnBack by rememberUpdatedState(onBack)
+    val currentCanStartNewVideo by rememberUpdatedState(canStartNewVideo)
     val recorder = remember {
         JumpCameraController(
             context,
@@ -277,18 +294,41 @@ fun CameraScreen(
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_START -> lifecycleStarted = true
+                Lifecycle.Event.ON_RESUME -> if (captureContext.usesOrientationLease) {
+                    // Re-adopt on every resume so the previous value is the real one, then
+                    // re-apply the current target in case no recomposition follows.
+                    orientationLease?.acquire()
+                    orientationLease?.update(orientationTarget)
+                }
                 Lifecycle.Event.ON_STOP -> {
                     lifecycleStarted = false
                     recorder.pause()
+                }
+                Lifecycle.Event.ON_PAUSE -> if (captureContext.usesOrientationLease) {
+                    // Restores only while the window still holds our value; idempotent.
+                    orientationLease?.release()
                 }
                 else -> Unit
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
+        // The observer only sees future events: adopt immediately when already RESUMED and
+        // apply the current target now (no recomposition may follow this first composition).
+        if (captureContext.usesOrientationLease &&
+            lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
+        ) {
+            orientationLease?.acquire()
+            orientationLease?.update(orientationTarget)
+        }
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
+            // Both contexts still dispose the recorder; only the orientation differs.
             recorder.dispose()
-            activity?.applyRequestedOrientation(CameraOrientationPolicy.afterDispose())
+            if (captureContext.usesOrientationLease) {
+                orientationLease?.release()
+            } else {
+                activity?.applyRequestedOrientation(CameraOrientationPolicy.afterDispose())
+            }
         }
     }
 
@@ -374,7 +414,10 @@ fun CameraScreen(
     val isActiveCompatible = remember(mode, selectedFps, selectedResolution) {
         CameraProfilePolicy.isCompatible(mode, selectedFps, selectedResolution)
     }
-    val canRecord = recordControl.canRecord && isActiveCompatible
+    // The opt-in fresh gate also feeds the derived UI: after the first handoff the button
+    // must read as unavailable even if the controller briefly reports READY again.
+    val canStartNewVideoNow = currentCanStartNewVideo()
+    val canRecord = recordControl.canRecord && isActiveCompatible && canStartNewVideoNow
     val canStop = recordControl.canStop
     val rejectedFpsText = unavailableFps.sorted().joinToString(", ")
     val runtimePreviewWarning = when {
@@ -388,12 +431,15 @@ fun CameraScreen(
     val contextWarnings = cameraContextWarnings(
         runtimePreviewWarning, continuityWarning, mode, selectedFps, hasHighSpeed,
     )
-    val showQuickAthletePicker = roster.isNotEmpty() &&
-        (activeDraft?.testingSessionId != null || activeEncoderDraft?.testingSessionId != null) &&
-        activeAthletes.any { athlete ->
+    val showQuickAthletePicker = CameraCaptureContextPolicy.quickAthletePickerAvailable(
+        context = captureContext,
+        rosterSize = roster.size,
+        testingSessionId = activeDraft?.testingSessionId ?: activeEncoderDraft?.testingSessionId,
+        hasEligibleAthlete = activeAthletes.any { athlete ->
             athlete.archivedAt == null && athlete.id in roster
-        }
-    val progressText = if (activeDraft != null) {
+        },
+    )
+    val progressText = if (CameraCaptureContextPolicy.seriesProgressEnabled(captureContext, activeDraft != null)) {
         val targetAttempts = bilateralSession?.targetAttempts ?: seriesTargetAttempts
         val resource = when (CameraRecordControlPolicy.guidancePhase(pipelineState)) {
             CameraRecordGuidancePhase.BEFORE_RECORDING -> if (bilateralSession != null) {
@@ -435,18 +481,46 @@ fun CameraScreen(
         currentOnBack()
     }
 
+    // Android system Back on the standalone camera previously fell through to the NavHost pop
+    // without pausing the recorder or letting the owner cancel the pending intake, leaving the
+    // intro's handoff in AwaitingCapture (Record/Import disabled until it was rebuilt). It now
+    // takes the exact same path as the camera Back control ([leaveCamera]). Declared after the
+    // local function (local scope) and disabled while FINALIZING, so the confirmation handler
+    // above stays the only active one and keeps its dialog/discard behaviour.
+    BackHandler(
+        enabled = CameraCaptureContextPolicy.shouldHandleStandaloneSystemBack(captureContext, pipelineState),
+    ) {
+        leaveCamera()
+    }
+
+    // The opt-in gate must be read at launch time, not from the last UI snapshot: a tap
+    // that lands before recomposition must not start a second import while a URI is in flight.
+    fun launchImportPicker() {
+        if (!currentCanStartNewVideo()) return
+        importVideoLauncher.launch(
+            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly),
+        )
+    }
+
     fun toggleRecording() {
         // Re-read the current request at click time: the captured canRecord may predate
         // the latest selector change by one frame and still reference the old tuple.
         val compatibleNow = CameraProfilePolicy.isCompatible(mode, selectedFps, selectedResolution)
         when {
             canStop -> {
+                // STOP of an active take is never gated or delayed by the opt-in guard.
                 recordingStoppedAtElapsedMs.value = SystemClock.elapsedRealtime()
                 recorder.stopRecording()
             }
-            canRecord && compatibleNow -> {
+            canRecord && compatibleNow && currentCanStartNewVideo() -> {
                 recordingStoppedAtElapsedMs.value = null
-                activity?.applyRequestedOrientation(CameraOrientationMode.LOCKED)
+                if (captureContext.usesOrientationLease) {
+                    // Same lease as every other standalone write: a direct LOCKED here would
+                    // make the next update believe a foreign route took the window.
+                    orientationLease?.update(CameraOrientationMode.LOCKED)
+                } else {
+                    activity?.applyRequestedOrientation(CameraOrientationMode.LOCKED)
+                }
                 recorder.startRecording()
             }
         }
@@ -511,7 +585,9 @@ fun CameraScreen(
                             R.string.jump_recording_guide_headroom, R.string.jump_recording_guide_lighting,
                         ).forEach { Text(stringResource(it), style = MaterialTheme.typography.bodySmall) }
                     }
-                    CameraStepBadge(jumpFlowStep)
+                    if (CameraCaptureContextPolicy.jumpStepBadgeVisible(captureContext)) {
+                        CameraStepBadge(jumpFlowStep)
+                    }
                     if (activeEncoderDraft != null) ExperimentalBadge()
                     // Preserve existing testing-session athlete switching, now on demand.
                     if (showQuickAthletePicker) {
@@ -545,11 +621,7 @@ fun CameraScreen(
                             if (permissionsGranted) recorder.retry(lifecycleOwner, selectedFps, selectedResolution)
                             else requestRequiredPermissions()
                         },
-                        onImportVideo = {
-                            importVideoLauncher.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly),
-                            )
-                        },
+                        onImportVideo = { launchImportPicker() },
                     ) else PortraitBlockingError(
                         title, blockingDetail, permissionsGranted,
                         onRetry = {
@@ -557,11 +629,7 @@ fun CameraScreen(
                             if (permissionsGranted) recorder.retry(lifecycleOwner, selectedFps, selectedResolution)
                             else requestRequiredPermissions()
                         },
-                        onImportVideo = {
-                            importVideoLauncher.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly),
-                            )
-                        },
+                        onImportVideo = { launchImportPicker() },
                     )
                 }
             },
@@ -596,6 +664,32 @@ fun CameraScreen(
         )
     }
 }
+
+/**
+ * Protocol session state stays unobserved in [CameraCaptureContext.Standalone]: the
+ * neutral value is returned without collecting the stale global flow.
+ *
+ * A [StateFlow] is read with `collectAsState()` and no initial value, so the first
+ * composition already sees the current session state (legacy behaviour). Seeding a
+ * placeholder here would derive the wrong recording use and cadence for one frame.
+ */
+@Composable
+internal fun <T : Any> appSessionFlowOrNull(enabled: Boolean, flow: StateFlow<T?>): State<T?> =
+    if (enabled) flow.collectAsState() else remember { mutableStateOf(null) }
+
+/**
+ * Same as [appSessionFlowOrNull] for flows with a non-null neutral value. The neutral
+ * value is only the pre-collection placeholder for plain flows: a [StateFlow] overload
+ * below reads the immediate value instead, exactly as the legacy session flows did.
+ */
+@Composable
+internal fun <T : Any> appSessionFlowOr(enabled: Boolean, flow: Flow<T>, neutral: T): State<T> =
+    if (enabled) flow.collectAsState(initial = neutral) else remember { mutableStateOf(neutral) }
+
+/** [StateFlow] overload: no placeholder, the current value is available immediately. */
+@Composable
+internal fun <T : Any> appSessionFlowOr(enabled: Boolean, flow: StateFlow<T>, neutral: T): State<T> =
+    if (enabled) flow.collectAsState() else remember { mutableStateOf(neutral) }
 
 @Composable
 internal fun CameraBackControl(onBack: () -> Unit, modifier: Modifier = Modifier) {
@@ -900,12 +994,17 @@ private fun Context.findActivity(): Activity? = when (this) {
     else -> null
 }
 
-private fun Activity.applyRequestedOrientation(mode: CameraOrientationMode) {
-    val requested = when (mode) {
-        CameraOrientationMode.PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-        CameraOrientationMode.FULL_SENSOR -> ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
-        CameraOrientationMode.LOCKED -> ActivityInfo.SCREEN_ORIENTATION_LOCKED
+/** Production host for the standalone orientation lease. */
+private class ActivityOrientationHost(private val activity: Activity) : CameraOrientationHost {
+    override val currentRequestedOrientation: Int get() = activity.requestedOrientation
+
+    override fun requestOrientation(requested: Int) {
+        if (activity.requestedOrientation != requested) activity.requestedOrientation = requested
     }
+}
+
+private fun Activity.applyRequestedOrientation(mode: CameraOrientationMode) {
+    val requested = mode.requestedOrientation()
     if (requestedOrientation != requested) requestedOrientation = requested
 }
 

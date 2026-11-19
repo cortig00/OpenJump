@@ -24,6 +24,61 @@ class DataExportRepository private constructor(
     suspend fun writeJson(writer: Writer, exportedAt: Instant = Instant.now()) = write(writer, exportedAt, StreamingJsonDataExportWriter(writer))
     suspend fun writeCsv(writer: Writer, exportedAt: Instant = Instant.now()) = write(writer, exportedAt, StreamingCsvDataExportWriter(writer))
 
+    /**
+     * Emite, una a una y en orden estable, cada raíz V2 (ángulos multi-fotograma) del agregado real,
+     * dentro de su propia transacción de lectura (`withTransaction`) y con el tamaño de página
+     * [DATA_EXPORT_PAGE_SIZE]: ni las raíces ni sus fotogramas/marcas se materializan enteros en
+     * memoria, así que la lectura escala igual que las familias jump/encoder/F-V-P/ángulos V1.
+     *
+     * [write] no llama aquí: comparte el MISMO snapshot llamando al helper interno
+     * [forEachAngleV2AnalysisInSnapshot] dentro de su propia transacción. Así no se anida
+     * `withTransaction` y todas las familias (athletes, jump/encoder, F-V-P, ángulos V1 y V2) se
+     * leen de una única foto consistente de Room.
+     *
+     * Cada emisión es la forma canónica del análisis ([canonicalizedV2Analysis]): fotogramas por
+     * (`ordinal`, `id`), marcas por (`ordinal`, `id`) y grados derivados de los puntos guardados.
+     * Los PTS viajan como `Long` exactos, asignado y reportado por separado, y `reported*` puede ser
+     * `null`. Ni `sessionKey`, ni `imageKey`, ni el SHA-256 del bitmap, ni rutas o nombres de
+     * fichero llegan al callback: la proyección del DAO no los lee.
+     *
+     * Requiere `JumpDatabase` (constructor de producción): el constructor de compatibilidad con DAO
+     * no tiene transacción de base de datos y falla en cerrado.
+     */
+    suspend fun forEachAngleV2Analysis(emit: suspend (ExportAngleV2Analysis) -> Unit) {
+        requireNotNull(database) { "Streaming export requires JumpDatabase" }.withTransaction {
+            forEachAngleV2AnalysisInSnapshot(emit)
+        }
+    }
+
+    /**
+     * Cuerpo de [forEachAngleV2Analysis] que EXIGE estar dentro de la transacción del llamador: es
+     * el helper que reutiliza [write] para que la familia V2 salga del mismo snapshot Room que las
+     * demás, sin abrir una transacción anidada. No llama a `withTransaction` ni al `dao` fuera de
+     * la transacción abierta.
+     */
+    private suspend fun forEachAngleV2AnalysisInSnapshot(emit: suspend (ExportAngleV2Analysis) -> Unit) {
+        // Cursor keyset propio (`createdAt`, `id`), igual que V1/F-V-P: una lista limitada por
+        // página sin cursor puede perder filas empatadas en `createdAt`.
+        var afterCreatedAt: Long? = null
+        var afterIdText = ""
+        while (true) {
+            currentCoroutineContext().ensureActive()
+            val roots = dao.angleV2Page(afterCreatedAt, afterIdText, DATA_EXPORT_PAGE_SIZE)
+            if (roots.isEmpty()) break
+            // Detalles acotados a la página, con su propio keyset dentro de cada raíz: se descartan
+            // al terminar la página, así que la memoria es la de una página, no la del agregado
+            // completo.
+            val analyses = angleV2Analyses(roots, angleV2DetailsForPage(roots.map { it.id }))
+            analyses.forEach { analysis ->
+                currentCoroutineContext().ensureActive()
+                emit(analysis.canonicalizedV2Analysis())
+            }
+            val last = roots.last()
+            afterCreatedAt = last.createdAt
+            afterIdText = last.idText
+        }
+    }
+
     private suspend fun write(writer: Writer, exportedAt: Instant, stream: DataExportStreamWriter) {
         requireNotNull(database) { "Streaming export requires JumpDatabase" }.withTransaction {
             stream.begin(exportedAt.toString())
@@ -87,6 +142,31 @@ class DataExportRepository private constructor(
                 fvpDate = last.dateTime
                 fvpId = last.idText
             }
+            // Familia de ángulos: cursor propio (`createdAt`, `id`) y detalles raíz+marcas por
+            // keyset acotado a la página. Se emite después de F-V-P, igual que el camino canónico.
+            var angleCreatedAt: Long? = null
+            var angleId = ""
+            while (true) {
+                currentCoroutineContext().ensureActive()
+                val roots = dao.anglePage(angleCreatedAt, angleId, DATA_EXPORT_PAGE_SIZE)
+                if (roots.isEmpty()) break
+                val marksByAnalysis = angleDetailsForPage(roots.map { it.id }).groupBy { it.analysisId }
+                roots.forEach { root ->
+                    currentCoroutineContext().ensureActive()
+                    // Una raíz sin marcas viaja igualmente: `markRows` queda vacío, pero la raíz y
+                    // su frame/PTS no se pierden (el LEFT JOIN devuelve una fila sin `markId`).
+                    stream.angle(root.toExportAngleAnalysis(marksByAnalysis[root.id].orEmpty()))
+                }
+                val last = roots.last()
+                angleCreatedAt = last.createdAt
+                angleId = last.idText
+            }
+            // Familia V2 (multi-fotograma): mismo snapshot Room y misma transacción que las
+            // familias anteriores, con su propio cursor keyset y página acotada
+            // (`forEachAngleV2AnalysisInSnapshot`, que NO abre transacción propia: no se anida
+            // `withTransaction`). Se emite después de los ángulos V1, igual que en el camino
+            // canónico, de modo que JSON y CSV publican las familias en el mismo orden.
+            forEachAngleV2AnalysisInSnapshot { analysis -> stream.angleV2(analysis) }
             stream.finish()
         }
     }
@@ -114,6 +194,58 @@ class DataExportRepository private constructor(
             afterConditionId = last.conditionId
             afterAttemptOrdinal = last.attemptOrdinal ?: -1
             afterAttemptId = last.attemptId ?: -1L
+        }
+        return details
+    }
+
+    /** Detalles raíz+fotograma+marca de una página de raíces V2, por cursor keyset propio. */
+    private suspend fun angleV2DetailsForPage(parentIds: List<Long>): List<ExportAngleV2DetailRow> {
+        val details = mutableListOf<ExportAngleV2DetailRow>()
+        var afterCreatedAt: Long? = null
+        var afterIdText = ""
+        var afterFrameOrdinal = -1
+        var afterFrameId = -1L
+        var afterMarkOrdinal = -1
+        var afterMarkId = -1L
+        while (true) {
+            val page = dao.angleV2DetailPage(
+                parentIds, afterCreatedAt, afterIdText, afterFrameOrdinal, afterFrameId,
+                afterMarkOrdinal, afterMarkId, DATA_EXPORT_PAGE_SIZE,
+            )
+            if (page.isEmpty()) break
+            details += page
+            val last = page.last()
+            afterCreatedAt = last.parentCreatedAt
+            afterIdText = last.parentIdText
+            afterFrameOrdinal = last.frameOrdinal
+            afterFrameId = last.frameId
+            // Un fotograma sin marcas llega con `markId` NULL: el cursor continúa con el centinela
+            // (-1, -1), igual que en la familia V1.
+            afterMarkOrdinal = last.markOrdinal ?: -1
+            afterMarkId = last.markId ?: -1L
+        }
+        return details
+    }
+
+    /** Detalles raíz+marcas de una página de raíces de ángulos, por cursor keyset. */
+    private suspend fun angleDetailsForPage(parentIds: List<Long>): List<ExportAngleDetailRow> {
+        val details = mutableListOf<ExportAngleDetailRow>()
+        var afterCreatedAt: Long? = null
+        var afterIdText = ""
+        var afterMarkOrdinal = -1
+        var afterMarkId = -1L
+        while (true) {
+            val page = dao.angleDetailPage(
+                parentIds, afterCreatedAt, afterIdText, afterMarkOrdinal, afterMarkId,
+                DATA_EXPORT_PAGE_SIZE,
+            )
+            if (page.isEmpty()) break
+            details += page
+            val last = page.last()
+            afterCreatedAt = last.parentCreatedAt
+            afterIdText = last.parentIdText
+            afterMarkOrdinal = last.markOrdinal ?: -1
+            afterMarkId = last.markId ?: -1L
         }
         return details
     }

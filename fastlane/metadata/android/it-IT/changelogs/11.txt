@@ -1,0 +1,1 @@
+Salva analisi degli angoli su più fotogrammi e visualizza o condividi le immagini dalla cronologia. Ingrandisci il video mentre contrassegni i salti senza cambiare fotogrammi o risultati. La cronologia si aggiorna senza perdere la posizione. Nuove lingue: hindi e cinese semplificato.

@@ -97,6 +97,28 @@ private enum class SettingsPicker { LANGUAGE, THEME, FPS_JUMPS, FPS_ENCODER }
 private val exportFileDateFormatter: DateTimeFormatter =
     DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'").withZone(ZoneOffset.UTC)
 
+/**
+ * MIME del backup manual. Es fijo porque el contenido tambien lo es: el export siempre es un
+ * contenedor ZIP (con o sin imagenes), y el documento SAF se crea con este tipo antes de escribir
+ * un solo byte. Un MIME elegido mirando si hay imagenes volveria a desalinearse con el contenido.
+ */
+private const val BACKUP_EXPORT_MIME_TYPE = "application/zip"
+private const val BACKUP_EXPORT_FILE_SUFFIX = ".ojbackup.zip"
+
+/**
+ * Tipos que el selector de restauracion admite. El ZIP se ofrece como ZIP y como octet-stream
+ * porque muchos proveedores SAF (Descargas, gestores de archivos, nubes) sirven el mismo fichero
+ * con `application/octet-stream` o lo renombran; los tipos JSON se conservan para las copias
+ * anteriores, que siguen siendo legibles. El formato real lo decide el contenido (cabecera ZIP o
+ * JSON), nunca el MIME declarado por el proveedor.
+ */
+private val BACKUP_IMPORT_MIME_TYPES = arrayOf(
+    BACKUP_EXPORT_MIME_TYPE,
+    "application/octet-stream",
+    "application/json",
+    "text/json",
+)
+
 private fun exportFileTimestamp(): String = exportFileDateFormatter.format(Instant.now())
 
 private data class SettingsOption<T>(
@@ -149,7 +171,7 @@ fun SettingsScreen(
     var backupPrivacy by rememberSaveable { mutableStateOf(false) }
     val backupBusy = backupState is ManualBackupState.Creating || backupState is ManualBackupState.Reading || backupState is ManualBackupState.Restoring
     BackHandler(enabled = backupState is ManualBackupState.Restoring) { }
-    val backupCreateLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+    val backupCreateLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(BACKUP_EXPORT_MIME_TYPE)) { uri ->
         if (uri != null) backupViewModel.create(uri)
     }
     val backupOpenLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -186,8 +208,15 @@ fun SettingsScreen(
                     ManualBackupError.WRITE_FAILED -> R.string.settings_backup_error_write
                     ManualBackupError.PARTIAL -> R.string.settings_backup_error_partial
                     ManualBackupError.REVERTED -> R.string.settings_backup_error_reverted
+                    ManualBackupError.STATE_UNVERIFIED -> R.string.settings_backup_error_state_unverified
                 }
                 snackbarHostState.showSnackbar(context.getString(message)); backupViewModel.acknowledge()
+            }
+            is ManualBackupState.RestoreOrphans -> {
+                // Rechazo posterior a la preparacion: no se sustituyo ninguna fila y las imagenes
+                // publicadas se conservan sin fila. Se informa del numero, nunca de las claves.
+                snackbarHostState.showSnackbar(context.getString(R.string.settings_backup_restore_orphans, state.imageCount))
+                backupViewModel.acknowledge()
             }
             else -> Unit
         }
@@ -372,7 +401,7 @@ fun SettingsScreen(
                         title = stringResource(R.string.settings_backup_restore),
                         summary = stringResource(R.string.settings_backup_restore_description),
                         enabled = exportFormat == null && !backupBusy,
-                        onClick = { backupOpenLauncher.launch(arrayOf("application/json", "text/json")) },
+                        onClick = { backupOpenLauncher.launch(BACKUP_IMPORT_MIME_TYPES) },
                     )
                     SettingsDivider()
                     SettingsRow(
@@ -493,20 +522,58 @@ fun SettingsScreen(
             title = { Text(stringResource(R.string.settings_backup_privacy_title)) },
             text = { Text(stringResource(R.string.settings_backup_privacy_message)) },
             confirmButton = {
-                TextButton(onClick = { backupPrivacy = false; backupCreateLauncher.launch("openjump_backup_${exportFileTimestamp()}.ojbackup.json") }) { Text(stringResource(R.string.settings_export_choose_location)) }
+                TextButton(onClick = { backupPrivacy = false; backupCreateLauncher.launch("openjump_backup_${exportFileTimestamp()}$BACKUP_EXPORT_FILE_SUFFIX") }) { Text(stringResource(R.string.settings_export_choose_location)) }
             },
             dismissButton = { TextButton(onClick = { backupPrivacy = false }) { Text(stringResource(R.string.common_cancel)) } },
         )
     }
 
     (backupState as? ManualBackupState.ReadyToRestore)?.let { ready ->
-        AlertDialog(
-            onDismissRequest = { backupViewModel.cancelRestore() },
-            title = { Text(stringResource(R.string.settings_backup_restore_confirm_title)) },
-            text = { Text(stringResource(R.string.settings_backup_restore_confirm_message, ready.summary.athleteCount, ready.summary.assessmentCount, ready.summary.encoderSessionCount)) },
-            confirmButton = { TextButton(onClick = { backupViewModel.confirmRestore() }) { Text(stringResource(R.string.settings_backup_restore_confirm)) } },
-            dismissButton = { TextButton(onClick = { backupViewModel.cancelRestore() }) { Text(stringResource(R.string.common_cancel)) } },
-        )
+        val angleV2Warning = ready.angleV2Warning
+        // La advertencia de perdida de analisis V2 es un **segundo dialogo** con su propia
+        // confirmacion: la primera confirmacion solo describe la copia, y aceptarla no autoriza a
+        // borrar analisis que la restauracion va a sustituir (JSON v1 o ZIP, con o sin analisis
+        // dentro). El flag se reinicia con cada carga pendiente.
+        var discardAngleV2 by remember(ready) { mutableStateOf(false) }
+        if (angleV2Warning != null && discardAngleV2) {
+            AlertDialog(
+                onDismissRequest = { backupViewModel.cancelRestore() },
+                modifier = Modifier.testTag("settings-backup-angle-v2-warning"),
+                title = { Text(stringResource(R.string.settings_backup_restore_angle_v2_title)) },
+                text = {
+                    Text(
+                        stringResource(
+                            R.string.settings_backup_restore_angle_v2_message,
+                            angleV2Warning.rootCount,
+                            angleV2Warning.frameCount,
+                            angleV2Warning.markCount,
+                        ),
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = { backupViewModel.confirmRestore() }) {
+                        Text(stringResource(R.string.settings_backup_restore_angle_v2_confirm))
+                    }
+                },
+                dismissButton = { TextButton(onClick = { backupViewModel.cancelRestore() }) { Text(stringResource(R.string.common_cancel)) } },
+            )
+        } else {
+            AlertDialog(
+                onDismissRequest = { backupViewModel.cancelRestore() },
+                title = { Text(stringResource(R.string.settings_backup_restore_confirm_title)) },
+                text = { Text(stringResource(R.string.settings_backup_restore_confirm_message, ready.summary.athleteCount, ready.summary.assessmentCount, ready.summary.encoderSessionCount)) },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            // Con advertencia V2 pendiente, este boton solo avanza al segundo dialogo;
+                            // nunca restaura por si mismo.
+                            if (angleV2Warning == null) backupViewModel.confirmRestore() else discardAngleV2 = true
+                        },
+                    ) { Text(stringResource(R.string.settings_backup_restore_confirm)) }
+                },
+                dismissButton = { TextButton(onClick = { backupViewModel.cancelRestore() }) { Text(stringResource(R.string.common_cancel)) } },
+            )
+        }
     }
     if (backupState is ManualBackupState.Restoring) {
         AlertDialog(

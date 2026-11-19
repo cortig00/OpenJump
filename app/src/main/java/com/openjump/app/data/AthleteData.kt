@@ -10,6 +10,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
+import com.openjump.app.data.angles.AngleMediaCoordination
 import com.openjump.app.protocol.AthleteAnthropometrics
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -100,8 +101,12 @@ interface AthleteDao {
     @Query("SELECT * FROM athletes WHERE archivedAt IS NOT NULL ORDER BY displayName COLLATE NOCASE, id LIMIT 1")
     suspend fun firstArchived(): AthleteEntity?
 
-    /** Legacy measurement roots count as existing installation state even when v4 had no athletes. */
-    @Query("SELECT (SELECT COUNT(*) FROM athletes) + (SELECT COUNT(*) FROM assessments) + (SELECT COUNT(*) FROM encoder_sessions) + (SELECT COUNT(*) FROM fvp_assessments)")
+    /**
+     * Every persisted measurement root counts as existing installation state, including legacy
+     * v4 measurements and the angle analyses born in Room 13; only a truly empty installation may
+     * bootstrap its first athlete.
+     */
+    @Query("SELECT (SELECT COUNT(*) FROM athletes) + (SELECT COUNT(*) FROM assessments) + (SELECT COUNT(*) FROM encoder_sessions) + (SELECT COUNT(*) FROM fvp_assessments) + (SELECT COUNT(*) FROM angle_analyses)")
     suspend fun persistedRootCount(): Int
 
     @Query("SELECT * FROM athletes WHERE id = :id AND archivedAt IS NULL LIMIT 1")
@@ -130,6 +135,27 @@ interface AthleteDao {
 
     @Query("DELETE FROM encoder_sessions WHERE athleteId = :athleteId")
     suspend fun deleteEncoderSessionsForAthlete(athleteId: Long)
+
+    /**
+     * Removes the athlete's angle roots; their marks follow by the `ON DELETE CASCADE` declared on
+     * `angle_marks.analysisId`. Roots with a NULL owner are not measurements of this athlete and
+     * are intentionally left alone.
+     */
+    @Query("DELETE FROM angle_analyses WHERE athleteId = :athleteId")
+    suspend fun deleteAngleAnalysesForAthlete(athleteId: Long)
+
+    /**
+     * Removes the athlete's multi-frame angle roots; their frames and marks follow by the
+     * `ON DELETE CASCADE` declared on `angle_analysis_v2_frames.rootId` and
+     * `angle_analysis_v2_marks.frameId`. Roots with a NULL owner belong to no athlete and are
+     * intentionally left alone.
+     *
+     * The private image files referenced by the removed frames are **not** deleted: they stay in
+     * the angle image store as orphans, exactly like the images of a save that never got its row.
+     * There is no image collection/GC path here.
+     */
+    @Query("DELETE FROM angle_analysis_v2_roots WHERE athleteId = :athleteId")
+    suspend fun deleteAngleAnalysisV2RootsForAthlete(athleteId: Long)
 
     @Query("DELETE FROM testing_participants WHERE athleteId = :athleteId")
     suspend fun deleteTestingParticipantsForAthlete(athleteId: Long)
@@ -174,6 +200,13 @@ interface AthleteDao {
             return AthletePermanentDeleteResult.LAST_ACTIVE_ATHLETE
         }
         val testingSessionIds = testingSessionIdsForAthlete(id)
+        // Las raices de angulos apuntan al atleta con NO_ACTION: hay que borrarlas antes que al
+        // atleta (sus marcas caen por CASCADE) o el DELETE de `athletes` fallaria por clave foranea.
+        // Aplica a las dos familias: el agregado legacy de un fotograma y el multi-fotograma V2, que
+        // es otra tabla con su propia secuencia de ids. Ambas listas son "de este atleta" (WHERE
+        // athleteId = :id), asi que las raices con dueno NULL y las de otros atletas no se tocan.
+        deleteAngleAnalysesForAthlete(id)
+        deleteAngleAnalysisV2RootsForAthlete(id)
         deleteAssessmentsForAthlete(id)
         deleteFvpAssessmentsForAthlete(id)
         deleteEncoderSessionsForAthlete(id)
@@ -238,8 +271,22 @@ class AthleteRepository(
 
     suspend fun archive(id: Long): Boolean = dao.setArchived(id, System.currentTimeMillis()) == 1
     suspend fun unarchive(id: Long): Boolean = dao.unarchive(id) == 1
+    /**
+     * Permanently deletes one athlete and every measurement it owns.
+     *
+     * Toma [AngleMediaCoordination.mutex], el mismo mutex por proceso que serializan el guardado del
+     * agregado V2 ([com.openjump.app.data.angles.AngleV2SaveRepository]) y el snapshot/restore del
+     * backup con imagenes ([com.openjump.app.data.backup.MediaBackupCoordinator]). Sin el, un
+     * guardado V2 podria publicar sus imagenes y confirmar su transaccion entre las lecturas y el
+     * borrado de este atleta, dejando una raiz V2 nueva apuntando a un atleta ya eliminado (o
+     * haciendo fallar la FK). Con el, el borrado y esas operaciones no se intercalan.
+     *
+     * El mutex es exclusion entre corrutinas de esta app, **no** una garantia transaccional entre
+     * Room y el sistema de ficheros: la unidad atomica sigue siendo la transaccion del DAO
+     * ([AthleteDao.permanentlyDelete]).
+     */
     suspend fun permanentlyDelete(id: Long): AthletePermanentDeleteResult {
-        val result = dao.permanentlyDelete(id)
+        val result = AngleMediaCoordination.mutex.withLock { dao.permanentlyDelete(id) }
         if (result == AthletePermanentDeleteResult.DELETED) {
             try {
                 onSuccessfulDelete()

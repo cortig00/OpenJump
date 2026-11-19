@@ -410,7 +410,7 @@ class DataExportWritersTest {
     }
 
     @Test
-    fun documentWithoutFvpOmitsTheCollectionAndStillEmitsSchema5() {
+    fun documentWithoutFvpOmitsTheCollectionAndStillEmitsSchema7() {
         val document = DataExportDocument(
             exportedAt = "2026-01-01T00:00:00Z",
             measurements = listOf(
@@ -422,7 +422,7 @@ class DataExportWritersTest {
         )
         val json = JsonDataExportWriter.write(document)
         assertFalse(json.contains("\"fvp\""))
-        assertTrue("el schema global es 5 tambien sin FVP", json.contains("\"schemaVersion\": 5"))
+        assertTrue("el schema global es 7 tambien sin FVP", json.contains("\"schemaVersion\": 7"))
         assertEquals(json, JsonDataExportWriter.write(document.copy(fvp = emptyList())))
         assertEquals(CsvDataExportWriter.write(document), CsvDataExportWriter.write(document.copy(fvp = emptyList())))
     }

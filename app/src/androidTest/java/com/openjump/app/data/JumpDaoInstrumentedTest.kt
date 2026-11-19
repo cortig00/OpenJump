@@ -121,6 +121,31 @@ class JumpDaoInstrumentedTest {
         assertEquals(listOf(sharedUri), database.jumpDao().savedVideoUris())
     }
 
+    /**
+     * Un video referenciado SOLO por un analisis de angulos sigue siendo una referencia guardada: si
+     * `savedVideoUris()` lo omitiera, el reconciliador liberaria el grant de un video que el analisis
+     * necesita para reabrirse. Al borrar la raiz deja de serlo, y NULL/en blanco nunca son
+     * referencias.
+     */
+    @Test
+    fun savedVideoReferencesIncludeAngleRootsAndDropThemWhenTheRootIsDeleted() = runBlocking {
+        val angleUri = "content://test/angle-only-video"
+        fun angle(sessionKey: String, videoUri: String?) = AngleAnalysisEntity(
+            sessionKey = sessionKey, athleteId = 1L, createdAt = 3L, updatedAt = 3L,
+            videoUri = videoUri, encodedWidth = 1920, encodedHeight = 1080,
+            presentationWidth = 1920, presentationHeight = 1080, rotationDegrees = 0,
+            frameIndex = 42, sourcePtsUs = 1_400_000L, geometryVersion = 1,
+        )
+        val angleId = database.angleDao().insertAnalysis(angle("uri-reference-angle", angleUri))
+        database.angleDao().insertAnalysis(angle("uri-reference-angle-null", null))
+        database.angleDao().insertAnalysis(angle("uri-reference-angle-blank", "   "))
+
+        assertEquals(setOf(angleUri), database.jumpDao().savedVideoUris().toSet())
+
+        assertEquals(1, database.angleDao().deleteAnalysis(angleId))
+        assertEquals(emptyList<String>(), database.jumpDao().savedVideoUris())
+    }
+
     @Test
     fun streamingExportIncludesDistinctRootNotesAndFormulaHardening() = runBlocking {
         val jump = MeasurementDraft(

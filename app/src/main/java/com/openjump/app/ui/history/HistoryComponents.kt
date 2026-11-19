@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
@@ -46,6 +47,19 @@ fun HistoryEntryRow(
     onDelete: (() -> Unit)? = null,
     deleting: Boolean = false,
 ) {
+    // Sólo la familia Ángulos delega: tiene fila propia (icono genérico de ángulo + menú secundario
+    // de borrado) y no comparte el aspecto de saltos/encoder, que quedan exactamente como están.
+    if (item is MeasurementHistoryItem.Angle) {
+        AngleHistoryEntryRow(
+            entry = item.entry,
+            onClick = onClick,
+            modifier = modifier,
+            showDivider = showDivider,
+            onDelete = onDelete,
+            deleting = deleting,
+        )
+        return
+    }
     val presentation = historyEntryPresentation(item, recent)
     Column(modifier = modifier.fillMaxWidth()) {
         ListItem(
@@ -83,10 +97,15 @@ fun HistoryEntryRow(
                     )
                 }
             },
-            trailingContent = presentation.value?.let { value ->
+            // El botón de borrado no puede depender del valor de la fila: un análisis de ángulos no
+            // proyecta ningún valor y aun así debe ofrecer la acción (con su valor ausente).
+            trailingContent = if (presentation.value == null && onDelete == null) {
+                null
+            } else {
                 {
                     Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {
-                        if (presentation.valuePlaceholder) {
+                        val value = presentation.value
+                        if (value != null && presentation.valuePlaceholder) {
                             // Los estados sin dato no deben competir con las cifras reales:
                             // texto secundario en vez de guion grande y en negrita. Ver F-011.
                             Text(
@@ -94,7 +113,7 @@ fun HistoryEntryRow(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 style = OpenJumpTypes.Secondary,
                             )
-                        } else {
+                        } else if (value != null) {
                             Text(value, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
                         }
                         // F035: Delete lives next to the empty value so the row keeps its
@@ -197,6 +216,70 @@ private fun historyEntryPresentation(item: MeasurementHistoryItem, recent: Boole
             } ?: stringResource(R.string.common_no_valid_reps),
             valuePlaceholder = session.bestMcv == null,
             hasNotes = session.hasNotes,
+        )
+    }
+    // La familia Ángulos NO se presenta aquí: `HistoryEntryRow` delega en `AngleHistoryEntryRow`
+    // antes de llegar a este `when`. La rama se mantiene explícita para conservar la exhaustividad
+    // del tipo sellado y fallar si alguien rompiera esa delegación.
+    is MeasurementHistoryItem.Angle ->
+        error("La familia Ángulos se presenta con AngleHistoryEntryRow")
+}
+
+/**
+ * Diálogos del único camino de borrado de HISTORY: confirmación explícita del objetivo pendiente y
+ * reintento tras un fallo.
+ *
+ * El copy es el ya traducido de borrado de resultado (`result_delete_*`), compartido por las dos
+ * familias: describe exactamente lo que ocurre aquí —los datos de análisis se eliminan y el vídeo
+ * importado/guardado NO se borra—, así que no se añaden cadenas nuevas ni traducciones.
+ *
+ * Cancelar no ejecuta ninguna acción sobre la fila: sólo cierra el diálogo. Confirmar entrega el
+ * [HistoryDeleteTarget] con su familia, nunca un `Long` suelto.
+ */
+@Composable
+internal fun HistoryDeleteDialogs(
+    pending: HistoryDeleteTarget?,
+    failed: HistoryDeleteTarget?,
+    onConfirm: (HistoryDeleteTarget) -> Unit,
+    onCancelPending: () -> Unit,
+    onRetry: (HistoryDeleteTarget) -> Unit,
+    onDismissFailure: () -> Unit,
+) {
+    if (pending != null) {
+        AlertDialog(
+            onDismissRequest = onCancelPending,
+            title = { Text(stringResource(R.string.result_delete_title)) },
+            text = { Text(stringResource(R.string.result_delete_body)) },
+            confirmButton = {
+                TextButton(onClick = { onConfirm(pending) }) {
+                    Text(
+                        stringResource(R.string.result_delete_action),
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onCancelPending) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            },
+        )
+    }
+    if (failed != null) {
+        AlertDialog(
+            onDismissRequest = onDismissFailure,
+            title = { Text(stringResource(R.string.result_delete_title)) },
+            text = { Text(stringResource(R.string.result_delete_error)) },
+            confirmButton = {
+                TextButton(onClick = { onRetry(failed) }) {
+                    Text(stringResource(R.string.common_retry))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismissFailure) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            },
         )
     }
 }

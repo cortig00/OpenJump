@@ -40,11 +40,13 @@ internal object ManualBackupPreflight {
             tables.fvpAssessments.size to BackupFvpAssessment.serializer().descriptor.elementsCount,
             tables.fvpConditions.size to BackupFvpCondition.serializer().descriptor.elementsCount,
             tables.fvpAttempts.size to BackupFvpAttempt.serializer().descriptor.elementsCount,
+            tables.angleAnalyses.size to BackupAngleAnalysis.serializer().descriptor.elementsCount,
+            tables.angleMarks.size to BackupAngleMark.serializer().descriptor.elementsCount,
         )
         val rowCount = tableRowsAndFields.sumOf { it.first.toLong() }
         require(rowCount <= limits.maxArrayItems) { "Manual backup is too large (too many rows)" }
         // Root object + header/table values, then each table-row object and its fixed fields.
-        val jsonValues = 26L + tableRowsAndFields.sumOf { (rows, fields) -> rows.toLong() * (fields + 1L) }
+        val jsonValues = 28L + tableRowsAndFields.sumOf { (rows, fields) -> rows.toLong() * (fields + 1L) }
         require(jsonValues <= limits.maxJsonValues) { "Manual backup is too large (too much structure)" }
         val strings = StringBudget(limits)
         strings.add(document.contract)
@@ -63,6 +65,8 @@ internal object ManualBackupPreflight {
         tables.fvpAssessments.forEach { strings.add(it.sessionKey, it.protocolId, it.bodyMassSource, it.pushOffMode, it.pushOffSource, it.pushOffLandmark, it.pushOffProtocol, it.algorithmVersion, it.methodVersion, it.warningsCsv, it.notes, it.acquisitionContextKind, it.acquisitionContextKey, it.bodyMassMeasurement) }
         tables.fvpConditions.forEach { strings.add(it.conditionKey, it.addedLoadSource) }
         tables.fvpAttempts.forEach { strings.add(it.method, it.sourceProtocolId, it.exclusionReason, it.notes, it.reuseConfirmationVersion, it.timeMapping, it.timeMappingEvidenceKey) }
+        tables.angleAnalyses.forEach { strings.add(it.sessionKey) }
+        tables.angleMarks.forEach { strings.add(it.name) }
     }
 
     private class StringBudget(private val limits: ManualBackupPreflightLimits) {

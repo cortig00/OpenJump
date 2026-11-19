@@ -13,13 +13,8 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.core.content.FileProvider
 import androidx.lifecycle.viewmodel.viewModelFactory
-import androidx.media3.common.MediaItem
-import androidx.media3.common.PlaybackException
-import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.SeekParameters
-import androidx.media3.exoplayer.video.VideoFrameMetadataListener
 import com.openjump.app.OpenJumpApp
 import com.openjump.app.R
 import com.openjump.app.benchmark.PreviewMmrPrefetchFrameSource
@@ -42,8 +37,8 @@ import com.openjump.app.tracking.TrackingStatus
 import com.openjump.app.tracking.TrackingFrameSource
 import com.openjump.app.video.AppSession
 import com.openjump.app.video.VideoFrameIndex
-import com.openjump.app.video.isPlateCircleWithinFrame
 import com.openjump.app.video.VideoFrameIndexer
+import com.openjump.app.video.isPlateCircleWithinFrame
 import com.openjump.app.video.VideoTrackingFrameSource
 import com.openjump.app.video.toPresentation
 import com.openjump.app.video.export.TrajectoryVideoExporter
@@ -54,7 +49,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -253,13 +247,10 @@ fun interface SelectorTrackingSourceFactory {
     ): TrackingFrameSource
 }
 
-/**
- * Visor frame a frame basado en ExoPlayer sobre SurfaceView.
- *
- * Scrubbing Mode mantiene el codec caliente y optimiza seeks frecuentes. La
- * salida se renderiza directamente por GPU: no hay copias YUV -> RGB ni bitmaps
- * intermedios. [VideoFrameMetadataListener] confirma el PTS que Media3 va a
- * renderizar, de modo que nunca se marca un target todavía obsoleto.
+/** Visor frame a frame del selector. El transporte (player, alineación PTS, scrubbing,
+ * reproducción y suspensión) vive en [ViewerTransport]; este ViewModel conserva la API
+ * pública por delegación y mantiene aquí la política de placas, tracking, exportación y el
+ * lease de URI del vídeo.
  */
 @OptIn(UnstableApi::class)
 class FrameSelectorViewModel(
@@ -267,17 +258,14 @@ class FrameSelectorViewModel(
     private val trackingSourceFactory: SelectorTrackingSourceFactory? = null,
 ) : ViewModel() {
 
-    private val _player = MutableStateFlow<ExoPlayer?>(null)
-    val player: StateFlow<ExoPlayer?> = _player.asStateFlow()
+    // El transporte (ExoPlayer + alineación PTS + scrubbing) se extrajo a [ViewerTransport]
+    // para reutilizarlo en otros visores. El ViewModel conserva la misma API por delegación.
+    private val sessionPort: ViewerSessionPort = AppSessionViewerSessionPort
 
-    private val _displayState = MutableStateFlow(FrameDisplayState())
-    val displayState: StateFlow<FrameDisplayState> = _displayState.asStateFlow()
-
-    private val _loading = MutableStateFlow(true)
-    val loading: StateFlow<Boolean> = _loading.asStateFlow()
-
-    private val _error = MutableStateFlow<String?>(null)
-    val error: StateFlow<String?> = _error.asStateFlow()
+    val player: StateFlow<ExoPlayer?> get() = transport.player
+    val displayState: StateFlow<FrameDisplayState> get() = transport.displayState
+    val loading: StateFlow<Boolean> get() = transport.loading
+    val error: StateFlow<String?> get() = transport.error
 
     private val _trackingState = MutableStateFlow(TrackingUiState())
     val trackingState: StateFlow<TrackingUiState> = _trackingState.asStateFlow()
@@ -294,8 +282,6 @@ class FrameSelectorViewModel(
     private val debugLoggingEnabled = context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
     private val trajectoryExporter = TrajectoryVideoExporter(context)
     private var exportValidationJob: Job? = null
-    private var viewerSuspendedForExport = false
-    private var viewerSuspendedForResult = false
     private var trackingJob: Job? = null
     private var plateDetectionJob: Job? = null
     private var offlineTracker: OfflineVideoTracker? = null
@@ -320,33 +306,22 @@ class FrameSelectorViewModel(
     private var plateDisplayRequestGeneration = 0L
     private val plateDetectorConfig = PlateDetectorConfig()
     private val plateDetector = GeometricPlateDetector(plateDetectorConfig)
-    private var ptsOffsetUs: Long? = null
-    private var calibrationIndex = 0
-    private var scrubbingActive = false
-
-    @Volatile
-    private var scrubEndRequested = false
-    private var scrubReleaseJob: Job? = null
-
-    private val frameMetadataListener = VideoFrameMetadataListener { presentationTimeUs, _, _, _ ->
-        onFrameAboutToBeRendered(presentationTimeUs)
-    }
-
-    private val playerListener = object : Player.Listener {
-        override fun onPlayerError(error: PlaybackException) {
-            _error.value = context.getString(R.string.selector_error_show_video)
-            _loading.value = false
-        }
-
-        override fun onPlaybackStateChanged(playbackState: Int) {
-            if (playbackState == Player.STATE_ENDED) pausePlayback()
-        }
-    }
+    /**
+     * Transporte del visor. Recibe el scope del ViewModel (mismo despachador y cancelación) y
+     * el callback de invalidación de placas en el punto exacto en que lo ejecutaba requestFrame.
+     */
+    private val transport = ViewerTransport(
+        context = context,
+        scope = viewModelScope,
+        session = sessionPort,
+        onFrameRequested = {
+            plateDisplayRequestGeneration++
+            invalidatePlateWork(resetPendingState = true)
+        },
+    )
 
     init {
-        viewModelScope.launch {
-            openVideo()
-        }
+        transport.start()
         viewModelScope.launch {
             var observedSessionKey: String? = null
             var observedVideoUri: String? = null
@@ -364,239 +339,38 @@ class FrameSelectorViewModel(
                 observedTiming = draft?.timingDecision
             }
         }
-        viewModelScope.launch {
-            AppSession.currentFrameIndex.collect { requested ->
-                val current = _displayState.value
-                if (requested == current.requestedIndex) return@collect
-
-                val mode = if (scrubbingActive && !scrubEndRequested) {
-                    ViewerTransportMode.SCRUBBING
-                } else {
-                    ViewerTransportMode.SEEKING
-                }
-                requestFrame(requested, mode, updateSession = false)
-            }
-        }
+        transport.startSessionCollection()
     }
 
-    private suspend fun openVideo() {
-        try {
-            val uri = AppSession.videoUri.value
-            if (uri == null) {
-                _error.value = context.getString(R.string.selector_no_video)
-                _loading.value = false
-                return
-            }
-
-            val index = AppSession.frameIndex.value ?: withContext(Dispatchers.IO) {
-                val indexingContext = coroutineContext
-                VideoFrameIndexer.indexFromUri(context, uri) { indexingContext.ensureActive() }
-            }.also { AppSession.setVideo(uri, it) }
-
-            require(index.frameCount > 0) { "El vídeo no contiene frames analizables." }
-
-            val initialIndex = AppSession.currentFrameIndex.value.coerceIn(0, index.frameCount - 1)
-            calibrationIndex = initialIndex
-            _displayState.value = FrameDisplayState(
-                requestedIndex = initialIndex,
-                mode = ViewerTransportMode.SEEKING,
-            )
-
-            val exoPlayer = ExoPlayer.Builder(context)
-                .setSeekParameters(SeekParameters.EXACT)
-                .build()
-                .apply {
-                    addListener(playerListener)
-                    setVideoFrameMetadataListener(frameMetadataListener)
-                    volume = 0f
-                    playWhenReady = false
-                    setMediaItem(MediaItem.fromUri(uri))
-                    seekTo(index.timeOf(initialIndex) / 1_000L)
-                    prepare()
-                }
-
-            _player.value = exoPlayer
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (e: Exception) {
-            _error.value = context.getString(R.string.selector_error_analyze_video)
-            _loading.value = false
-        }
-    }
-
-    private fun seekToFrame(requestedIndex: Int) {
-        val index = AppSession.frameIndex.value ?: return
-        val exoPlayer = _player.value ?: return
-        val clamped = requestedIndex.coerceIn(0, index.frameCount - 1)
-        exoPlayer.seekTo(index.timeOf(clamped) / 1_000L)
-    }
-
-    private fun requestFrame(
-        requestedIndex: Int,
-        mode: ViewerTransportMode,
-        updateSession: Boolean = true,
-    ) {
-        val index = AppSession.frameIndex.value ?: return
-        val clamped = requestedIndex.coerceIn(0, index.frameCount - 1)
-        plateDisplayRequestGeneration++
-        invalidatePlateWork(resetPendingState = true)
-        _player.value?.pause()
-        _displayState.update { it.request(clamped, mode) }
-        _loading.value = _displayState.value.renderedIndex == null
-        if (updateSession) AppSession.setFrameIndex(clamped)
-        seekToFrame(clamped)
-    }
-
-    private fun onFrameAboutToBeRendered(playerPtsUs: Long) {
-        val index: VideoFrameIndex = AppSession.frameIndex.value ?: return
-        if (index.frameCount == 0) return
-
-        // ExoPlayer normaliza algunos contenedores para empezar en cero. La
-        // primera salida corresponde al seek inicial exacto y permite alinear
-        // su timeline con los PTS originales del MediaExtractor.
-        val offset = ptsOffsetUs ?: (index.timeOf(calibrationIndex) - playerPtsUs).also {
-            ptsOffsetUs = it
-        }
-        val sourcePtsUs = playerPtsUs + offset
-        val renderedIndex = index.indexOfNearest(sourcePtsUs)
-        val canonicalPtsUs = index.timeOf(renderedIndex)
-
-        _displayState.update { it.rendered(renderedIndex, canonicalPtsUs) }
-        _loading.value = false
-        if (scrubEndRequested && _displayState.value.renderedIndex == _displayState.value.requestedIndex) {
-            viewModelScope.launch { finishScrubbing() }
-        }
-        if (_displayState.value.canMark) _error.value = null
-    }
+    // --- API del visor: delegación estable en [ViewerTransport] (mismo orden y semántica) ---
 
     /** Starts a short Media3 scrubbing interaction. Playback is always paused first. */
-    fun beginScrubbing() {
-        val exoPlayer = _player.value ?: return
-        scrubReleaseJob?.cancel()
-        scrubEndRequested = false
-        exoPlayer.pause()
-        if (!scrubbingActive) {
-            exoPlayer.setScrubbingModeEnabled(true)
-            scrubbingActive = true
-        }
-        _displayState.update {
-            it.request(it.requestedIndex, ViewerTransportMode.SCRUBBING)
-        }
-    }
+    fun beginScrubbing() = transport.beginScrubbing()
 
     /** Seeks to an indexed PTS while Media3 coalesces intermediate scrub requests. */
-    fun scrubToFrame(frameIndex: Int) {
-        beginScrubbing()
-        requestFrame(frameIndex, ViewerTransportMode.SCRUBBING)
-    }
+    fun scrubToFrame(frameIndex: Int) = transport.scrubToFrame(frameIndex)
 
     /** Performs an exact frame step; a burst shares one short scrubbing session. */
-    fun stepFrames(delta: Int) {
-        if (delta == 0) return
-        val before = _displayState.value
-        val base = if (before.isPlaying) {
-            before.renderedIndex ?: AppSession.currentFrameIndex.value
-        } else {
-            AppSession.currentFrameIndex.value
-        }
-        beginScrubbing()
-        requestFrame(base + delta, ViewerTransportMode.SCRUBBING)
-        scrubReleaseJob = viewModelScope.launch {
-            delay(STEP_SCRUB_RELEASE_MS)
-            endScrubbing()
-        }
-    }
+    fun stepFrames(delta: Int) = transport.stepFrames(delta)
 
     fun jumpTo(type: EventType) {
         AppSession.jumpTo(type)
-        requestFrame(AppSession.currentFrameIndex.value, ViewerTransportMode.SEEKING)
+        transport.requestFrame(AppSession.currentFrameIndex.value, ViewerTransportMode.SEEKING)
     }
 
     /** Requires the final scrub target to render before precision-sensitive actions are enabled. */
-    fun endScrubbing() {
-        if (!scrubbingActive) return
-        scrubReleaseJob?.cancel()
-        scrubReleaseJob = null
-        scrubEndRequested = true
-        val target = AppSession.currentFrameIndex.value
-        _displayState.update { it.request(target, ViewerTransportMode.SEEKING) }
-        if (_displayState.value.renderedIndex == target) {
-            finishScrubbing()
-        } else {
-            seekToFrame(target)
-        }
-    }
+    fun endScrubbing() = transport.endScrubbing()
 
-    private fun finishScrubbing() {
-        if (scrubbingActive) _player.value?.setScrubbingModeEnabled(false)
-        scrubbingActive = false
-        scrubEndRequested = false
-        _displayState.update { state ->
-            if (state.renderedIndex == state.requestedIndex) {
-                state.copy(mode = ViewerTransportMode.PAUSED)
-            } else {
-                state.copy(mode = ViewerTransportMode.SEEKING)
-            }
-        }
-    }
+    fun togglePlayback() = transport.togglePlayback()
 
-    fun togglePlayback() {
-        val exoPlayer = _player.value ?: return
-        if (exoPlayer.playWhenReady || _displayState.value.isPlaying) {
-            pausePlayback()
-            return
-        }
-
-        scrubReleaseJob?.cancel()
-        scrubReleaseJob = null
-        finishScrubbing()
-        if (exoPlayer.playbackState == Player.STATE_ENDED) {
-            exoPlayer.seekToDefaultPosition()
-            _displayState.update { it.request(0, ViewerTransportMode.PLAYING) }
-            AppSession.setFrameIndex(0)
-        } else {
-            _displayState.update { it.playing() }
-        }
-        _loading.value = false
-        exoPlayer.play()
-    }
-
-    fun pausePlayback() {
-        val exoPlayer = _player.value ?: return
-        scrubReleaseJob?.cancel()
-        scrubReleaseJob = null
-        if (scrubbingActive) finishScrubbing()
-        exoPlayer.pause()
-        val paused = _displayState.value.pauseAtRendered()
-        _displayState.value = paused
-        paused.renderedIndex?.let(AppSession::setFrameIndex)
-    }
+    fun pausePlayback() = transport.pausePlayback()
 
     /**
      * PlayerView crea una superficie nueva al volver desde Resultados. ExoPlayer
      * puede presentar entonces el siguiente buffer ya decodificado; repetir el
      * seek exacto mantiene superficie, etiqueta y PTS sincronizados.
      */
-    fun refreshCurrentFrame() {
-        if (viewerSuspendedForExport) return
-        if (viewerSuspendedForResult) viewerSuspendedForResult = false
-        val requested = AppSession.currentFrameIndex.value
-        val index = AppSession.frameIndex.value ?: return
-        val exoPlayer = _player.value ?: return
-
-        if (_displayState.value.isPlaying) return
-        _displayState.update { it.request(requested, ViewerTransportMode.SEEKING) }
-        _loading.value = _displayState.value.renderedIndex == null
-
-        // Una superficie nueva puede llegar DESPUES del seek inicial (arranque en frio) o al
-        // volver de otra pantalla. Un seek a la misma posicion es un no-op para ExoPlayer y deja
-        // el visor negro hasta que el usuario avanza un fotograma. Reiniciar la fuente en este
-        // borde garantiza que la superficie recien creada reciba el frame solicitado; no se hace
-        // durante la reproduccion (guard anterior) y el coste queda acotado a crear la superficie.
-        exoPlayer.stop()
-        exoPlayer.seekTo(index.timeOf(requested) / 1_000L)
-        exoPlayer.prepare()
-    }
+    fun refreshCurrentFrame() = transport.refreshCurrentFrame()
 
     /** A user chooses the reference before any optional detection runs. */
     fun requestPlateTap() {
@@ -617,7 +391,7 @@ class FrameSelectorViewModel(
     /** Manual geometry has the same frame/identity guards as a detector proposal. */
     fun startManualPlateCircle() {
         if (_plateDetectionState.value.isBusy || _trackingState.value.isBusy) return
-        val display = _displayState.value
+        val display = displayState.value
         val frame = display.renderedIndex ?: return
         if (!display.canMark) return
         val index = AppSession.frameIndex.value ?: return
@@ -689,7 +463,7 @@ class FrameSelectorViewModel(
         val state = _plateDetectionState.value
         val proposal = state.proposal ?: return
         if (!state.canConfirm || _trackingState.value.isBusy || _exportState.value.blocksViewer) return
-        val display = _displayState.value
+        val display = displayState.value
         val uri = AppSession.videoUri.value ?: return
         val index = AppSession.frameIndex.value ?: return
         val draft = AppSession.encoderDraft.value ?: return
@@ -775,7 +549,7 @@ class FrameSelectorViewModel(
         frameIndex: Int,
         requestIdentity: PlateDetectionRequestIdentity?,
     ): Boolean {
-        val display = _displayState.value
+        val display = displayState.value
         val currentIdentity = currentPlateRequestIdentity(frameIndex)
         return generation == plateDetectionGeneration && proposal.generation == generation &&
             proposal.frameIndex == frameIndex && proposal.frameIndex == display.renderedIndex &&
@@ -823,8 +597,8 @@ class FrameSelectorViewModel(
 
     private fun isCurrentRequest(identity: PlateDetectionRequestIdentity): Boolean =
         plateDetectionRequestIsCurrent(identity, currentPlateRequestIdentity(identity.frameIndex)) &&
-            _displayState.value.renderedIndex == identity.frameIndex &&
-            _displayState.value.renderedPtsUs == identity.ptsUs && _displayState.value.canMark
+            displayState.value.renderedIndex == identity.frameIndex &&
+            displayState.value.renderedPtsUs == identity.ptsUs && displayState.value.canMark
 
     private fun invalidatePlateProposal() = invalidatePlateWork(resetPendingState = true)
 
@@ -916,7 +690,7 @@ class FrameSelectorViewModel(
     }
 
     private fun runPlateDetection(mode: PlateDetectionMode, approximateTap: ImagePoint?) {
-        val display = _displayState.value
+        val display = displayState.value
         val renderedIndex = display.renderedIndex ?: return
         if (!display.canMark || _trackingState.value.isBusy || _exportState.value.blocksViewer) return
         if (AppSession.encoderDraft.value?.timingDecision == null) return
@@ -1003,7 +777,7 @@ class FrameSelectorViewModel(
         elapsedMs: Double,
         requestIdentity: PlateDetectionRequestIdentity,
     ) {
-        val currentDisplay = _displayState.value
+        val currentDisplay = displayState.value
         if (!isCurrentRequest(requestIdentity) || !currentDisplay.canMark || currentDisplay.renderedIndex != frameIndex) {
             _plateDetectionState.value = PlateDetectionUiState()
             return
@@ -1193,7 +967,7 @@ class FrameSelectorViewModel(
     }
 
     private fun initializeTrackingTarget(point: ImagePoint, decodedSeedFrame: DecodedTrackingFrame?) {
-        val display = _displayState.value
+        val display = displayState.value
         val renderedIndex = display.renderedIndex ?: return
         if (!display.canMark || _trackingState.value.isBusy || _exportState.value.blocksViewer) return
         val uri = AppSession.videoUri.value ?: return
@@ -1415,7 +1189,7 @@ class FrameSelectorViewModel(
     }
 
     fun markCalibrationPoint(point: ImagePoint): Boolean {
-        val display = _displayState.value
+        val display = displayState.value
         val renderedIndex = display.renderedIndex ?: return false
         if (!display.canMark || _trackingState.value.isBusy || _exportState.value.blocksViewer) return false
         AppSession.markCalibrationPoint(point, renderedIndex)
@@ -1423,7 +1197,7 @@ class FrameSelectorViewModel(
     }
 
     fun markHorizontalCalibrationPoint(point: ImagePoint): Boolean {
-        val display = _displayState.value
+        val display = displayState.value
         val renderedIndex = display.renderedIndex ?: return false
         if (!display.canMark || _trackingState.value.isBusy || _exportState.value.blocksViewer) return false
         AppSession.markHorizontalCalibrationPoint(point, renderedIndex)
@@ -1431,7 +1205,7 @@ class FrameSelectorViewModel(
     }
 
     fun markHorizontalPoint(point: ImagePoint): Boolean {
-        val display = _displayState.value
+        val display = displayState.value
         val renderedIndex = display.renderedIndex ?: return false
         if (!display.canMark || _trackingState.value.isBusy || _exportState.value.blocksViewer) return false
         AppSession.markHorizontalPoint(point, renderedIndex)
@@ -1619,33 +1393,11 @@ class FrameSelectorViewModel(
         }
     }
 
-    fun suspendViewerForResult() {
-        if (viewerSuspendedForResult) return
-        pausePlayback()
-        _player.value?.stop()
-        viewerSuspendedForResult = true
-    }
+    fun suspendViewerForResult() = transport.suspendViewerForResult()
 
-    private fun suspendViewerForExport() {
-        if (viewerSuspendedForExport) return
-        pausePlayback()
-        _player.value?.stop()
-        viewerSuspendedForExport = true
-    }
+    private fun suspendViewerForExport() = transport.suspendViewerForExport()
 
-    private fun resumeViewerAfterExport() {
-        if (!viewerSuspendedForExport) return
-        viewerSuspendedForExport = false
-        val index = AppSession.frameIndex.value ?: return
-        val requested = AppSession.currentFrameIndex.value.coerceIn(0, index.frameCount - 1)
-        val exoPlayer = _player.value ?: return
-        calibrationIndex = requested
-        ptsOffsetUs = null
-        _displayState.update { it.request(requested, ViewerTransportMode.SEEKING) }
-        _loading.value = true
-        exoPlayer.seekTo(index.timeOf(requested) / 1_000L)
-        exoPlayer.prepare()
-    }
+    private fun resumeViewerAfterExport() = transport.resumeViewerAfterExport()
 
     /** The terminal worker already committed the canonical snapshot; this only validates it. */
     fun commitEncoderTracking(): Boolean {
@@ -1707,15 +1459,14 @@ class FrameSelectorViewModel(
 
     /** Marca únicamente el frame que ExoPlayer ya confirmó en la superficie. */
     fun mark(type: EventType): Boolean {
-        val state = _displayState.value
-        val renderedIndex = state.renderedIndex ?: return false
-        if (!state.canMark || _exportState.value.blocksViewer) return false
+        val renderedIndex = transport.confirmedFrameIndex ?: return false
+        if (_exportState.value.blocksViewer) return false
         AppSession.markAt(type, renderedIndex)
         return true
     }
 
     override fun onCleared() {
-        scrubReleaseJob?.cancel()
+        transport.cancelPendingScrubRelease()
         plateDetectionJob?.cancel()
         exportValidationJob?.cancel()
         trajectoryExporter.cancel(notifyListener = false)
@@ -1724,12 +1475,7 @@ class FrameSelectorViewModel(
         pendingTrackingPreview = null
         disposeOfflineTracker()
         _trackingState.value = TrackingUiState()
-        _player.value?.let { exoPlayer ->
-            exoPlayer.clearVideoFrameMetadataListener(frameMetadataListener)
-            exoPlayer.removeListener(playerListener)
-            exoPlayer.release()
-        }
-        _player.value = null
+        transport.release()
         val jobsToFinish = viewModelScope.coroutineContext[Job]?.children?.toList().orEmpty()
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             jobsToFinish.joinAll()
@@ -1740,7 +1486,6 @@ class FrameSelectorViewModel(
 
     companion object {
         private const val PROGRESS_UPDATE_INTERVAL = 5
-        private const val STEP_SCRUB_RELEASE_MS = 300L
         private const val TRACKING_PERFORMANCE_TAG = "OpenJumpTrackingPerf"
         private const val PLATE_DETECTION_TAG = "OpenJumpPlateDetection"
         /** Ephemeral DEBUG-only override; null/OFF = usual route. Cleared in test finally. */

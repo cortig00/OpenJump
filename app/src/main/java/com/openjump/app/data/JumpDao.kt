@@ -29,6 +29,46 @@ data class ReusableJumpMeasurementRow(
     val notes: String?,
 )
 
+/**
+ * Fila de la familia Ángulos en HISTORY: una raíz de análisis guardada, sin valores derivados.
+ *
+ * `dateTime` es `angle_analyses.createdAt` (no existe fecha de edición en la proyección: HISTORY
+ * ordena por creación, igual que `AngleDao.observeAnalyses`). `markCount` es el número de marcas
+ * persistidas de la raíz, que es lo que HISTORY muestra como número de medidas. `videoUri` es la
+ * única vía para reabrir el análisis en el editor, así que se proyecta tal cual (puede ser NULL).
+ *
+ * Vive junto a [JumpDao.historyPage] porque HISTORY lee las tres familias con el mismo cursor
+ * keyset y el mismo contrato de página acotada; el agregado de escritura sigue siendo
+ * [AngleRepository] y esta proyección es de solo lectura.
+ */
+data class AngleHistoryPage(
+    val id: Long,
+    val dateTime: Long,
+    val athleteId: Long?,
+    val athleteName: String?,
+    val markCount: Int,
+    val videoUri: String?,
+)
+
+/**
+ * Fila de la familia Ángulos en HISTORY para una raíz MULTI-FOTOGRAMA (V2).
+ *
+ * Es un tipo distinto de [AngleHistoryPage] a propósito: `angle_analysis_v2_roots.id` y
+ * `angle_analyses.id` son secuencias independientes y pueden coincidir, así que una fila V2 no puede
+ * viajar como si fuera legacy ni compartir destino de navegación o de borrado.
+ *
+ * [markCount] cuenta las marcas de TODOS los fotogramas de la raíz (una raíz V2 agrupa varias
+ * imágenes) y es lo que HISTORY muestra como número de medidas. [videoUri] no existe por diseño: la
+ * raíz V2 no persiste la URI del vídeo, sólo las imágenes anotadas de sus fotogramas.
+ */
+data class AngleV2HistoryPage(
+    val id: Long,
+    val dateTime: Long,
+    val athleteId: Long?,
+    val athleteName: String?,
+    val markCount: Int,
+)
+
 @Dao
 interface JumpDao {
 
@@ -59,12 +99,21 @@ interface JumpDao {
     @Query("SELECT athleteId, testingSessionId FROM assessments WHERE sessionKey = :sessionKey LIMIT 1")
     suspend fun ownershipForSession(sessionKey: String): AssessmentOwnership?
 
-    /** All saved video references across jump and encoder sessions, independent of selected athlete. */
+    /**
+     * All saved video references across jump attempts, encoder sessions and angle analyses,
+     * independent of selected athlete.
+     *
+     * An angle analysis owns its video reference exactly like an attempt or an encoder session: if
+     * it is missing here, the grant reconciler would release a persisted URI still needed to reopen
+     * the analysis. NULL and blank URIs are not references and stay excluded.
+     */
     @Query(
         """
         SELECT videoUri FROM attempts WHERE videoUri IS NOT NULL AND TRIM(videoUri) <> ''
         UNION
         SELECT videoUri FROM encoder_sessions WHERE videoUri IS NOT NULL AND TRIM(videoUri) <> ''
+        UNION
+        SELECT videoUri FROM angle_analyses WHERE videoUri IS NOT NULL AND TRIM(videoUri) <> ''
         """,
     )
     suspend fun savedVideoUris(): List<String>
@@ -300,6 +349,126 @@ interface JumpDao {
         dateFrom: Long?, dateTo: Long?, metricMin: Double?, metricMax: Double?,
         cursorDateTime: Long?, cursorId: Long, cursorKind: String, limit: Int,
     ): List<AthleteHistoryPage>
+
+    /**
+     * Página keyset acotada de la familia Ángulos. Todos los filtros se evalúan en SQLite antes del
+     * LIMIT, igual que [historyPage].
+     *
+     * No acepta `protocolOrExercise` ni métrica: una raíz de ángulos no tiene protocolo ni métrica
+     * primaria, y el llamante debe excluir la familia cuando esos filtros están activos en vez de
+     * ignorarlos (ver `HistoryViewModel.historyIncludesAngles`).
+     *
+     * Orden compartido con las otras familias: `dateTime DESC, id DESC` y, para empates
+     * exactos, Ángulos legacy va ÚLTIMA de las tres familias de esta consulta (ENCODER, JUMP,
+     * ANGLE). Por eso la frontera del cursor incluye `id = :cursorId` cuando el cursor es de otra
+     * familia: esa fila de ángulos todavía no se emitió. Con `cursorKind = 'ANGLE'` la frontera es
+     * estricta y no se repite la fila ya leída.
+     *
+     * La fuente multi-fotograma (`ANGLE_V2`) se lee en [angleV2HistoryPage] y va DESPUÉS de esta
+     * familia en el orden global. Eso no cambia el predicado de aquí: si el cursor es
+     * `'ANGLE_V2'`, la fila legacy de igual `(createdAt, id)` ya se emitió antes, así que queda
+     * excluida por `id < :cursorId`.
+     */
+    @Query(
+        """
+        SELECT an.id AS id, an.createdAt AS dateTime, an.athleteId AS athleteId,
+               ath.displayName AS athleteName,
+               (SELECT COUNT(*) FROM angle_marks AS mark WHERE mark.analysisId = an.id) AS markCount,
+               an.videoUri AS videoUri
+        FROM angle_analyses AS an
+        LEFT JOIN athletes AS ath ON ath.id = an.athleteId
+        WHERE ((:unassignedOnly = 1 AND an.athleteId IS NULL)
+          OR (:unassignedOnly = 0 AND (:athleteId IS NULL OR an.athleteId = :athleteId)))
+          AND (:groupId IS NULL OR EXISTS (
+              SELECT 1 FROM athlete_group_cross_ref AS membership
+              WHERE membership.athleteId = an.athleteId AND membership.groupId = :groupId
+          ))
+          AND (:search IS NULL OR
+               REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+                 REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ath.displayName,
+                   'á', 'a'), 'Á', 'a'), 'é', 'e'), 'É', 'e'), 'í', 'i'), 'Í', 'i'),
+                   'ó', 'o'), 'Ó', 'o'), 'ú', 'u'), 'Ú', 'u'), 'ü', 'u'), 'Ü', 'u'),
+                   'ñ', 'n'), 'Ñ', 'n') LIKE '%' || :search || '%' COLLATE NOCASE)
+          AND (:dateFrom IS NULL OR an.createdAt >= :dateFrom)
+          AND (:dateTo IS NULL OR an.createdAt <= :dateTo)
+          AND (:cursorDateTime IS NULL OR an.createdAt < :cursorDateTime
+            OR (an.createdAt = :cursorDateTime AND
+                (an.id < :cursorId OR (:cursorKind IN ('ENCODER', 'JUMP') AND an.id = :cursorId))))
+        ORDER BY an.createdAt DESC, an.id DESC
+        LIMIT :limit
+        """,
+    )
+    suspend fun angleHistoryPage(
+        search: String?, athleteId: Long?, unassignedOnly: Boolean, groupId: Long?,
+        dateFrom: Long?, dateTo: Long?,
+        cursorDateTime: Long?, cursorId: Long, cursorKind: String, limit: Int,
+    ): List<AngleHistoryPage>
+
+    /**
+     * Página keyset acotada de las raíces Ángulos multi-fotograma (V2).
+     *
+     * Comparte contrato con [angleHistoryPage] —filtros evaluados en SQLite antes del LIMIT, misma
+     * búsqueda normalizada sobre el nombre del atleta y el MISMO cursor global— pero lee otra tabla y
+     * emite una familia de cursor distinta.
+     *
+     * **Identidad.** El `id` devuelto aquí pertenece a `angle_analysis_v2_roots` y NUNCA se puede
+     * interpretar contra `angle_analyses` (ni al revés): son secuencias independientes que pueden
+     * coincidir numéricamente. El llamante lo etiqueta con su fuente
+     * (`MeasurementHistory.AngleHistorySource.MULTI_FRAME`), y esa fuente es la que hace única la
+     * clave de lista y el `kind` del cursor.
+     *
+     * **Frontera del cursor.** En el orden global `(dateTime DESC, id DESC)` esta familia va la
+     * ÚLTIMA (`ENCODER`, `JUMP`, `ANGLE`, `ANGLE_V2`). Con `cursorKind = 'ANGLE_V2'` la frontera es
+     * estricta (`id < :cursorId`) porque esa fila ya se emitió; con cualquier otra familia todavía
+     * hay que emitir la fila de igual `(createdAt, id)`, porque las familias anteriores a ella sí se
+     * leyeron antes. Los literales `'ANGLE_V2'` de aquí y `'ENCODER'`/`'JUMP'` de [historyPage] y
+     * [angleHistoryPage] son el contrato con `MeasurementHistory.kindKey()`: se cambian juntos.
+     *
+     * **Formato.** Sólo se listan raíces de un formato que este lector sepa interpretar
+     * ([analysisFormat], hoy `ANGLE_ANALYSIS_V2_FORMAT`): una raíz de un formato futuro no se
+     * presenta como si fuera ésta y no se ofrece un destino que no pudiera leerla.
+     *
+     * Como [angleHistoryPage], no acepta `protocolOrExercise` ni métrica: una raíz de ángulos no
+     * tiene ninguna de las dos, y el llamante excluye la familia cuando esos filtros están activos
+     * en vez de ignorarlos (ver `HistoryViewModel.historyIncludesAngles`).
+     */
+    @Query(
+        """
+        SELECT root.id AS id, root.createdAt AS dateTime, root.athleteId AS athleteId,
+               ath.displayName AS athleteName,
+               (SELECT COUNT(*) FROM angle_analysis_v2_frames AS frame
+                  JOIN angle_analysis_v2_marks AS mark ON mark.frameId = frame.id
+                 WHERE frame.rootId = root.id) AS markCount
+        FROM angle_analysis_v2_roots AS root
+        LEFT JOIN athletes AS ath ON ath.id = root.athleteId
+        WHERE root.analysisFormat = :analysisFormat
+          AND ((:unassignedOnly = 1 AND root.athleteId IS NULL)
+            OR (:unassignedOnly = 0 AND (:athleteId IS NULL OR root.athleteId = :athleteId)))
+          AND (:groupId IS NULL OR EXISTS (
+              SELECT 1 FROM athlete_group_cross_ref AS membership
+              WHERE membership.athleteId = root.athleteId AND membership.groupId = :groupId
+          ))
+          AND (:search IS NULL OR
+               REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+                 REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ath.displayName,
+                   'á', 'a'), 'Á', 'a'), 'é', 'e'), 'É', 'e'), 'í', 'i'), 'Í', 'i'),
+                   'ó', 'o'), 'Ó', 'o'), 'ú', 'u'), 'Ú', 'u'), 'ü', 'u'), 'Ü', 'u'),
+                   'ñ', 'n'), 'Ñ', 'n') LIKE '%' || :search || '%' COLLATE NOCASE)
+          AND (:dateFrom IS NULL OR root.createdAt >= :dateFrom)
+          AND (:dateTo IS NULL OR root.createdAt <= :dateTo)
+          AND (:cursorDateTime IS NULL OR root.createdAt < :cursorDateTime
+            OR (root.createdAt = :cursorDateTime AND
+                (root.id < :cursorId OR (:cursorKind <> 'ANGLE_V2' AND root.id = :cursorId))))
+        ORDER BY root.createdAt DESC, root.id DESC
+        LIMIT :limit
+        """,
+    )
+    suspend fun angleV2HistoryPage(
+        analysisFormat: String,
+        search: String?, athleteId: Long?, unassignedOnly: Boolean, groupId: Long?,
+        dateFrom: Long?, dateTo: Long?,
+        cursorDateTime: Long?, cursorId: Long, cursorKind: String, limit: Int,
+    ): List<AngleV2HistoryPage>
 
     /** Small, reactive PR projection: ordinary roots plus each unilateral attempt in a bilateral root. */
     @Query(

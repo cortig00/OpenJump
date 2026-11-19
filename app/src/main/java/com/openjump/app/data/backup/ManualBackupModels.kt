@@ -1,5 +1,9 @@
 package com.openjump.app.data.backup
 
+import com.openjump.app.angles.AngleGeometry
+import com.openjump.app.angles.AngleMarkNameContract
+import com.openjump.app.angles.AngleMeasurement
+import com.openjump.app.angles.AnglePoint
 import com.openjump.app.data.*
 import com.openjump.app.encoder.EncoderExercise
 import com.openjump.app.encoder.PhysicalTimeline
@@ -25,7 +29,32 @@ import kotlin.math.abs
 
 const val MANUAL_BACKUP_CONTRACT = "openjump-manual-backup"
 const val MANUAL_BACKUP_FORMAT_VERSION = 1
-const val MANUAL_BACKUP_ROOM_VERSION = 12
+
+/**
+ * Version de esquema Room que declara un documento escrito hoy. La subida a Room 14 es puramente
+ * aditiva (agregado multi-fotograma `angle_analysis_v2_*`, ver
+ * [MANUAL_BACKUP_V2_INTRODUCED_ROOM_VERSION]) y NO cambia la forma del formato v1, que sigue sin
+ * modelar esas tablas. Por eso la version declarada se eleva a 14 y la compatibilidad se conserva:
+ * los documentos legitimamente escritos por las apps Room 13/12/11/10/9 siguen aceptandose (ver
+ * [ManualBackupDocument.validate]).
+ *
+ * Ojo: subir esta constante NO autoriza a restaurar el agregado V2. Mientras exista un solo dato en
+ * esas tres tablas, [ManualBackupDao] rechaza `snapshot` y `replaceAll` con
+ * [ManualBackupV2BlockedException]: la barrera es TRANSITORIA hasta que exista el formato de backup
+ * con imagenes, y este gate no es ese formato.
+ */
+const val MANUAL_BACKUP_ROOM_VERSION = 14
+
+/**
+ * Version de esquema en la que nacen las tablas del agregado multi-fotograma (Room 14):
+ * `angle_analysis_v2_roots`, `angle_analysis_v2_frames` y `angle_analysis_v2_marks`.
+ *
+ * Se fija aqui (no sigue a [MANUAL_BACKUP_ROOM_VERSION]) porque documenta el linaje de un agregado
+ * que el formato v1 **no** transporta: [ManualBackupTables] no tiene claves para esas tablas y el
+ * codec decodifica en modo estricto (`ignoreUnknownKeys = false`), asi que un JSON v1 que intente
+ * traerlas se rechaza en el decode y no hay forma de colarlas "a medias".
+ */
+const val MANUAL_BACKUP_V2_INTRODUCED_ROOM_VERSION = 14
 
 /**
  * Version de esquema en la que nacen las tablas F-V-P. Se fija aqui (no en
@@ -33,8 +62,32 @@ const val MANUAL_BACKUP_ROOM_VERSION = 12
  * filas F-V-P debe seguir aceptando un documento Room 11 legitimo, que ya puede traerlas.
  */
 const val MANUAL_BACKUP_FVP_INTRODUCED_ROOM_VERSION = 11
+
+/**
+ * Version de esquema en la que nacen las columnas de procedencia F-V-P (Room 12, B0). Igual que
+ * [MANUAL_BACKUP_FVP_INTRODUCED_ROOM_VERSION], se fija aqui y NO sigue a
+ * [MANUAL_BACKUP_ROOM_VERSION]: al subir el esquema actual (Room 13 y despues Room 14) un documento
+ * 12 legitimo con procedencia debe seguir decodificando, y uno 11 con procedencia debe seguir siendo
+ * un hibrido rechazado.
+ */
+const val MANUAL_BACKUP_PROVENANCE_INTRODUCED_ROOM_VERSION = 12
+
+/**
+ * Version de esquema en la que nacen las tablas de angulos manuales legacy (Room 13). Un documento
+ * que se declara 9/10/11/12 no puede traerlas aunque el esquema actual sea 14 (la subida a 14 solo
+ * anade el agregado V2 y no toca estas tablas ni estas filas).
+ */
+const val MANUAL_BACKUP_ANGLE_INTRODUCED_ROOM_VERSION = 13
 private const val LEGACY_MANUAL_BACKUP_ROOM_VERSION = 9
 private const val LEGACY_MANUAL_BACKUP_ROOM_VERSION_10 = 10
+private const val LEGACY_MANUAL_BACKUP_ROOM_VERSION_12 = MANUAL_BACKUP_PROVENANCE_INTRODUCED_ROOM_VERSION
+
+/**
+ * Documento escrito por la app Room 13 (angulos manuales legacy). Se acepta explicitamente: el paso
+ * 13 -> 14 solo anade el agregado V2, que el formato v1 no lleva, asi que un 13 legitimo conserva su
+ * forma y su `sourceRoomSchemaVersion` al decodificar y reescribirse.
+ */
+private const val LEGACY_MANUAL_BACKUP_ROOM_VERSION_13 = MANUAL_BACKUP_ANGLE_INTRODUCED_ROOM_VERSION
 
 /** Cota de las claves opacas de procedencia (contrato B0 §2): `<= 128` caracteres. */
 private const val MANUAL_BACKUP_MAX_PROVENANCE_KEY_CHARS = 128
@@ -44,7 +97,13 @@ internal const val MANUAL_BACKUP_MAX_WARNINGS_CSV_CHARS = 1_024
 const val MANUAL_BACKUP_MAX_BYTES = 8L * 1024L * 1024L
 internal const val MANUAL_BACKUP_MAX_JSON_VALUES = 1_500_000
 internal const val MANUAL_BACKUP_MAX_ARRAY_ITEMS = 50_000
-internal const val MANUAL_BACKUP_MAX_STRING_CHARS = 4_096
+/**
+ * Presupuesto por cadena del backup, en unidades de codigo UTF-16. Se deriva del contrato
+ * compartido del nombre de angulo ([AngleMarkNameContract.MAX_CODE_UNITS]) para que editor,
+ * repositorio y backup no puedan divergir: un nombre aceptado al guardar siempre cabe aqui. Sigue
+ * siendo un limite estricto del decode (no se relaja: el valor es el mismo 4096).
+ */
+internal const val MANUAL_BACKUP_MAX_STRING_CHARS = AngleMarkNameContract.MAX_CODE_UNITS
 internal const val MANUAL_BACKUP_MAX_TOTAL_STRING_CHARS = 1_000_000L
 internal const val MANUAL_BACKUP_MAX_NUMBER_CHARS = 128
 internal const val MANUAL_BACKUP_MAX_NESTING = 16
@@ -88,6 +147,10 @@ data class ManualBackupTables(
     val fvpAssessments: List<BackupFvpAssessment> = emptyList(),
     val fvpConditions: List<BackupFvpCondition> = emptyList(),
     val fvpAttempts: List<BackupFvpAttempt> = emptyList(),
+    // Angulos manuales (Room 13). Igual que F-V-P: `emptyList()` por defecto para que un backup
+    // 9/10/11/12 sin estas claves siga restaurando, sin relajar la validacion de filas presentes.
+    val angleAnalyses: List<BackupAngleAnalysis> = emptyList(),
+    val angleMarks: List<BackupAngleMark> = emptyList(),
 )
 
 @Serializable
@@ -227,9 +290,93 @@ data class BackupFvpAttempt(
     val timeMappingEvidenceKey: String? = null,
 )
 
-data class ManualBackupSummary(val createdAtEpochMillis: Long, val formatVersion: Int, val athleteCount: Int, val groupCount: Int, val testingSessionCount: Int, val assessmentCount: Int, val encoderSessionCount: Int, val fvpAssessmentCount: Int = 0) {
-    companion object { fun from(document: ManualBackupDocument) = with(document.tables) { ManualBackupSummary(document.createdAtEpochMillis, document.formatVersion, athletes.size, athleteGroups.size, testingSessions.size, assessments.size, encoderSessions.size, fvpAssessments.size) } }
+/**
+ * Raiz de un analisis manual de angulos 2D (Room 13). Espeja las columnas publicas de
+ * `angle_analyses`: la URI del video, la identidad logica de la fuente y el hash del contenido son
+ * identidad privada y NO viajan en el backup (mismo contrato que `attempts`/`encoder_sessions`); al
+ * restaurar quedan NULL. [presentationWidth]/[presentationHeight] son el sistema de coordenadas de
+ * las marcas (post-rotacion, ver [rotationDegrees]) y [geometryVersion] la version del modelo con la
+ * que se midieron. El frame y su PTS son canonicos de la raiz, no de cada marca.
+ */
+@Serializable
+data class BackupAngleAnalysis(
+    val id: Long,
+    val sessionKey: String,
+    val athleteId: Long?,
+    val createdAt: Long,
+    val updatedAt: Long,
+    val revision: Int,
+    val encodedWidth: Int,
+    val encodedHeight: Int,
+    val presentationWidth: Int,
+    val presentationHeight: Int,
+    val rotationDegrees: Int,
+    val frameIndex: Int,
+    val sourcePtsUs: Long,
+    val geometryVersion: Int,
+)
+
+/**
+ * Marca manual A/B/C de un analisis de angulos, en pixeles de presentacion post-rotacion. No hay
+ * resultados derivados (grados/validez): se recalculan desde las marcas, asi que aqui solo se
+ * preserva la geometria dibujada, la identidad persistente y la presentacion (nombre, color, visible).
+ *
+ * La validacion ([ManualBackupDocument.validate]) exige puntos finitos dentro de
+ * `[0, presentacionWidth-1] x [0, presentacionHeight-1]` y una terna con angulo medible (A == B o
+ * C == B se rechazan); A == C y las ternas colineales 0/180 son geometria valida.
+ */
+@Serializable
+data class BackupAngleMark(
+    val id: Long,
+    val analysisId: Long,
+    val ordinal: Int,
+    val name: String,
+    val colorArgb: Int,
+    val visible: Boolean = true,
+    val pointAX: Double,
+    val pointAY: Double,
+    val pointBX: Double,
+    val pointBY: Double,
+    val pointCX: Double,
+    val pointCY: Double,
+)
+
+data class ManualBackupSummary(val createdAtEpochMillis: Long, val formatVersion: Int, val athleteCount: Int, val groupCount: Int, val testingSessionCount: Int, val assessmentCount: Int, val encoderSessionCount: Int, val fvpAssessmentCount: Int = 0, val angleAnalysisCount: Int = 0) {
+    companion object { fun from(document: ManualBackupDocument) = with(document.tables) { ManualBackupSummary(document.createdAtEpochMillis, document.formatVersion, athletes.size, athleteGroups.size, testingSessions.size, assessments.size, encoderSessions.size, fvpAssessments.size, angleAnalyses.size) } }
 }
+
+/**
+ * Conteo de filas del agregado multi-fotograma (Room 14) que la barrera TRANSITORIA de
+ * [ManualBackupDao] encontro. Existe para diagnosticar sin abrir una transaccion de lectura nueva:
+ * el rechazo dice exactamente que tabla tenia datos.
+ */
+data class AngleAnalysisV2RowCounts(val roots: Int, val frames: Int, val marks: Int) {
+    val total: Int get() = roots + frames + marks
+    val isEmpty: Boolean get() = total == 0
+    internal fun describe(): String =
+        "angle_analysis_v2_roots=$roots, angle_analysis_v2_frames=$frames, angle_analysis_v2_marks=$marks"
+}
+
+/**
+ * Rechazo **fail-closed** de la barrera TRANSITORIA del backup manual (Room 14).
+ *
+ * El formato v1 no modela las tablas del agregado multi-fotograma
+ * ([MANUAL_BACKUP_V2_INTRODUCED_ROOM_VERSION]), asi que un backup capturado hoy seria incompleto y
+ * un `replaceAll` borraria filas V2 (incluidas las raices con `athleteId` NULL, que no cuelgan de
+ * ningun atleta) sin poder devolverlas. Mientras CUALQUIERA de las tres tablas tenga datos, el DAO
+ * lanza esta excepcion **antes** de capturar nada y **antes** de borrar una sola fila, tanto hacia
+ * snapshot como hacia restore, y deja base y filas intactas.
+ *
+ * No es una excepcion de formato ni de validacion ([IllegalArgumentException] sigue siendo la del
+ * decode/validate): es un estado de la base que el formato actual no puede representar. Es
+ * transitoria: desaparece cuando exista el backup con imagenes, no relajando este gate.
+ */
+class ManualBackupV2BlockedException(val rows: AngleAnalysisV2RowCounts) : IllegalStateException(
+    "Manual backup is temporarily blocked: the Room $MANUAL_BACKUP_V2_INTRODUCED_ROOM_VERSION angle " +
+        "V2 tables contain data that the v$MANUAL_BACKUP_FORMAT_VERSION backup format does not carry " +
+        "(${rows.describe()}). Nothing was captured and no row was replaced; snapshot and restore " +
+        "stay fail-closed until the media-aware backup format exists.",
+)
 
 internal fun BackupAthlete.entity() = AthleteEntity(id, displayName, birthDate, sex, notes, createdAt, updatedAt, archivedAt, avatarKey, weightKg, heightCm)
 internal fun BackupGroup.entity() = GroupEntity(id, name, notes, createdAt, updatedAt, archivedAt)
@@ -281,6 +428,22 @@ internal fun BackupFvpAttempt.entity() = FvpAttemptEntity(
     landingPreviousPtsUs = landingPreviousPtsUs, landingNextPtsUs = landingNextPtsUs,
     timeMapping = timeMapping, timeMappingEvidenceKey = timeMappingEvidenceKey,
 )
+internal fun BackupAngleAnalysis.entity() = AngleAnalysisEntity(
+    id = id, sessionKey = sessionKey, athleteId = athleteId, createdAt = createdAt, updatedAt = updatedAt,
+    revision = revision,
+    // Identidad privada de la fuente: el formato no la lleva (como la URI de video de intentos y
+    // sesiones de encoder), asi que se restaura NULL en vez de inventarla.
+    videoUri = null, sourceIdentity = null, sourceHash = null,
+    encodedWidth = encodedWidth, encodedHeight = encodedHeight,
+    presentationWidth = presentationWidth, presentationHeight = presentationHeight,
+    rotationDegrees = rotationDegrees, frameIndex = frameIndex, sourcePtsUs = sourcePtsUs,
+    geometryVersion = geometryVersion,
+)
+internal fun BackupAngleMark.entity() = AngleMarkEntity(
+    id = id, analysisId = analysisId, ordinal = ordinal, name = name, colorArgb = colorArgb,
+    visible = visible, pointAX = pointAX, pointAY = pointAY, pointBX = pointBX, pointBY = pointBY,
+    pointCX = pointCX, pointCY = pointCY,
+)
 
 private fun finite(value: Double?, field: String) { require(value == null || value.isFinite()) { "$field must be finite" } }
 
@@ -290,7 +453,9 @@ fun ManualBackupDocument.validate(): ManualBackupDocument {
     require(formatVersion == MANUAL_BACKUP_FORMAT_VERSION) { "Unsupported manual backup version" }
     require(
         sourceRoomSchemaVersion == MANUAL_BACKUP_ROOM_VERSION ||
+            sourceRoomSchemaVersion == LEGACY_MANUAL_BACKUP_ROOM_VERSION_13 ||
             sourceRoomSchemaVersion == MANUAL_BACKUP_FVP_INTRODUCED_ROOM_VERSION ||
+            sourceRoomSchemaVersion == LEGACY_MANUAL_BACKUP_ROOM_VERSION_12 ||
             sourceRoomSchemaVersion == LEGACY_MANUAL_BACKUP_ROOM_VERSION ||
             sourceRoomSchemaVersion == LEGACY_MANUAL_BACKUP_ROOM_VERSION_10,
     ) { "Unsupported Room schema version" }
@@ -594,13 +759,13 @@ fun ManualBackupDocument.validate(): ManualBackupDocument {
     // La procedencia nace en Room 12: un documento que se declara 9/10/11 no puede traer ninguna de
     // las 20 columnas. Mismo criterio que el gate de filas F-V-P: la version debe describir la forma,
     // y asi los defaults no pueden tapar un linaje mentido ni una restauracion hibrida.
-    if (sourceRoomSchemaVersion < MANUAL_BACKUP_ROOM_VERSION) {
+    if (sourceRoomSchemaVersion < MANUAL_BACKUP_PROVENANCE_INTRODUCED_ROOM_VERSION) {
         require(
             t.fvpAssessments.all { it.provenanceIsUnknown() } &&
                 t.fvpConditions.all { it.provenanceIsUnknown() } &&
                 t.fvpAttempts.all { it.provenanceIsUnknown() },
         ) {
-            "Room $sourceRoomSchemaVersion backup cannot carry Room $MANUAL_BACKUP_ROOM_VERSION provenance."
+            "Room $sourceRoomSchemaVersion backup cannot carry Room $MANUAL_BACKUP_PROVENANCE_INTRODUCED_ROOM_VERSION provenance."
         }
     }
     t.fvpAssessments.forEach { a ->
@@ -744,7 +909,107 @@ fun ManualBackupDocument.validate(): ManualBackupDocument {
             "fvp assessment ${a.id} conditionCount ${a.conditionCount} != $conditions stored conditions"
         }
     }
+    // --- Angulos manuales (Room 13) -------------------------------------------------------------
+    unique(t.angleAnalyses.map { it.sessionKey }, "angle analysis sessionKey")
+    unique(t.angleMarks.map { it.analysisId to it.ordinal }, "angle mark ordinal")
+    val angleAnalysisIds = unique(t.angleAnalyses.map { it.id }, "angle analysis id")
+    val angleMarkIds = unique(t.angleMarks.map { it.id }, "angle mark id")
+    angleAnalysisIds.forEach { require(it > 0L) { "angle analysis id must be positive" } }
+    angleMarkIds.forEach { require(it > 0L) { "angle mark id must be positive" } }
+    // Las tablas de angulos nacen en Room 13: un payload que se declara 9/10/11/12 no puede traerlas.
+    // Mismo criterio que F-V-P (11) y la procedencia (12): la version declarada debe describir la
+    // forma y los defaults no pueden tapar un linaje mentido.
+    if (sourceRoomSchemaVersion < MANUAL_BACKUP_ANGLE_INTRODUCED_ROOM_VERSION) {
+        require(t.angleAnalyses.isEmpty() && t.angleMarks.isEmpty()) {
+            "Room $sourceRoomSchemaVersion backup cannot contain angle rows."
+        }
+    }
+    val angleMarksByAnalysis = t.angleMarks.groupBy { it.analysisId }
+    t.angleAnalyses.forEach { a ->
+        require(a.sessionKey.isNotBlank())
+        require(a.athleteId == null || a.athleteId in athleteIds)
+        require(a.createdAt >= 0L && a.updatedAt >= 0L) {
+            "angle analysis ${a.id} createdAt/updatedAt must be >= 0"
+        }
+        require(a.revision >= 0) { "angle analysis ${a.id} revision must be >= 0" }
+        require(a.geometryVersion >= 1) { "angle analysis ${a.id} geometryVersion must be >= 1" }
+        require(a.rotationDegrees in ANGLE_ROTATION_DEGREES) {
+            "angle analysis ${a.id} has an unsupported rotationDegrees: ${a.rotationDegrees}"
+        }
+        require(a.frameIndex >= 0) { "angle analysis ${a.id} frameIndex must be >= 0" }
+        require(a.sourcePtsUs >= 0L) { "angle analysis ${a.id} sourcePtsUs must be >= 0" }
+        require(a.encodedWidth > 0 && a.encodedHeight > 0) {
+            "angle analysis ${a.id} encoded dimensions must be positive"
+        }
+        require(a.presentationWidth > 0 && a.presentationHeight > 0) {
+            "angle analysis ${a.id} presentation dimensions must be positive"
+        }
+        // La geometria de presentacion es coherente con la rotacion: 90/270 intercambian los ejes y
+        // 0/180 los conservan. Sin esta comprobacion las marcas (en pixeles post-rotacion) se
+        // restaurarian contra un sistema de coordenadas que nunca produjo el extractor.
+        if (a.rotationDegrees % 180 == 0) {
+            require(a.presentationWidth == a.encodedWidth && a.presentationHeight == a.encodedHeight) {
+                "angle analysis ${a.id} rotation ${a.rotationDegrees} cannot swap encoded dimensions"
+            }
+        } else {
+            require(a.presentationWidth == a.encodedHeight && a.presentationHeight == a.encodedWidth) {
+                "angle analysis ${a.id} rotation ${a.rotationDegrees} must swap encoded dimensions"
+            }
+        }
+    }
+    t.angleMarks.forEach { m ->
+        require(m.analysisId in angleAnalysisIds) { "angle mark ${m.id} references an unknown analysis" }
+        require(m.ordinal >= 0) { "angle mark ${m.id} ordinal must be >= 0" }
+        require(m.name.isNotBlank()) { "angle mark ${m.id} name must not be blank" }
+    }
+    // Coherencia raiz-hijos: un analisis sin marcas no conserva ninguna medicion y no se acepta.
+    // Cada marca debe ser geometria real: puntos finitos (NaN/infinito no es una marca valida),
+    // dentro de los pixeles del frame de presentacion post-rotacion del que salieron y con un
+    // angulo medible.
+    t.angleAnalyses.forEach { a ->
+        val marks = angleMarksByAnalysis[a.id].orEmpty()
+        require(marks.isNotEmpty()) { "angle analysis ${a.id} has no marks" }
+        marks.forEach { m -> requireAngleGeometry(m, a.presentationWidth, a.presentationHeight) }
+    }
     return this
+}
+
+/** Rotaciones que produce el extractor: las marcas viven siempre en uno de estos sistemas. */
+private val ANGLE_ROTATION_DEGREES = setOf(0, 90, 180, 270)
+
+/**
+ * Geometria de una marca de angulos contra el frame de presentacion post-rotacion del analisis:
+ *  - cada punto es finito (NaN/infinito nunca es una marca valida);
+ *  - cada punto cae en un pixel real del frame, `[0, width-1] x [0, height-1]`: la dimension no es
+ *    una coordenada (el ultimo pixel es `width-1`/`height-1`) y una dimension unitaria solo admite
+ *    la coordenada 0;
+ *  - la terna A/B/C mide un angulo segun [AngleGeometry], la misma definicion que la UI. Solo se
+ *    rechaza [AngleMeasurement.Invalid]: A == C con B distinto es un 0 grados legitimo y la
+ *    colinealidad (0/180) tambien, pero A == B o C == B no tienen lado y persistirlos guardaria
+ *    un angulo degenerado que nunca se podria medir.
+ */
+private fun requireAngleGeometry(mark: BackupAngleMark, width: Int, height: Int) {
+    val a = requireAnglePoint(mark.id, "pointA", mark.pointAX, mark.pointAY, width, height)
+    val b = requireAnglePoint(mark.id, "pointB", mark.pointBX, mark.pointBY, width, height)
+    val c = requireAnglePoint(mark.id, "pointC", mark.pointCX, mark.pointCY, width, height)
+    when (val measurement = AngleGeometry.measure(a, b, c)) {
+        is AngleMeasurement.Measured -> Unit
+        is AngleMeasurement.Invalid -> throw IllegalArgumentException(
+            "angle mark ${mark.id} has no measurable angle: ${measurement.reason}",
+        )
+    }
+}
+
+/**
+ * Punto de una marca de angulos: finito (NaN/infinito se rechaza, nunca se acepta como valido) y
+ * dentro del frame de presentacion post-rotacion, con el ultimo pixel en `width-1`/`height-1`.
+ */
+private fun requireAnglePoint(markId: Long, label: String, x: Double, y: Double, width: Int, height: Int): AnglePoint {
+    require(x.isFinite() && y.isFinite()) { "angle mark $markId $label must be finite" }
+    require(x >= 0.0 && x <= (width - 1).toDouble() && y >= 0.0 && y <= (height - 1).toDouble()) {
+        "angle mark $markId $label must be inside the ${width}x$height presentation frame"
+    }
+    return AnglePoint(x, y)
 }
 
 private fun <T> unique(values: List<T>, field: String): Set<T> { require(values.distinct().size == values.size) { "Duplicate $field" }; return values.toSet() }
@@ -780,7 +1045,7 @@ private fun requireFvpPtsOrder(
     require(previous == null || event == null || previous < event) { "$label $previousField must be < $eventField" }
     require(next == null || event == null || event < next) { "$label $nextField must be > $eventField" }
 }
-private fun ManualBackupTables.allLists() = listOf(athletes, athleteGroups, athleteGroupCrossRef, testingSessions, testingParticipants, assessments, attempts, attemptEvents, attemptMetrics, attemptCalibrations, attemptSpatialMarks, encoderSessions, encoderSamples, encoderRepetitions, encoderRepMetrics, fvpAssessments, fvpConditions, fvpAttempts)
+private fun ManualBackupTables.allLists() = listOf(athletes, athleteGroups, athleteGroupCrossRef, testingSessions, testingParticipants, assessments, attempts, attemptEvents, attemptMetrics, attemptCalibrations, attemptSpatialMarks, encoderSessions, encoderSamples, encoderRepetitions, encoderRepMetrics, fvpAssessments, fvpConditions, fvpAttempts, angleAnalyses, angleMarks)
 
 /** `true` si la raiz no declara ninguna columna de procedencia (`UNKNOWN`/NULL, como un documento <12). */
 private fun BackupFvpAssessment.provenanceIsUnknown(): Boolean =

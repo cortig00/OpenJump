@@ -93,6 +93,8 @@ object ManualBackupCodec {
             fvpAssessments = tables.fvpAssessments.sortedBy { it.id },
             fvpConditions = tables.fvpConditions.sortedWith(compareBy({ it.assessmentId }, { it.ordinal })),
             fvpAttempts = tables.fvpAttempts.sortedWith(compareBy({ it.conditionId }, { it.ordinal })),
+            angleAnalyses = tables.angleAnalyses.sortedBy { it.id },
+            angleMarks = tables.angleMarks.sortedWith(compareBy({ it.analysisId }, { it.ordinal }, { it.id })),
         ),
     )
 }

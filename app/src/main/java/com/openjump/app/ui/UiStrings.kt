@@ -32,6 +32,8 @@ fun AppLanguage.titleResource(): Int = when (this) {
     AppLanguage.POLISH -> R.string.settings_language_polish
     AppLanguage.JAPANESE -> R.string.settings_language_japanese
     AppLanguage.KOREAN -> R.string.settings_language_korean
+    AppLanguage.HINDI -> R.string.settings_language_hindi
+    AppLanguage.CHINESE_SIMPLIFIED -> R.string.settings_language_chinese_simplified
 }
 
 @StringRes

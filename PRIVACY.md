@@ -2,7 +2,9 @@
 
 Available in: English, Español, Français, Deutsch, Italiano, Português (Brasil), Português (Portugal), Türkçe.
 
-**Public page:** the public Notion policy is updated manually; it must be synchronized with this document before any new release. Parity is not claimed here.
+**OpenJump 1.3:** read the [privacy update for saved angle images and manual backups](docs/PRIVACY_1.3.md) ([English](docs/PRIVACY_1.3.md#english) / [Español](docs/PRIVACY_1.3.md#español)). The update supersedes the older descriptions of angle storage and JSON-only backup below for 1.3.
+
+**Public page:** the public Notion policy is updated manually; it must be synchronized with this document and the 1.3 update before any new release. Parity is not claimed here.
 
 **Last updated / Última actualización / Dernière mise à jour / Zuletzt aktualisiert / Ultimo aggiornamento / Última atualização / Son güncelleme: October 3, 2026 / 3 de octubre de 2026 / 3 octobre 2026 / 3. Oktober 2026 / 3 ottobre 2026 / 3 de outubro de 2026 / 3 Ekim 2026**
 

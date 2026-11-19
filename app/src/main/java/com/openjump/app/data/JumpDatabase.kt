@@ -27,8 +27,13 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         FvpAssessmentEntity::class,
         FvpConditionEntity::class,
         FvpAttemptEntity::class,
+        AngleAnalysisEntity::class,
+        AngleMarkEntity::class,
+        AngleAnalysisV2RootEntity::class,
+        AngleAnalysisV2FrameEntity::class,
+        AngleAnalysisV2MarkEntity::class,
     ],
-    version = 12,
+    version = 14,
     exportSchema = true,
 )
 abstract class JumpDatabase : RoomDatabase() {
@@ -39,6 +44,9 @@ abstract class JumpDatabase : RoomDatabase() {
     abstract fun groupDao(): GroupDao
     abstract fun testingDao(): TestingDao
     abstract fun fvpDao(): FvpDao
+    abstract fun angleDao(): AngleDao
+    /** Sólo lectura a propósito: el escritor multi-fotograma llega con imágenes y backup. */
+    abstract fun angleAnalysisV2Dao(): AngleAnalysisV2Dao
     abstract fun dataExportDao(): com.openjump.app.data.export.DataExportDao
     abstract fun manualBackupDao(): com.openjump.app.data.backup.ManualBackupDao
 
@@ -893,6 +901,195 @@ abstract class JumpDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v12→v13 is strictly additive: the two angle-tool tables plus their indices.
+         * No existing table, column, index or row is touched, and the new tables are created
+         * empty, so legacy installs keep their measurements untouched.
+         */
+        val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS angle_analyses (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        sessionKey TEXT NOT NULL,
+                        athleteId INTEGER,
+                        createdAt INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL,
+                        revision INTEGER NOT NULL,
+                        videoUri TEXT,
+                        sourceIdentity TEXT,
+                        sourceHash TEXT,
+                        encodedWidth INTEGER NOT NULL,
+                        encodedHeight INTEGER NOT NULL,
+                        presentationWidth INTEGER NOT NULL,
+                        presentationHeight INTEGER NOT NULL,
+                        rotationDegrees INTEGER NOT NULL,
+                        frameIndex INTEGER NOT NULL,
+                        sourcePtsUs INTEGER NOT NULL,
+                        geometryVersion INTEGER NOT NULL,
+                        FOREIGN KEY (athleteId) REFERENCES athletes (id)
+                            ON UPDATE NO ACTION ON DELETE NO ACTION
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS index_angle_analyses_sessionKey " +
+                        "ON angle_analyses (sessionKey)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_angle_analyses_athleteId_createdAt_id " +
+                        "ON angle_analyses (athleteId, createdAt, id)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_angle_analyses_createdAt_id " +
+                        "ON angle_analyses (createdAt, id)",
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS angle_marks (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        analysisId INTEGER NOT NULL,
+                        ordinal INTEGER NOT NULL,
+                        name TEXT NOT NULL,
+                        colorArgb INTEGER NOT NULL,
+                        visible INTEGER NOT NULL,
+                        pointAX REAL NOT NULL,
+                        pointAY REAL NOT NULL,
+                        pointBX REAL NOT NULL,
+                        pointBY REAL NOT NULL,
+                        pointCX REAL NOT NULL,
+                        pointCY REAL NOT NULL,
+                        FOREIGN KEY (analysisId) REFERENCES angle_analyses (id)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_angle_marks_analysisId " +
+                        "ON angle_marks (analysisId)",
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS index_angle_marks_analysisId_ordinal " +
+                        "ON angle_marks (analysisId, ordinal)",
+                )
+            }
+        }
+
+        /**
+         * v13→v14 es estrictamente aditiva: crea las tres tablas del agregado multi-fotograma y
+         * sus índices, vacías, con FK en cascada raíz→fotograma→marca y FK del atleta NO_ACTION
+         * igual que el agregado legacy. No altera `angle_analyses`/`angle_marks` ni ninguna otra
+         * tabla: las filas, IDs, referencias y datos legacy siguen intactos y el nuevo agregado
+         * puede tener IDs colisionantes porque vive en tablas e identidad de tipo distintas.
+         *
+         * Los escritores de este agregado **no** se conectan aquí: el backup actual (`replaceAll`)
+         * ignora estas tablas y restaurar una copia antigua las vaciaría. Ver [AngleAnalysisV2Dao].
+         */
+        val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS angle_analysis_v2_roots (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        analysisFormat TEXT NOT NULL,
+                        sessionKey TEXT NOT NULL,
+                        athleteId INTEGER,
+                        createdAt INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL,
+                        revision INTEGER NOT NULL,
+                        FOREIGN KEY (athleteId) REFERENCES athletes (id)
+                            ON UPDATE NO ACTION ON DELETE NO ACTION
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS " +
+                        "index_angle_analysis_v2_roots_sessionKey " +
+                        "ON angle_analysis_v2_roots (sessionKey)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS " +
+                        "index_angle_analysis_v2_roots_athleteId_createdAt_id " +
+                        "ON angle_analysis_v2_roots (athleteId, createdAt, id)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS " +
+                        "index_angle_analysis_v2_roots_createdAt_id " +
+                        "ON angle_analysis_v2_roots (createdAt, id)",
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS angle_analysis_v2_frames (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        rootId INTEGER NOT NULL,
+                        ordinal INTEGER NOT NULL,
+                        assignedFrameIndex INTEGER NOT NULL,
+                        reportedFrameIndex INTEGER,
+                        assignedPtsUs INTEGER NOT NULL,
+                        reportedPtsUs INTEGER,
+                        encodedWidth INTEGER NOT NULL,
+                        encodedHeight INTEGER NOT NULL,
+                        presentationWidth INTEGER NOT NULL,
+                        presentationHeight INTEGER NOT NULL,
+                        rotationDegrees INTEGER NOT NULL,
+                        geometryVersion INTEGER NOT NULL,
+                        imageKey TEXT NOT NULL,
+                        imageWidth INTEGER NOT NULL,
+                        imageHeight INTEGER NOT NULL,
+                        imageByteCount INTEGER NOT NULL,
+                        imageSha256 TEXT NOT NULL,
+                        imageMimeType TEXT NOT NULL,
+                        FOREIGN KEY (rootId) REFERENCES angle_analysis_v2_roots (id)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_angle_analysis_v2_frames_rootId " +
+                        "ON angle_analysis_v2_frames (rootId)",
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS " +
+                        "index_angle_analysis_v2_frames_rootId_ordinal " +
+                        "ON angle_analysis_v2_frames (rootId, ordinal)",
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS index_angle_analysis_v2_frames_imageKey " +
+                        "ON angle_analysis_v2_frames (imageKey)",
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS angle_analysis_v2_marks (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        frameId INTEGER NOT NULL,
+                        ordinal INTEGER NOT NULL,
+                        name TEXT NOT NULL,
+                        colorArgb INTEGER NOT NULL,
+                        visible INTEGER NOT NULL,
+                        pointAX REAL NOT NULL,
+                        pointAY REAL NOT NULL,
+                        pointBX REAL NOT NULL,
+                        pointBY REAL NOT NULL,
+                        pointCX REAL NOT NULL,
+                        pointCY REAL NOT NULL,
+                        FOREIGN KEY (frameId) REFERENCES angle_analysis_v2_frames (id)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_angle_analysis_v2_marks_frameId " +
+                        "ON angle_analysis_v2_marks (frameId)",
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS " +
+                        "index_angle_analysis_v2_marks_frameId_ordinal " +
+                        "ON angle_analysis_v2_marks (frameId, ordinal)",
+                )
+            }
+        }
+
         @Volatile
         private var instance: JumpDatabase? = null
 
@@ -914,6 +1111,8 @@ abstract class JumpDatabase : RoomDatabase() {
                     MIGRATION_9_10,
                     MIGRATION_10_11,
                     MIGRATION_11_12,
+                    MIGRATION_12_13,
+                    MIGRATION_13_14,
                 )
                     .build()
                     .also { instance = it }

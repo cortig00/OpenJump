@@ -23,9 +23,14 @@ import kotlin.math.sqrt
 fun CropFramingOverlay(
     onGesture: (centroid: Offset, zoomChange: Float, panDelta: Offset) -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * Descripción accesible de la capa. Por defecto, la del selector; los visores que reutilizan
+     * esta capa y no tienen «Listo» pasan la suya para no anunciar una acción inexistente.
+     */
+    description: String? = null,
 ) {
     val currentOnGesture by rememberUpdatedState(onGesture)
-    val cropModeDescription = stringResource(R.string.selector_crop_mode_description)
+    val cropModeDescription = description ?: stringResource(R.string.selector_crop_mode_description)
 
     Box(
         modifier = modifier

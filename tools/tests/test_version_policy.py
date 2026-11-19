@@ -204,6 +204,46 @@ class VersionPolicyTest(unittest.TestCase):
         self.repo.version(3, "1.0.1")
         self.assertPolicyError(r"release names must not decrease")
 
+    def test_short_1_3_candidate_follows_1_2_2_code10_and_strict_tag(self):
+        self.repo.version(10, "1.2.2")
+        self.repo.annotate("v1.2.2")
+        self.repo.version(11, "1.3")
+        self.assertEqual(
+            version_policy.validate(self.repo.path),
+            version_policy.VersionMetadata(11, "1.3"),
+        )
+        self.repo.annotate("v1.3")
+        self.assertEqual(
+            version_policy.validate(self.repo.path, strict_tag=True),
+            version_policy.VersionMetadata(11, "1.3"),
+        )
+
+    def test_short_1_3_keeps_code_monotonicity_and_no_duplicate_code(self):
+        self.repo.version(10, "1.2.2")
+        self.repo.annotate("v1.2.2")
+        self.repo.version(10, "1.3")
+        self.assertPolicyError(r"does not match greatest released version")
+
+        # A 1.3 tag reusing the released code is a duplicate, not an allowed reset.
+        self.repo.annotate("v1.3")
+        self.assertPolicyError(r"versionCode 10 is duplicated")
+        self.repo.git("tag", "-d", "v1.3")
+
+        self.repo.version(9, "1.3")
+        self.assertPolicyError(r"below greatest tagged code")
+
+    def test_short_1_3_is_not_a_public_reset_or_downgrade_exception(self):
+        self.repo.version(12, "1.4.0")
+        self.repo.annotate("v1.4.0")
+        self.repo.version(13, "1.3")
+        self.assertPolicyError(r"release names must not decrease")
+
+    def test_only_authorized_short_names_are_accepted(self):
+        for name in ("1.1", "1.2", "1.4", "2.0", "1.3.0-rc.1"):
+            with self.subTest(name=name):
+                with self.assertRaisesRegex(version_policy.PolicyError, r"VERSION_NAME=.*not stable"):
+                    version_policy.parse_properties(f"VERSION_CODE=11\nVERSION_NAME={name}\n")
+
     def test_public_reset_tag_remains_valid_for_next_release(self):
         self.repo.annotate("v1.1.0-beta.1")
         self.repo.version(3, "1.0")

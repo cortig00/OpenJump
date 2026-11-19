@@ -206,6 +206,56 @@ class JumpRepository(
     fun recentFiveForAthlete(athleteId: Long): Flow<List<RecentMeasurement>> = dao.recentFiveForAthlete(athleteId)
 
     fun history(): Flow<List<RecentMeasurement>> = dao.history()
+
+    /**
+     * Página keyset de la familia Ángulos, con el mismo contrato que [historyPage]: filtros
+     * evaluados en SQLite antes del LIMIT, búsqueda normalizada igual que el resto del historial y
+     * cursor compartido por las tres familias.
+     *
+     * No recibe protocolo/ejercicio ni métrica porque un análisis de ángulos no los tiene: el
+     * llamante (HistoryViewModel) excluye la familia cuando esos filtros están activos en vez de
+     * ignorarlos. La lectura es de solo lectura; las escrituras del agregado siguen pasando por
+     * AngleRepository.
+     */
+    suspend fun angleHistoryPage(query: HistoryQuery, cursor: AthleteHistoryCursor?, limit: Int): List<AngleHistoryPage> =
+        dao.angleHistoryPage(
+            search = query.search?.normalizeForSearch(),
+            athleteId = query.athleteId,
+            unassignedOnly = query.unassignedOnly,
+            groupId = query.groupId,
+            dateFrom = query.dateFrom,
+            dateTo = query.dateTo,
+            cursorDateTime = cursor?.dateTime,
+            cursorId = cursor?.id ?: 0L,
+            cursorKind = cursor?.kind ?: "",
+            limit = limit,
+        )
+
+    /**
+     * Página keyset de las raíces Ángulos multi-fotograma (V2), con el mismo contrato que
+     * [angleHistoryPage]: filtros evaluados en SQLite antes del LIMIT y el MISMO cursor global, pero
+     * leída de `angle_analysis_v2_roots`.
+     *
+     * La lectura es de solo lectura y no pasa por el agregado V2 de escritura. El llamante debe
+     * etiquetar las filas con su fuente: un `id` de esta página no identifica una raíz legacy, porque
+     * cada tabla tiene su propia secuencia. Se limita al formato que este lector sabe interpretar
+     * ([ANGLE_ANALYSIS_V2_FORMAT]) para no listar como propia una raíz de un formato futuro.
+     */
+    suspend fun angleV2HistoryPage(query: HistoryQuery, cursor: AthleteHistoryCursor?, limit: Int): List<AngleV2HistoryPage> =
+        dao.angleV2HistoryPage(
+            analysisFormat = ANGLE_ANALYSIS_V2_FORMAT,
+            search = query.search?.normalizeForSearch(),
+            athleteId = query.athleteId,
+            unassignedOnly = query.unassignedOnly,
+            groupId = query.groupId,
+            dateFrom = query.dateFrom,
+            dateTo = query.dateTo,
+            cursorDateTime = cursor?.dateTime,
+            cursorId = cursor?.id ?: 0L,
+            cursorKind = cursor?.kind ?: "",
+            limit = limit,
+        )
+
     suspend fun historyPage(query: HistoryQuery, cursor: AthleteHistoryCursor?, limit: Int): List<AthleteHistoryPage> =
         dao.historyPage(
             search = query.search?.normalizeForSearch(),

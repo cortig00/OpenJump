@@ -17,6 +17,10 @@ from typing import Iterable
 
 MAX_VERSION_CODE = 2_100_000_000
 _ALLOWED_KEYS = {"VERSION_CODE", "VERSION_NAME"}
+# Exact authorized public short names, compared as their stable MAJOR.MINOR.PATCH tuple.
+# This is a closed allowlist, not generic two-component SemVer support: 1.0 is the historical
+# first public Play identity and 1.3 the approved 1.2.2/code10 successor candidate.
+_PUBLIC_SHORT_NAMES = {"1.0": (1, 0, 0), "1.3": (1, 3, 0)}
 _VERSION_RE = re.compile(r"^(?P<major>0|[1-9][0-9]*)\.(?P<minor>0|[1-9][0-9]*)\.(?P<patch>0|[1-9][0-9]*)(?P<beta>-beta\.(?P<beta_number>[1-9][0-9]*))?$")
 _LEGACY_CODE_RE = re.compile(r"\bversionCode\s*=\s*(\d+)")
 _LEGACY_NAME_RE = re.compile(r'\bversionName\s*=\s*"([^"]+)"')
@@ -49,19 +53,20 @@ def _git(repo: Path, *args: str, check: bool = True) -> str:
 
 
 def _parse_version_name(name: str, source: str) -> None:
-    if name == "1.0":  # Authorized first public Play identity; historical names stay immutable.
+    if name in _PUBLIC_SHORT_NAMES:  # Exact authorized names only; historical ones stay immutable.
         return
     match = _VERSION_RE.fullmatch(name)
     if not match:
         raise PolicyError(
             f"{source}: VERSION_NAME={name!r} is not stable MAJOR.MINOR.PATCH "
-            "or beta MAJOR.MINOR.PATCH-beta.N (N must be positive), or public 1.0"
+            "or beta MAJOR.MINOR.PATCH-beta.N (N must be positive), or the authorized public 1.0/1.3"
         )
 
 
 def _version_name_parts(name: str) -> tuple[tuple[int, int, int], int | None]:
-    if name == "1.0":
-        return (1, 0, 0), None
+    short = _PUBLIC_SHORT_NAMES.get(name)
+    if short is not None:
+        return short, None
     match = _VERSION_RE.fullmatch(name)
     if match is None:  # parse_properties validates names before policy compares them
         raise PolicyError(f"cannot compare malformed VERSION_NAME={name!r}")

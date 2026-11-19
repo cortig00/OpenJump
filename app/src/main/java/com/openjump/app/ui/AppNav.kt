@@ -66,6 +66,22 @@ import com.openjump.app.settings.EncoderSettings
 import com.openjump.app.settings.ExperienceMode
 import com.openjump.app.settings.JumpSettings
 import com.openjump.app.settings.OnboardingCompletion
+import com.openjump.app.angles.AngleEditorDefaults
+import com.openjump.app.ui.angles.ANGLE_MULTI_FRAME_SAVE_UI_ENABLED
+import com.openjump.app.ui.angles.ANGLES_CAMERA_ROUTE
+import com.openjump.app.ui.angles.ANGLES_HELP_ROUTE
+import com.openjump.app.ui.angles.ANGLES_INTRO_ROUTE
+import com.openjump.app.ui.angles.AngleColorPalette
+import com.openjump.app.ui.angles.AngleEditorRequest
+import com.openjump.app.ui.angles.AngleEditorScreen
+import com.openjump.app.ui.angles.AngleEditorViewModel
+import com.openjump.app.ui.angles.AngleMultiFrameSaveState
+import com.openjump.app.ui.angles.AngleSaveState
+import com.openjump.app.ui.angles.AngleVideoState
+import com.openjump.app.ui.angles.AnglesCameraDestination
+import com.openjump.app.ui.angles.AnglesHelpDestination
+import com.openjump.app.ui.angles.AnglesIntroDestination
+import com.openjump.app.ui.angles.angleWorkspaceEligible
 import com.openjump.app.ui.athletes.AthletesScreen
 import com.openjump.app.ui.athletes.AthletesViewModel
 import com.openjump.app.ui.athletes.PersonalRecordsScreen
@@ -87,6 +103,7 @@ import com.openjump.app.ui.fvp.FvpSessionPolicy
 import com.openjump.app.ui.fvp.FvpSetupScreen
 import com.openjump.app.ui.fvp.fvpFlowStepForRoute
 import com.openjump.app.ui.fvp.fvpRecoveryNoticeText
+import com.openjump.app.ui.history.AngleHistorySource
 import com.openjump.app.ui.history.HistoryScreen
 import com.openjump.app.ui.groups.GroupDetailScreen
 import com.openjump.app.ui.groups.GroupsScreen
@@ -117,6 +134,10 @@ import com.openjump.app.data.TestingFamily
 import com.openjump.app.ui.theme.OpenJumpTheme
 import com.openjump.app.video.AppSession
 import com.openjump.app.video.SeriesFeedback
+import java.util.UUID
+
+/** Ruta de la cámara de Saltos/Encoder (grabación del borrador activo). */
+internal const val CAMERA_ROUTE = "camera"
 
 internal const val HOME_ROUTE = "home"
 private const val ONBOARDING_ROUTE = "onboarding"
@@ -139,6 +160,125 @@ private const val COMPARISON_RESULTS_ROUTE = "$COMPARISON_ROUTE/results"
 internal fun athleteEditRoute(athleteId: Long): String = "athlete/$athleteId/edit"
 internal fun comparisonResultsRoute(): String = COMPARISON_RESULTS_ROUTE
 internal fun comparisonRoutes(): List<String> = listOf(COMPARISON_ROUTE, COMPARISON_RESULTS_ROUTE)
+
+// --- Editor manual de angulos -------------------------------------------------------------------
+
+/**
+ * Ruta del editor de angulos sobre un video ya elegido. Fuera de `isBottomBarVisible`: es un flujo
+ * a pantalla completa con su propia barra superior y su propio boton de salida.
+ *
+ * La URI del video y el atleta viajan como argumentos de ruta, no por `AppSession`: el editor de
+ * angulos abre SU video ([AngleEditorViewModel.open]) y no necesita (ni debe) compartir el borrador
+ * de saltos o encoder. La identidad del atleta se fija al elegir el video (atleta seleccionado en
+ * ese momento) para que el analisis quede asociado a quien lo inicio.
+ */
+internal const val ANGLES_EDITOR_ROUTE = "angles/editor?videoUri={videoUri}&athleteId={athleteId}&analysisId={analysisId}"
+
+internal const val ANGLES_VIDEO_URI_ARG = "videoUri"
+internal const val ANGLES_ATHLETE_ID_ARG = "athleteId"
+
+/**
+ * Id del análisis guardado que se quiere REABRIR en el editor. `0` (valor de un análisis nuevo)
+ * significa "no reabrir nada": el editor arranca vacío como hasta ahora.
+ */
+internal const val ANGLES_ANALYSIS_ID_ARG = "analysisId"
+
+/**
+ * Id de la raíz multi-fotograma (`angle_analysis_v2_roots`) que se quiere CONSULTAR.
+ *
+ * Es un argumento distinto de [ANGLES_ANALYSIS_ID_ARG] a propósito: mismo tipo `Long`, pero tabla
+ * distinta, y confundirlos mostraría otro análisis con el mismo número. La ruta V2 tampoco empieza
+ * por `angles/saved/` para que ningún patrón legacy pueda capturarla.
+ */
+internal const val ANGLES_V2_ROOT_ID_ARG = "rootId"
+
+/**
+ * Codifica un valor para que viaje como argumento de ruta sin romper el patron de navegacion.
+ *
+ * Percent-encoding RFC 3986 de todo lo que no sea *unreserved*: `?`, `&`, `#`, `/`, `%`, espacios y
+ * no-ASCII quedan escapados y el valor no puede inyectar parametros ni segmentos. Es Kotlin puro
+ * (sin `android.net.Uri`) para poder probarlo en JVM; el decodificado lo hace la propia libreria de
+ * navegacion al entregar el argumento.
+ */
+internal fun encodeRouteArgument(value: String): String = buildString {
+    for (byte in value.toByteArray(Charsets.UTF_8)) {
+        val code = byte.toInt() and 0xFF
+        val unreserved = code in 'a'.code..'z'.code ||
+            code in 'A'.code..'Z'.code ||
+            code in '0'.code..'9'.code ||
+            code == '-'.code || code == '.'.code || code == '_'.code || code == '~'.code
+        if (unreserved) {
+            append(code.toChar())
+        } else {
+            append('%')
+            append(HEX_DIGITS[code shr 4])
+            append(HEX_DIGITS[code and 0x0F])
+        }
+    }
+}
+
+/** Destino concreto del editor de angulos para [videoUri] y [athleteId]. */
+internal fun anglesEditorRoute(videoUri: String, athleteId: Long, analysisId: Long = 0L): String {
+    require(videoUri.isNotBlank()) { "La ruta del editor de angulos exige una URI de video." }
+    require(athleteId > 0L) { "La ruta del editor de angulos exige un atleta valido, era $athleteId." }
+    require(analysisId >= 0L) { "El analisis a reabrir no puede ser negativo, era $analysisId." }
+    // El argumento viaja SIEMPRE (0 = analisis nuevo): la ruta patron lo declara y la navegacion
+    // nunca depende de un parametro opcional ausente.
+    return "angles/editor?$ANGLES_VIDEO_URI_ARG=${encodeRouteArgument(videoUri)}" +
+        "&$ANGLES_ATHLETE_ID_ARG=$athleteId" +
+        "&$ANGLES_ANALYSIS_ID_ARG=$analysisId"
+}
+
+/**
+ * Destino de RECUPERACION: reabre el analisis [analysisId] sobre su propio video y atleta.
+ *
+ * La raiz guardada es la fuente de la URI y del dueno (son los que validan la compatibilidad del
+ * editor); HISTORY nunca inventa un atleta ni abre otro video para el mismo analisis.
+ */
+internal fun anglesSavedAnalysisRoute(analysisId: Long, videoUri: String, athleteId: Long): String {
+    require(analysisId > 0L) { "La recuperacion de angulos exige un analisis guardado, era $analysisId." }
+    return anglesEditorRoute(videoUri, athleteId, analysisId)
+}
+
+/**
+ * Ruta del detalle COMPACTO y de solo lectura de un analisis guardado (familia legacy).
+ *
+ * Existe para que el resultado siga siendo consultable sin abrir el video: la fila de HISTORY no
+ * puede decidir por la URI (una URI presente puede haber perdido su permiso tras restaurar una
+ * copia) y `canReopen` ya no bloquea la navegacion. Por el contrato D2 el detalle NO ofrece editar
+ * ni reabrir el video: un analisis legacy se consulta y muestra un aviso de imagen no disponible.
+ */
+internal const val ANGLES_SAVED_DETAIL_ROUTE = "angles/saved/{$ANGLES_ANALYSIS_ID_ARG}"
+
+/**
+ * Destino concreto del detalle guardado del analisis [analysisId].
+ *
+ * SOLO ids de `angle_analyses` (familia legacy). `angle_analysis_v2_roots` tiene su propia secuencia
+ * de ids y su `id` puede coincidir numericamente con uno legacy, asi que un identificador de una
+ * raiz multi-fotograma no puede construirse con esta ruta: su detalle es otra pantalla.
+ */
+internal fun anglesSavedDetailRoute(analysisId: Long): String {
+    require(analysisId > 0L) { "El detalle de angulos exige un analisis guardado, era $analysisId." }
+    return "angles/saved/$analysisId"
+}
+
+/**
+ * Ruta del detalle de SOLO LECTURA de una raiz multi-fotograma V2.
+ *
+ * Prefijo propio (`angles/v2/saved/...`): no comparte patron con [ANGLES_SAVED_DETAIL_ROUTE] ni con
+ * el editor, asi que un id de `angle_analysis_v2_roots` no puede caer nunca en el detalle legacy
+ * (que leeria `angle_analyses`) ni en el editor (que exigiria un video que el formato V2 no guarda).
+ * La pantalla consulta imagenes anotadas y datos estructurados sin abrir el video original.
+ */
+internal const val ANGLES_V2_SAVED_DETAIL_ROUTE = "angles/v2/saved/{$ANGLES_V2_ROOT_ID_ARG}"
+
+/** Destino concreto del detalle V2 de la raiz [rootId] (identidad de tabla `angle_analysis_v2_roots`). */
+internal fun anglesV2SavedDetailRoute(rootId: Long): String {
+    require(rootId > 0L) { "El detalle V2 de angulos exige una raiz guardada, era $rootId." }
+    return "angles/v2/saved/$rootId"
+}
+
+private const val HEX_DIGITS = "0123456789ABCDEF"
 
 // F-V-P experimental flow. Routes stay out of `isBottomBarVisible` and `settingsSectionRoutes`.
 internal const val FVP_SETUP_ROUTE = "fvp/setup"
@@ -264,7 +404,17 @@ fun AppNav() {
 }
 
 @Composable
-fun OpenJumpNavHost(navController: NavHostController) {
+fun OpenJumpNavHost(
+    navController: NavHostController,
+    /**
+     * Gate de producto del guardado multi-fotograma que se propaga al editor de ángulos y a la
+     * introducción de Ángulos. Se usa **solo** para calcular la disponibilidad de la acción de
+     * guardado y la elegibilidad del workspace del editor, y para la copia introductoria de las
+     * rutas de introducción y ayuda; por defecto mantiene el valor compilado del producto
+     * ([ANGLE_MULTI_FRAME_SAVE_UI_ENABLED]) y ninguna ruta de la app lo activa ni lo desactiva.
+     */
+    angleMultiFrameSaveUiEnabled: Boolean = ANGLE_MULTI_FRAME_SAVE_UI_ENABLED,
+) {
     val context = LocalContext.current
     val encoderSettings = remember(context) { EncoderSettings(context) }
     // Read at session start only: the preference seeds new drafts and never rewrites existing ones.
@@ -357,9 +507,13 @@ fun OpenJumpNavHost(navController: NavHostController) {
 
     Scaffold(
         // Only the immersive camera owns its insets: preview edge-to-edge,
-        // floating controls inside safeDrawing. All other routes stay unchanged.
-        contentWindowInsets = if (currentRoute == "camera") WindowInsets(0, 0, 0, 0) else
-            WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom),
+        // floating controls inside safeDrawing. The Angles intake camera reuses that same pattern;
+        // every other route stays unchanged.
+        contentWindowInsets = if (currentRoute == CAMERA_ROUTE || currentRoute == ANGLES_CAMERA_ROUTE) {
+            WindowInsets(0, 0, 0, 0)
+        } else {
+            WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)
+        },
         bottomBar = {
             if (showNavigationBar) {
                 OpenJumpNavigationBar(
@@ -367,7 +521,15 @@ fun OpenJumpNavHost(navController: NavHostController) {
                     currentRoute = currentRoute,
                     mode = mode,
                     onDestinationSelected = { destination ->
-                        navController.navigateTopLevel(destination.route)
+                        // Salir de Saltos con el tab Inicio es una salida EXPLÍCITA a Home. El helper
+                        // genérico combina `popUpTo(inicio)` + `saveState` con `restoreState`, y en
+                        // esa secuencia el toque en Inicio volvía a mostrar Saltos (A0: 2/2). El
+                        // resto de tabs conserva su comportamiento sin cambios.
+                        if (currentRoute == JUMPS_ROUTE && destination.route == HOME_ROUTE) {
+                            navController.exitJumpsToHome()
+                        } else {
+                            navController.navigateTopLevel(destination.route)
+                        }
                     },
                 )
             }
@@ -379,6 +541,15 @@ fun OpenJumpNavHost(navController: NavHostController) {
             // The root already reserves safeDrawing (including IME). Nested screens
             // must not reserve that same keyboard/navigation space a second time.
             modifier = Modifier.padding(appPadding).consumeWindowInsets(appPadding),
+            // Movimiento propio y corto (fundido de opacidad de 160 ms, sin retardo, slide ni
+            // escala) para los pares de rutas ordinarios. Si cualquiera de los dos lados toca la
+            // cámara de Saltos/Encoder o la de Ángulos, entrada Y salida son `None`, también con
+            // Back/pop, porque Navigation-Compose aplica estos mismos callbacks en ambos sentidos.
+            // No se afirma liberación física instantánea del hardware de cámara.
+            enterTransition = { navEnterTransition() },
+            exitTransition = { navExitTransition() },
+            popEnterTransition = { navEnterTransition() },
+            popExitTransition = { navExitTransition() },
         ) {
             composable(ONBOARDING_ROUTE) {
                 // The graph's startRoute is frozen at launch. A replay after skipping in this
@@ -424,6 +595,10 @@ fun OpenJumpNavHost(navController: NavHostController) {
                     recordFeedback = pendingRecords.takeIf { currentRoute == HOME_ROUTE }.orEmpty(),
                     onRecordFeedbackConsumed = { pendingRecords = emptyList() },
                     onJumpsSelected = { navController.navigate(JUMPS_ROUTE) },
+                    // Entrada de Ángulos: abre la PREPARACIÓN (atleta + cómo funciona + Grabar
+                    // principal / Importar secundario). No abre el selector ni la cámara al entrar:
+                    // sólo al pulsar un botón, y sin tocar Saltos/Encoder ni `AppSession`.
+                    onAnglesSelected = { navController.navigate(ANGLES_INTRO_ROUTE) },
                     onEncoderSelected = { navController.navigate("encoder/setup") },
                     onHistorySelected = { navController.navigateTopLevel(HISTORY_ROUTE) },
                     onMeasurementSelected = { navController.navigate("measurement/$it") },
@@ -442,10 +617,202 @@ fun OpenJumpNavHost(navController: NavHostController) {
                 )
             }
 
+            // Introducción de Ángulos: dueña del intento (atleta CONGELADO antes de abrir cámara o
+            // selector), de la selección local y del único lanzamiento del picker. Vive fuera de la
+            // barra inferior y nunca escribe en `AppSession`.
+            composable(ANGLES_INTRO_ROUTE) { entry ->
+                AnglesIntroDestination(
+                    navController = navController,
+                    entry = entry,
+                    activeAthletes = activeAthletesOrNull,
+                    globalSelectedAthleteId = selectedAthleteId,
+                    multiFrameEnabled = angleMultiFrameSaveUiEnabled,
+                )
+            }
+
+            composable(ANGLES_HELP_ROUTE) {
+                AnglesHelpDestination(
+                    navController = navController,
+                    multiFrameEnabled = angleMultiFrameSaveUiEnabled,
+                )
+            }
+
+            // Cámara PROPIA de Ángulos: no es la ruta `camera` (esa exige borrador y lleva al
+            // selector de fotogramas). La petición congelada viaja en la ruta y el dueño real es el
+            // ViewModel de la entrada de la introducción.
+            composable(ANGLES_CAMERA_ROUTE) { entry ->
+                AnglesCameraDestination(navController = navController, entry = entry)
+            }
+
+            // Editor manual de angulos sobre el video elegido en Home. La ruta solo TRANSPORTA la
+            // identidad del video y del atleta: el ViewModel real abre su propio video (lease +
+            // grant), persiste por la unica puerta transaccional y se cierra con la entrada de la
+            // pila (`onCleared` -> `close`), sin borrar datos del atleta ni del video.
+            composable(ANGLES_EDITOR_ROUTE) { entry ->
+                val videoUri = entry.arguments?.getString(ANGLES_VIDEO_URI_ARG)
+                val athleteId = entry.arguments?.getString(ANGLES_ATHLETE_ID_ARG)?.toLongOrNull()
+                // 0 = analisis nuevo. Un id > 0 pide RECUPERAR esa raiz guardada una vez abierto el
+                // video (la reapertura necesita indice y player reales, no puede ocurrir antes).
+                val analysisId = entry.arguments?.getString(ANGLES_ANALYSIS_ID_ARG)?.toLongOrNull() ?: 0L
+                if (videoUri.isNullOrBlank() || athleteId == null || athleteId <= 0L) {
+                    // Ruta incompleta: no se abre video, no se escribe y se vuelve al origen.
+                    LaunchedEffect(Unit) { navController.popBackStack() }
+                } else {
+                    val angleDefaults = AngleEditorDefaults(
+                        namePrefix = stringResource(R.string.angle_default_name_prefix),
+                        colorArgb = AngleColorPalette.first(),
+                    )
+                    // Una clave de sesion UUID por ANALISIS: se genera al entrar y se conserva
+                    // (`rememberSaveable`) ante recreacion o muerte de proceso, de modo que un
+                    // reintento de guardado siga siendo idempotente en el repositorio.
+                    val analysisSessionKey = rememberSaveable { UUID.randomUUID().toString() }
+                    val angleEditorViewModel: AngleEditorViewModel =
+                        androidx.lifecycle.viewmodel.compose.viewModel(
+                            factory = AngleEditorViewModel.factory(angleDefaults),
+                        )
+                    LaunchedEffect(angleEditorViewModel, videoUri, athleteId, analysisSessionKey) {
+                        angleEditorViewModel.open(
+                            AngleEditorRequest(
+                                uri = videoUri,
+                                athleteId = athleteId,
+                                sessionKey = analysisSessionKey,
+                            ),
+                        )
+                    }
+                    val angleSaveState by angleEditorViewModel.saveState.collectAsState()
+                    // Recuperacion de un analisis guardado: se intenta UNA vez, cuando el video ya
+                    // esta listo (antes no hay frame confirmado que rehidratar). Un rechazo de
+                    // compatibilidad deja el editor como analisis nuevo y no navega solo.
+                    val angleVideoState by angleEditorViewModel.videoState.collectAsState()
+                    // `remember` (no `rememberSaveable`) a proposito: al recrear la Activity se
+                    // reinicia, y debe hacerlo. Tras una muerte de proceso el ViewModel tambien es
+                    // nuevo y la reapertura tiene que ocurrir; tras una recreacion de configuracion
+                    // el ViewModel SOBREVIVE y es el quien rechaza la repeticion por IDENTIDAD DE
+                    // APERTURA (`openingAnalysisId`), sin releer Room ni pisar la edicion viva. La
+                    // identidad persistida vigente (`savedAnalysisId`) puede ser ya otra raiz: la
+                    // copia que «guardar como analisis nuevo» adopta tras un conflicto o una
+                    // escritura sin verificar. Esta ruta sigue nombrando la de apertura, asi que
+                    // reemitirla no puede releer el analisis original ni reemplazar el borrador
+                    // pendiente ni los bindings de la copia; el ViewModel compara las dos
+                    // identidades por separado. Guardar este booleano en el estado de la entrada
+                    // dejaria sin reabrir el caso de muerte de proceso.
+                    var angleReopenRequested by remember { mutableStateOf(false) }
+                    LaunchedEffect(analysisId, angleVideoState, angleReopenRequested) {
+                        if (!angleReopenRequested &&
+                            analysisId > 0L &&
+                            angleVideoState is AngleVideoState.Ready
+                        ) {
+                            angleReopenRequested = true
+                            angleEditorViewModel.reopen(analysisId)
+                        }
+                    }
+                    // Guardado verificado: la navegacion vuelve al origen (Home) con una pila
+                    // coherente. Un conflicto, un borrado o un fallo NO navegan: la edicion sigue
+                    // en pantalla con su mensaje.
+                    LaunchedEffect(angleSaveState) {
+                        if (angleSaveState is AngleSaveState.Saved) navController.popBackStack()
+                    }
+                    // Guardado multi-fotograma: se observa el estado REAL del ViewModel. La
+                    // navegacion al detalle V2 ocurre SOLO cuando la transaccion ya termino y el
+                    // `rootId` viene de `angle_analysis_v2_roots` (identidad de la tabla V2, no de
+                    // `angle_analyses`). Un rechazo no navega, un id invalido tampoco: la sesion
+                    // sigue en pantalla con sus fotogramas y su mensaje de fallo.
+                    val multiFrameSaveState by angleEditorViewModel.multiFrameSaveState
+                        .collectAsState()
+                    var multiFrameSavedHandled by remember { mutableStateOf(false) }
+                    LaunchedEffect(multiFrameSaveState) {
+                        val rootId = when (val saved = multiFrameSaveState) {
+                            is AngleMultiFrameSaveState.Saved -> saved.rootId
+                            is AngleMultiFrameSaveState.AlreadySaved -> saved.rootId
+                            else -> null
+                        }
+                        if (!multiFrameSavedHandled && rootId != null && rootId > 0L) {
+                            multiFrameSavedHandled = true
+                            navController.navigate(anglesV2SavedDetailRoute(rootId)) {
+                                // El editor sale de la pila: la raiz ya esta persistida y volver
+                                // atras no debe reabrir el video ni retener la sesion en memoria.
+                                popUpTo(ANGLES_EDITOR_ROUTE) { inclusive = true }
+                            }
+                        }
+                    }
+                    AngleEditorScreen(
+                        viewModel = angleEditorViewModel,
+                        onCancel = { navController.popBackStack() },
+                        angleMultiFrameSaveUiEnabled = angleMultiFrameSaveUiEnabled,
+                        // Elegibilidad del workspace derivada SOLO de la ruta y del gate inyectado:
+                        // esta entrada es un análisis NUEVO (`analysisId == 0`), nunca una reapertura.
+                        // No se consultan ids guardados/abiertos del ViewModel.
+                        workspaceRequested = angleWorkspaceEligible(
+                            gateEnabled = angleMultiFrameSaveUiEnabled,
+                            routeAnalysisId = analysisId,
+                        ),
+                    )
+                }
+            }
+
+            composable(ANGLES_SAVED_DETAIL_ROUTE) { entry ->
+                val analysisId = entry.arguments?.getString(ANGLES_ANALYSIS_ID_ARG)?.toLongOrNull()
+                if (analysisId == null || analysisId <= 0L) {
+                    // Sin id guardado no hay nada que consultar: no se escribe y se vuelve al origen.
+                    LaunchedEffect(Unit) { navController.popBackStack() }
+                } else {
+                    val savedDetailViewModel: com.openjump.app.ui.angles.AngleSavedDetailViewModel =
+                        androidx.lifecycle.viewmodel.compose.viewModel(
+                            factory = com.openjump.app.ui.angles.AngleSavedDetailViewModel.factory(),
+                        )
+                    // Solo datos: esta pantalla no abre video, no dibuja geometria y no recrea el
+                    // editor. Por el contrato D2 tampoco ofrece editar: un analisis legacy sin
+                    // imagen anotada se consulta y no reabre el video original.
+                    com.openjump.app.ui.angles.AngleSavedDetailScreen(
+                        analysisId = analysisId,
+                        viewModel = savedDetailViewModel,
+                        onBack = { navController.popBackStack() },
+                    )
+                }
+            }
+
+            composable(ANGLES_V2_SAVED_DETAIL_ROUTE) { entry ->
+                val rootId = entry.arguments?.getString(ANGLES_V2_ROOT_ID_ARG)?.toLongOrNull()
+                if (rootId == null || rootId <= 0L) {
+                    // Sin id de raiz V2 no hay nada que consultar: no se escribe y se vuelve al origen.
+                    LaunchedEffect(Unit) { navController.popBackStack() }
+                } else {
+                    val v2DetailViewModel: com.openjump.app.ui.angles.AngleV2SavedDetailViewModel =
+                        androidx.lifecycle.viewmodel.compose.viewModel(
+                            factory = com.openjump.app.ui.angles.AngleV2SavedDetailViewModel.factory(),
+                        )
+                    // Solo consulta: todos los fotogramas en orden, su imagen anotada verificada y sus
+                    // marcas. No abre video, no edita, no borra y no comparte (eso sera otro slice).
+                    com.openjump.app.ui.angles.AngleV2SavedDetailScreen(
+                        rootId = rootId,
+                        viewModel = v2DetailViewModel,
+                        onBack = { navController.popBackStack() },
+                    )
+                }
+            }
+
             composable(HISTORY_ROUTE) {
                 HistoryScreen(
                     onMeasurementSelected = { navController.navigate("measurement/$it") },
                     onEncoderSessionSelected = { navController.navigate("encoder/session/$it") },
+                    // Una fila legacy abre SU detalle guardado, que consulta la raiz persistida sin
+                    // abrir video; editar sobre el video se decide alli. El guard por fuente es
+                    // deliberado: `angles/saved/{id}` resuelve ids de `angle_analyses`, asi que un id
+                    // de `angle_analysis_v2_roots` (mismo numero, otra tabla) no debe llegar nunca.
+                    onAngleAnalysisSelected = { entry ->
+                        if (entry.source == AngleHistorySource.LEGACY) {
+                            navController.navigate(anglesSavedDetailRoute(entry.id))
+                        }
+                    },
+                    // Identidad diferenciada: el detalle V2 (imagenes anotadas, sin video ni
+                    // edicion) tiene su propia ruta y su propio ViewModel. La fila multi-fotograma
+                    // NO puede reutilizar la ruta legacy ni su ViewModel: los ids de
+                    // `angle_analysis_v2_roots` y `angle_analyses` son secuencias independientes.
+                    onAngleMultiFrameSelected = { entry ->
+                        if (entry.source == AngleHistorySource.MULTI_FRAME) {
+                            navController.navigate(anglesV2SavedDetailRoute(entry.id))
+                        }
+                    },
                 )
             }
 
@@ -555,7 +922,7 @@ fun OpenJumpNavHost(navController: NavHostController) {
                                         ),
                                         markMovementStart = jumpSettings.markMovementStart,
                                     )
-                                    navController.navigate("camera")
+                                    navController.navigate(CAMERA_ROUTE)
                                 }
                             } else {
                                 runCatching {
@@ -568,7 +935,7 @@ fun OpenJumpNavHost(navController: NavHostController) {
                                         session.id,
                                         rosterIds,
                                     )
-                                    navController.navigate("camera")
+                                    navController.navigate(CAMERA_ROUTE)
                                 }
                             }
                         },
@@ -720,7 +1087,7 @@ fun OpenJumpNavHost(navController: NavHostController) {
                     },
                     onRecord = { setup, athleteId ->
                         AppSession.beginEncoder(setup, encoderSettings.defaultPlateDiameterCm, athleteId)
-                        navController.navigate("camera")
+                        navController.navigate(CAMERA_ROUTE)
                     },
                 )
             }
@@ -789,13 +1156,13 @@ fun OpenJumpNavHost(navController: NavHostController) {
                                     markMovementStart = jumpSettings.markMovementStart,
                                 )
                             }
-                            navController.navigate("camera")
+                            navController.navigate(CAMERA_ROUTE)
                         },
                     )
                 }
             }
 
-            composable("camera") {
+            composable(CAMERA_ROUTE) {
                 if (!TransientSessionPolicy.canOpenCamera(draft != null, encoderDraft != null)) {
                     ExpiredSession(onHome = { navController.popBackStack(HOME_ROUTE, false) })
                 } else {
@@ -811,7 +1178,7 @@ fun OpenJumpNavHost(navController: NavHostController) {
                             recordedVideoStopElapsedMs = stoppedAt
                             AppSession.attachVideo(uri, VideoSource.RECORDED)
                             navController.navigate("selector") {
-                                popUpTo("camera") { inclusive = true }
+                                popUpTo(CAMERA_ROUTE) { inclusive = true }
                             }
                         },
                         onBack = { navController.popBackStack() },
@@ -825,7 +1192,7 @@ fun OpenJumpNavHost(navController: NavHostController) {
                             try {
                                 AppSession.attachVideo(uri, VideoSource.IMPORTED)
                                 navController.navigate("selector") {
-                                    popUpTo("camera") { inclusive = true }
+                                    popUpTo(CAMERA_ROUTE) { inclusive = true }
                                 }
                             } finally {
                                 pendingImport.close()
@@ -1168,6 +1535,24 @@ private fun NavHostController.navigateTopLevel(route: String) {
         popUpTo(graph.findStartDestination().id) { saveState = true }
         launchSingleTop = true
         restoreState = true
+    }
+}
+
+/**
+ * Salida explícita de Saltos a Home al tocar el tab Inicio.
+ *
+ * Recupera la entrada de Home que YA está en la pila con `saveState = false`: la subpila de Saltos se
+ * descarta en vez de archivarse, así que ningún `restoreState` posterior puede volver a mostrarla.
+ * Si la pila no contiene Home (grafo arrancado en el onboarding sin entrada de Home), se retira sólo
+ * la entrada actual de Saltos y se abre Home como destino de nivel superior sin restaurar estado: no
+ * se limpia el grafo ni se vuelve al onboarding.
+ */
+private fun NavHostController.exitJumpsToHome() {
+    if (popBackStack(HOME_ROUTE, inclusive = false, saveState = false)) return
+    if (currentDestination?.route == JUMPS_ROUTE) popBackStack()
+    navigate(HOME_ROUTE) {
+        launchSingleTop = true
+        restoreState = false
     }
 }
 

@@ -24,7 +24,7 @@ interface DataExportDao {
     @Query("SELECT repetitionId, key, value, unit, validity, reason FROM encoder_rep_metrics ORDER BY repetitionId, key")
     suspend fun encoderMetricRows(): List<ExportEncoderMetricRow>
 
-    @Query("SELECT a.id, a.displayName, a.birthDate, a.sex FROM athletes AS a WHERE EXISTS (SELECT 1 FROM assessments AS m WHERE m.athleteId = a.id) OR EXISTS (SELECT 1 FROM encoder_sessions AS s WHERE s.athleteId = a.id) ORDER BY a.id")
+    @Query("SELECT a.id, a.displayName, a.birthDate, a.sex FROM athletes AS a WHERE EXISTS (SELECT 1 FROM assessments AS m WHERE m.athleteId = a.id) OR EXISTS (SELECT 1 FROM encoder_sessions AS s WHERE s.athleteId = a.id) OR EXISTS (SELECT 1 FROM angle_analyses AS g WHERE g.athleteId = a.id) OR EXISTS (SELECT 1 FROM angle_analysis_v2_roots AS v WHERE v.athleteId = a.id) ORDER BY a.id")
     suspend fun athleteRows(): List<ExportAthleteRow>
 
     @Query("SELECT s.id, s.groupNameSnapshot FROM testing_sessions AS s WHERE EXISTS (SELECT 1 FROM assessments AS m WHERE m.testingSessionId = s.id) OR EXISTS (SELECT 1 FROM encoder_sessions AS e WHERE e.testingSessionId = s.id) OR EXISTS (SELECT 1 FROM fvp_assessments AS f WHERE f.testingSessionId = s.id) ORDER BY s.id")
@@ -33,7 +33,11 @@ interface DataExportDao {
     @Query("SELECT id, displayName, birthDate, sex FROM athletes WHERE (" +
         "EXISTS (SELECT 1 FROM assessments m WHERE m.athleteId = athletes.id) OR " +
         "EXISTS (SELECT 1 FROM encoder_sessions s WHERE s.athleteId = athletes.id) OR " +
-        "EXISTS (SELECT 1 FROM fvp_assessments f WHERE f.athleteId = athletes.id)) AND " +
+        "EXISTS (SELECT 1 FROM fvp_assessments f WHERE f.athleteId = athletes.id) OR " +
+        "EXISTS (SELECT 1 FROM angle_analyses g WHERE g.athleteId = athletes.id) OR " +
+        // Un atleta que SOLO tenga análisis V2 también se exporta: si no, la raíz V2 quedaría
+        // colgando de un `athleteId` que no aparece en `athletes`.
+        "EXISTS (SELECT 1 FROM angle_analysis_v2_roots v WHERE v.athleteId = athletes.id)) AND " +
         "(:afterIdText IS NULL OR CAST(id AS TEXT) > :afterIdText) ORDER BY CAST(id AS TEXT) LIMIT :limit")
     suspend fun athletePage(afterIdText: String?, limit: Int): List<ExportAthleteRow>
 
@@ -132,6 +136,72 @@ interface DataExportDao {
         afterConditionId: Long, afterAttemptOrdinal: Int, afterAttemptId: Long, limit: Int,
     ): List<ExportFvpDetailRow>
 
+    /**
+     * Raíces de ángulos con cursor keyset propio (`createdAt`, `id`): la familia no comparte
+     * forma con `measurements` ni con F-V-P, así que se pagina aparte. La proyección excluye a
+     * propósito `videoUri`, `sourceIdentity`, `sourceHash` y `sessionKey`: el export no publica
+     * rutas, identidades de fuente, hashes de contenido ni claves derivadas de la URI.
+     */
+    @Query("SELECT " + ANGLE_ROOT_COLUMNS + " FROM angle_analyses a WHERE (:afterCreatedAt IS NULL OR " +
+        "a.createdAt > :afterCreatedAt OR (a.createdAt = :afterCreatedAt AND CAST(a.id AS TEXT) > :afterIdText)) " +
+        "ORDER BY a.createdAt, CAST(a.id AS TEXT) LIMIT :limit")
+    suspend fun anglePage(afterCreatedAt: Long?, afterIdText: String, limit: Int): List<ExportAngleRootRow>
+
+    /**
+     * Raíz + marcas planas de una página de raíces. `LEFT JOIN`: una raíz sin marcas viaja con
+     * `markId` NULL, de modo que el llamador no pierde la raíz.
+     */
+    @Query("SELECT " + ANGLE_DETAIL_COLUMNS + " FROM angle_analyses a " +
+        "LEFT JOIN angle_marks m ON m.analysisId = a.id " +
+        "WHERE a.id IN (:parentIds) AND (:afterCreatedAt IS NULL OR " +
+        "(a.createdAt, CAST(a.id AS TEXT), COALESCE(m.ordinal, -1), COALESCE(m.id, -1)) > " +
+        "(:afterCreatedAt, :afterIdText, :afterMarkOrdinal, :afterMarkId)) " +
+        "ORDER BY a.createdAt, CAST(a.id AS TEXT), m.ordinal, m.id LIMIT :limit")
+    suspend fun angleDetailPage(
+        parentIds: List<Long>, afterCreatedAt: Long?, afterIdText: String,
+        afterMarkOrdinal: Int, afterMarkId: Long, limit: Int,
+    ): List<ExportAngleDetailRow>
+
+    /**
+     * Raíces del agregado multi-fotograma (V2) con cursor keyset propio (`createdAt`, `id`), igual
+     * que [anglePage]. Se pagina aparte porque la familia no comparte forma con las anteriores.
+     *
+     * La proyección excluye a propósito `sessionKey`: la app lo deriva de la URI privada del vídeo
+     * (ver [ExportAngleV2RootRow]). [analysisFormat] sí viaja 1:1 con la columna: el export declara
+     * el formato persistido en vez de normalizarlo a la constante vigente, de modo que una raíz de
+     * un formato futuro no se publica como si fuera `ANGLE_MULTI_FRAME_V1`.
+     */
+    @Query("SELECT " + ANGLE_V2_ROOT_COLUMNS + " FROM angle_analysis_v2_roots a WHERE (:afterCreatedAt IS NULL OR " +
+        "a.createdAt > :afterCreatedAt OR (a.createdAt = :afterCreatedAt AND CAST(a.id AS TEXT) > :afterIdText)) " +
+        "ORDER BY a.createdAt, CAST(a.id AS TEXT) LIMIT :limit")
+    suspend fun angleV2Page(afterCreatedAt: Long?, afterIdText: String, limit: Int): List<ExportAngleV2RootRow>
+
+    /**
+     * Raíz + fotogramas + marcas planas de una página de raíces V2.
+     *
+     * `JOIN` de fotogramas (un fotograma no existe sin raíz) y `LEFT JOIN` de marcas: un fotograma
+     * sin marcas viaja con `markId` NULL y una raíz sin fotogramas no devuelve filas, de modo que el
+     * llamador emite la raíz con `frames: []` en vez de perderla.
+     *
+     * La proyección excluye a propósito TODAS las columnas de imagen (`imageKey`, `imageWidth`,
+     * `imageHeight`, `imageByteCount`, `imageSha256`, `imageMimeType`): el export analítico no
+     * publica claves del almacén, digests ni tamaños de bitmap, y no promete restaurabilidad.
+     *
+     * Las columnas del fotograma llegan repetidas en cada fila de sus marcas (mismo valor); el
+     * ensamblador toma la primera y agrupa por `frameId`.
+     */
+    @Query("SELECT " + ANGLE_V2_DETAIL_COLUMNS + " FROM angle_analysis_v2_roots a " +
+        "JOIN angle_analysis_v2_frames f ON f.rootId = a.id " +
+        "LEFT JOIN angle_analysis_v2_marks m ON m.frameId = f.id " +
+        "WHERE a.id IN (:parentIds) AND (:afterCreatedAt IS NULL OR " +
+        "(a.createdAt, CAST(a.id AS TEXT), f.ordinal, f.id, COALESCE(m.ordinal, -1), COALESCE(m.id, -1)) > " +
+        "(:afterCreatedAt, :afterIdText, :afterFrameOrdinal, :afterFrameId, :afterMarkOrdinal, :afterMarkId)) " +
+        "ORDER BY a.createdAt, CAST(a.id AS TEXT), f.ordinal, f.id, m.ordinal, m.id LIMIT :limit")
+    suspend fun angleV2DetailPage(
+        parentIds: List<Long>, afterCreatedAt: Long?, afterIdText: String,
+        afterFrameOrdinal: Int, afterFrameId: Long, afterMarkOrdinal: Int, afterMarkId: Long, limit: Int,
+    ): List<ExportAngleV2DetailRow>
+
     /** Compatibility API for backup-era tests; production uses the paged methods above. */
     @Transaction
     suspend fun snapshot(): DataExportSnapshot {
@@ -188,6 +258,89 @@ private const val FVP_DETAIL_COLUMNS = "a.dateTime AS parentDateTime, a.id AS as
     "at.landingPtsUs AS landingPtsUs, at.landingPreviousPtsUs AS landingPreviousPtsUs, " +
     "at.landingNextPtsUs AS landingNextPtsUs, at.timeMapping AS timeMapping, " +
     "at.timeMappingEvidenceKey AS timeMappingEvidenceKey"
+
+private const val ANGLE_ROOT_COLUMNS = "a.id AS id, CAST(a.id AS TEXT) AS idText, " +
+    "a.athleteId AS athleteId, a.createdAt AS createdAt, a.updatedAt AS updatedAt, a.revision AS revision, " +
+    // Política de export: `videoUri`, `sourceIdentity`, `sourceHash` y `sessionKey` NO se proyectan.
+    // La identidad pública del análisis es `id`; `sessionKey` se deriva de la URI y del frame.
+    "a.encodedWidth AS encodedWidth, a.encodedHeight AS encodedHeight, " +
+    "a.presentationWidth AS presentationWidth, a.presentationHeight AS presentationHeight, " +
+    "a.rotationDegrees AS rotationDegrees, a.frameIndex AS frameIndex, a.sourcePtsUs AS sourcePtsUs, " +
+    "a.geometryVersion AS geometryVersion"
+
+private const val ANGLE_DETAIL_COLUMNS =
+    "a.createdAt AS parentCreatedAt, a.id AS analysisId, CAST(a.id AS TEXT) AS parentIdText, " +
+        "a.frameIndex AS frameIndex, a.sourcePtsUs AS sourcePtsUs, " +
+        "a.presentationWidth AS presentationWidth, a.presentationHeight AS presentationHeight, " +
+        "a.geometryVersion AS geometryVersion, m.id AS markId, m.ordinal AS markOrdinal, " +
+        "m.name AS markName, m.visible AS markVisible, m.colorArgb AS markColorArgb, " +
+        "m.pointAX AS pointAX, m.pointAY AS pointAY, m.pointBX AS pointBX, m.pointBY AS pointBY, " +
+        "m.pointCX AS pointCX, m.pointCY AS pointCY"
+
+// Política de export: `sessionKey` NO se proyecta (se deriva de la URI privada del vídeo).
+// `analysisFormat` viaja 1:1 con la columna, sin sustituirlo por la constante vigente.
+private const val ANGLE_V2_ROOT_COLUMNS = "a.id AS id, CAST(a.id AS TEXT) AS idText, " +
+    "a.analysisFormat AS analysisFormat, a.athleteId AS athleteId, " +
+    "a.createdAt AS createdAt, a.updatedAt AS updatedAt, a.revision AS revision"
+
+private const val ANGLE_V2_DETAIL_COLUMNS =
+    "a.createdAt AS parentCreatedAt, a.id AS rootId, CAST(a.id AS TEXT) AS parentIdText, " +
+        "f.id AS frameId, f.ordinal AS frameOrdinal, f.assignedFrameIndex AS assignedFrameIndex, " +
+        "f.reportedFrameIndex AS reportedFrameIndex, f.assignedPtsUs AS assignedPtsUs, " +
+        "f.reportedPtsUs AS reportedPtsUs, f.encodedWidth AS encodedWidth, f.encodedHeight AS encodedHeight, " +
+        "f.presentationWidth AS presentationWidth, f.presentationHeight AS presentationHeight, " +
+        "f.rotationDegrees AS rotationDegrees, f.geometryVersion AS geometryVersion, " +
+        // Política de export: `imageKey`, `imageWidth`, `imageHeight`, `imageByteCount`,
+        // `imageSha256` e `imageMimeType` NO se proyectan.
+        "m.id AS markId, m.ordinal AS markOrdinal, m.name AS markName, m.visible AS markVisible, " +
+        "m.colorArgb AS markColorArgb, m.pointAX AS pointAX, m.pointAY AS pointAY, " +
+        "m.pointBX AS pointBX, m.pointBY AS pointBY, m.pointCX AS pointCX, m.pointCY AS pointCY"
+
+/** Raíz de ángulo tal como la pagina [DataExportDao.anglePage]. Sin datos privados del vídeo. */
+data class ExportAngleRootRow(
+    val id: Long, val idText: String, val athleteId: Long?,
+    val createdAt: Long, val updatedAt: Long, val revision: Int,
+    val encodedWidth: Int, val encodedHeight: Int, val presentationWidth: Int, val presentationHeight: Int,
+    val rotationDegrees: Int, val frameIndex: Int, val sourcePtsUs: Long, val geometryVersion: Int,
+)
+
+/** Fila plana raíz+marca de la familia de ángulos (`markId` NULL si la raíz no tiene marcas). */
+data class ExportAngleDetailRow(
+    val parentCreatedAt: Long, val analysisId: Long, val parentIdText: String,
+    val frameIndex: Int, val sourcePtsUs: Long, val presentationWidth: Int, val presentationHeight: Int,
+    val geometryVersion: Int, val markId: Long?, val markOrdinal: Int?, val markName: String?,
+    val markVisible: Boolean?, val markColorArgb: Int?,
+    val pointAX: Double?, val pointAY: Double?, val pointBX: Double?, val pointBY: Double?,
+    val pointCX: Double?, val pointCY: Double?,
+)
+
+/**
+ * Raíz del agregado multi-fotograma tal como la pagina [DataExportDao.angleV2Page].
+ *
+ * Sin `sessionKey`: es la clave que la app deriva de la URI privada del vídeo y el export publica
+ * sólo la identidad anónima de la tabla ([id]/[idText]). [analysisFormat] es la columna persistida,
+ * copiada tal cual.
+ */
+data class ExportAngleV2RootRow(
+    val id: Long, val idText: String, val analysisFormat: String, val athleteId: Long?,
+    val createdAt: Long, val updatedAt: Long, val revision: Int,
+)
+
+/**
+ * Fila plana raíz+fotograma+marca del agregado V2 (`markId` NULL si el fotograma no tiene marcas).
+ *
+ * Los PTS son `Long` exactos y `reported*` es nullable: lo que la extracción no verificó no se
+ * copia del asignado. No hay ninguna columna de imagen: ver `ANGLE_V2_DETAIL_COLUMNS`.
+ */
+data class ExportAngleV2DetailRow(
+    val parentCreatedAt: Long, val rootId: Long, val parentIdText: String,
+    val frameId: Long, val frameOrdinal: Int, val assignedFrameIndex: Int, val reportedFrameIndex: Int?,
+    val assignedPtsUs: Long, val reportedPtsUs: Long?, val encodedWidth: Int, val encodedHeight: Int,
+    val presentationWidth: Int, val presentationHeight: Int, val rotationDegrees: Int, val geometryVersion: Int,
+    val markId: Long?, val markOrdinal: Int?, val markName: String?, val markVisible: Boolean?,
+    val markColorArgb: Int?, val pointAX: Double?, val pointAY: Double?, val pointBX: Double?,
+    val pointBY: Double?, val pointCX: Double?, val pointCY: Double?,
+)
 
 /** Raíz F-V-P tal como la pagina [DataExportDao.fvpPage]. */
 data class ExportFvpAssessmentRow(

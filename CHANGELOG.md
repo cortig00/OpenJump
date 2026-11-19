@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3 (versionCode 11) — Prepared source
+
+- Save multi-frame angle analyses and view or share their images from History.
+- Zoom while marking jumps without changing the selected frame or result.
+- Refresh History without losing the current position.
+- Add Hindi and Simplified Chinese to the app. The listing includes
+  [14 localized release notes](docs/PLAY_RELEASE_NOTES_1.3.txt).
+
 ## 1.2.2 (versionCode 10) — Production release candidate
 
 - Supersedes the historical 1.2.0 / code 9 checkpoint (retained as history;

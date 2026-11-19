@@ -4,4 +4,13 @@
     <cache-path
         name="trajectory_exports"
         path="trajectory_exports/" />
+
+    <!--
+      Share only the per-file PNG copies staged for an explicitly shared angle frame. This is a
+      dedicated directory: the private image store (filesDir/angle-images), the rest of the cache
+      and filesDir are not exposed, and each Intent grants exactly one file URI.
+    -->
+    <cache-path
+        name="angle_frame_shares"
+        path="shared-angle-frames/" />
 </paths>

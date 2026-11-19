@@ -61,9 +61,11 @@ require(versionCodeValue <= 2_100_000_000L) {
 val versionNameValue = versionValues.getValue("VERSION_NAME")
 require(
     versionNameValue == "1.0" ||
+        versionNameValue == "1.3" ||
         Regex("(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-beta\\.[1-9][0-9]*)?").matches(versionNameValue),
 ) {
-    "${versionFile.name}: VERSION_NAME must be public 1.0, stable MAJOR.MINOR.PATCH or beta MAJOR.MINOR.PATCH-beta.N."
+    "${versionFile.name}: VERSION_NAME must be the authorized public 1.0 or 1.3, " +
+        "stable MAJOR.MINOR.PATCH or beta MAJOR.MINOR.PATCH-beta.N."
 }
 
 android {
@@ -77,11 +79,15 @@ android {
         versionCode = versionCodeValue.toInt()
         versionName = versionNameValue
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // El guardado multi-fotograma de ángulos queda apagado por defecto (debug y demo); `release`
+        // lo enciende explícitamente para el candidato autorizado y la variante aislada de prueba
+        // manual `anglesV2Test` también lo compila como true.
+        buildConfigField("boolean", "ANGLE_MULTI_FRAME_SAVE_UI_ENABLED", "false")
     }
 
     androidResources {
         generateLocaleConfig = true
-        localeFilters += listOf("es", "en", "fr", "de", "pt-rBR", "pt-rPT", "it", "tr", "b+es+419", "pl", "ja", "ko")
+        localeFilters += listOf("es", "en", "fr", "de", "pt-rBR", "pt-rPT", "it", "tr", "b+es+419", "pl", "ja", "ko", "hi", "b+zh+Hans")
     }
 
     signingConfigs {
@@ -109,6 +115,7 @@ android {
         }
         release {
             buildConfigField("boolean", "FVP_ENABLED", "false")
+            buildConfigField("boolean", "ANGLE_MULTI_FRAME_SAVE_UI_ENABLED", "true")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -116,6 +123,22 @@ android {
                 "proguard-rules.pro",
             )
             signingConfig = signingConfigs.findByName("upload")
+        }
+        // Variante de prueba manual aislada para el flujo de ángulos V2: parte de `debug`, no
+        // incluye el código demo, usa otro applicationId (datos privados separados) y es la única
+        // variante aislada que compila el gate `ANGLE_MULTI_FRAME_SAVE_UI_ENABLED` como `true`
+        // (además de `release`, que solo lo enciende para el candidato autorizado).
+        create("anglesV2Test") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".anglesv2test"
+            versionNameSuffix = "-angles-v2-test"
+            matchingFallbacks += listOf("debug")
+            signingConfig = signingConfigs.getByName("debug")
+            buildConfigField("boolean", "ANGLE_MULTI_FRAME_SAVE_UI_ENABLED", "true")
+            // La app aislada que se entrega en QA no ofrece el perfil F-V-P: parte de `debug`
+            // (donde sigue encendido para desarrollo y regresiones internas), así que aquí se apaga
+            // explícitamente. Hace lo mismo que `release` y no borra perfiles, sesiones ni datos.
+            buildConfigField("boolean", "FVP_ENABLED", "false")
         }
     }
 
