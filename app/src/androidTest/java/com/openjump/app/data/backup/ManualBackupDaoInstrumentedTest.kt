@@ -8,6 +8,7 @@ import com.openjump.app.data.*
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
@@ -207,9 +208,12 @@ class ManualBackupDaoInstrumentedTest {
      */
     @Test fun fvpProvenanceRoundTripsThroughDaoAndRoom11DocumentsRestoreAsUnknown() = runBlocking {
         val document = fvpDocument()
-        assertEquals(12, MANUAL_BACKUP_ROOM_VERSION)
-        assertEquals(12, document.sourceRoomSchemaVersion)
-        assertEquals(12, ManualBackupCodec.decode(ManualBackupCodec.encode(document)).sourceRoomSchemaVersion)
+        // El esquema actual es Room 14 (el agregado V2 es aditivo y la barrera vive en el DAO); la
+        // procedencia F-V-P nacio en Room 12 y por eso su compatibilidad se prueba aparte con
+        // documentos declarados 12.
+        assertEquals(14, MANUAL_BACKUP_ROOM_VERSION)
+        assertEquals(14, document.sourceRoomSchemaVersion)
+        assertEquals(14, ManualBackupCodec.decode(ManualBackupCodec.encode(document)).sourceRoomSchemaVersion)
 
         database.manualBackupDao().replaceAll(document)
         val captured = database.manualBackupDao().snapshot()
@@ -295,6 +299,31 @@ class ManualBackupDaoInstrumentedTest {
     }
 
     /**
+     * Un backup escrito por la app Room 12 (sin tablas de angulos) sigue restaurando en el esquema
+     * actual 13 con las tablas de angulos vacias; un documento declarado 12 que traiga filas de
+     * angulos (que nacen en Room 13) es un hibrido y se rechaza ANTES de mutar la base.
+     */
+    @Test fun room12DocumentRestoresIntoCurrentSchemaWithEmptyAngleTables() = runBlocking {
+        val document = fvpDocument().copy(sourceRoomSchemaVersion = 12)
+        database.manualBackupDao().replaceAll(document)
+        val restored = database.manualBackupDao().snapshot()
+        assertEquals(1, restored.tables.fvpAssessments.size)
+        assertEquals(2, restored.tables.fvpConditions.size)
+        assertEquals(3, restored.tables.fvpAttempts.size)
+        assertTrue(restored.tables.angleAnalyses.isEmpty())
+        assertTrue(restored.tables.angleMarks.isEmpty())
+        assertTrue(database.openHelper.writableDatabase.query("PRAGMA foreign_key_check").use { !it.moveToFirst() })
+        assertEquals(0, database.manualBackupDao().angleAnalysisCount())
+
+        assertThrows(IllegalArgumentException::class.java) {
+            runBlocking {
+                database.manualBackupDao().replaceAll(angleDocument().copy(sourceRoomSchemaVersion = 12))
+            }
+        }
+        assertEquals(restored.tables, database.manualBackupDao().snapshot().tables)
+    }
+
+    /**
      * Las referencias de origen son informativas y NO tienen FK: restaurar un documento cuyos
      * `sourceAthleteId`/`sourceAssessmentId` ya no existen debe conservar el snapshot FVP y dejar
      * `foreign_key_check` limpio (contrato 18 §5, "origen borrado").
@@ -317,6 +346,157 @@ class ManualBackupDaoInstrumentedTest {
             assertEquals(999_999L, it.sourceAssessmentId)
         }
         assertTrue(database.openHelper.writableDatabase.query("PRAGMA foreign_key_check").use { !it.moveToFirst() })
+    }
+
+    /**
+     * Barrera TRANSITORIA (Room 14): una raiz V2 **sin atleta** (`athleteId` NULL) no cuelga de
+     * `athletes`, asi que el snapshot v1 no la veria y `replaceAll` la borraria sin poder recrearla.
+     * Debe bloquear snapshot y restore, y no tocar ni las filas legacy ni la propia raiz.
+     */
+    @Test fun angleV2RootWithoutOwnerBlocksSnapshotAndRestoreLeavingEveryRowIntact() = runBlocking {
+        val baseline = fullDocument()
+        database.manualBackupDao().replaceAll(baseline)
+        val legacyBefore = legacyRowCounts()
+        insertAngleV2Root(id = 9_001L, sessionKey = "v2-no-owner", athleteId = null)
+
+        val snapshotFailure = assertThrows(ManualBackupV2BlockedException::class.java) {
+            runBlocking { database.manualBackupDao().snapshot() }
+        }
+        assertEquals(AngleAnalysisV2RowCounts(roots = 1, frames = 0, marks = 0), snapshotFailure.rows)
+
+        val restoreFailure = assertThrows(ManualBackupV2BlockedException::class.java) {
+            runBlocking { database.manualBackupDao().replaceAll(baseline) }
+        }
+        assertEquals(AngleAnalysisV2RowCounts(roots = 1, frames = 0, marks = 0), restoreFailure.rows)
+
+        // Ni una fila legacy borrada/reescrita y la raiz V2 (sin dueno) sigue exactamente igual.
+        assertEquals(legacyBefore, legacyRowCounts())
+        assertEquals(Triple(1, 0, 0), angleV2RowCounts())
+        assertTrue(
+            "la raiz V2 sin atleta debe seguir en su sitio",
+            rowExists("SELECT COUNT(*) FROM angle_analysis_v2_roots WHERE id = 9001 AND athleteId IS NULL AND sessionKey = 'v2-no-owner'"),
+        )
+        assertTrue(foreignKeysClean())
+    }
+
+    /**
+     * La barrera cubre las TRES tablas: con raiz (con atleta), fotograma y marca presentes, snapshot
+     * y `replaceAll` rechazan y el agregado completo sigue intacto.
+     */
+    @Test fun angleV2RootWithAthleteFrameAndMarkBlocksBothPathsLeavingTheAggregateIntact() = runBlocking {
+        val baseline = fullDocument()
+        database.manualBackupDao().replaceAll(baseline)
+        insertAngleV2Root(id = 9_002L, sessionKey = "v2-owned", athleteId = 101L)
+        insertAngleV2Frame(id = 9_101L, rootId = 9_002L, ordinal = 0, imageKey = "image-key-1")
+        insertAngleV2Mark(id = 9_201L, frameId = 9_101L, ordinal = 0, name = "Cadera")
+        val legacyBefore = legacyRowCounts()
+
+        val snapshotFailure = assertThrows(ManualBackupV2BlockedException::class.java) {
+            runBlocking { database.manualBackupDao().snapshot() }
+        }
+        assertEquals(AngleAnalysisV2RowCounts(roots = 1, frames = 1, marks = 1), snapshotFailure.rows)
+        val restoreFailure = assertThrows(ManualBackupV2BlockedException::class.java) {
+            runBlocking { database.manualBackupDao().replaceAll(baseline) }
+        }
+        assertEquals(AngleAnalysisV2RowCounts(roots = 1, frames = 1, marks = 1), restoreFailure.rows)
+
+        assertEquals(legacyBefore, legacyRowCounts())
+        assertEquals(Triple(1, 1, 1), angleV2RowCounts())
+        assertTrue(rowExists("SELECT COUNT(*) FROM angle_analysis_v2_roots WHERE id = 9002 AND athleteId = 101"))
+        assertTrue(rowExists("SELECT COUNT(*) FROM angle_analysis_v2_frames WHERE id = 9101 AND rootId = 9002 AND imageKey = 'image-key-1'"))
+        assertTrue(rowExists("SELECT COUNT(*) FROM angle_analysis_v2_marks WHERE id = 9201 AND frameId = 9101 AND name = 'Cadera'"))
+        assertTrue(foreignKeysClean())
+    }
+
+    /**
+     * Con V2 vacio el backup legacy sigue siendo el de siempre (snapshot captura, restore reemplaza)
+     * y, en cuanto el agregado se vacia, el camino legacy se reabre: la barrera es sobre DATOS, no
+     * sobre el esquema.
+     */
+    @Test fun legacySnapshotAndRestoreKeepWorkingWhileAngleV2IsEmpty() = runBlocking {
+        val document = fvpDocument()
+        database.manualBackupDao().replaceAll(document)
+        assertEquals(document.tables, database.manualBackupDao().snapshot().tables)
+        assertEquals(Triple(0, 0, 0), angleV2RowCounts())
+
+        insertAngleV2Root(id = 9_003L, sessionKey = "v2-transient", athleteId = null)
+        assertThrows(ManualBackupV2BlockedException::class.java) {
+            runBlocking { database.manualBackupDao().snapshot() }
+        }
+        // Vaciar el agregado (la cascada se lleva fotogramas y marcas) reabre snapshot y restore.
+        database.openHelper.writableDatabase.execSQL("DELETE FROM angle_analysis_v2_roots")
+        assertEquals(Triple(0, 0, 0), angleV2RowCounts())
+        assertEquals(document.tables, database.manualBackupDao().snapshot().tables)
+
+        val replacement = fullDocument()
+        database.manualBackupDao().replaceAll(replacement)
+        assertEquals(replacement.tables, database.manualBackupDao().snapshot().tables)
+        assertTrue(foreignKeysClean())
+    }
+
+    /** Tablas que `replaceAll` reemplaza: se comparan antes/despues para probar que quedan intactas. */
+    private fun legacyRowCounts(): Map<String, Int> = LEGACY_TABLES.associateWith(::tableRowCount)
+
+    private fun tableRowCount(table: String): Int =
+        database.openHelper.writableDatabase.query("SELECT COUNT(*) FROM $table").use { cursor ->
+            cursor.moveToFirst()
+            cursor.getInt(0)
+        }
+
+    private fun angleV2RowCounts(): Triple<Int, Int, Int> = Triple(
+        tableRowCount("angle_analysis_v2_roots"),
+        tableRowCount("angle_analysis_v2_frames"),
+        tableRowCount("angle_analysis_v2_marks"),
+    )
+
+    private fun rowExists(sql: String): Boolean =
+        database.openHelper.writableDatabase.query(sql).use { cursor -> cursor.moveToFirst() && cursor.getInt(0) > 0 }
+
+    private fun foreignKeysClean(): Boolean =
+        database.openHelper.writableDatabase.query("PRAGMA foreign_key_check").use { !it.moveToFirst() }
+
+    /**
+     * Siembra el agregado V2 por SQL directo: `AngleAnalysisV2Dao` es de solo lectura y este arnes
+     * no debe abrir una via de escritura de producto. Reproduce exactamente la forma de las tablas
+     * Room 14, incluida una raiz con `athleteId` NULL.
+     */
+    private fun insertAngleV2Root(id: Long, sessionKey: String, athleteId: Long?) {
+        database.openHelper.writableDatabase.execSQL(
+            "INSERT INTO angle_analysis_v2_roots (id, analysisFormat, sessionKey, athleteId, createdAt, updatedAt, revision) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            arrayOf<Any?>(id, ANGLE_ANALYSIS_V2_FORMAT, sessionKey, athleteId, 1L, 2L, 0),
+        )
+    }
+
+    private fun insertAngleV2Frame(id: Long, rootId: Long, ordinal: Int, imageKey: String) {
+        database.openHelper.writableDatabase.execSQL(
+            "INSERT INTO angle_analysis_v2_frames (id, rootId, ordinal, assignedFrameIndex, reportedFrameIndex, " +
+                "assignedPtsUs, reportedPtsUs, encodedWidth, encodedHeight, presentationWidth, presentationHeight, " +
+                "rotationDegrees, geometryVersion, imageKey, imageWidth, imageHeight, imageByteCount, imageSha256, imageMimeType) " +
+                "VALUES (?, ?, ?, ?, NULL, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            arrayOf<Any?>(
+                id, rootId, ordinal, 10L, 1_000L, 1920, 1080, 1920, 1080, 0, 1, imageKey,
+                640, 360, 4_096L, "sha256:image-key-1", "image/png",
+            ),
+        )
+    }
+
+    private fun insertAngleV2Mark(id: Long, frameId: Long, ordinal: Int, name: String) {
+        database.openHelper.writableDatabase.execSQL(
+            "INSERT INTO angle_analysis_v2_marks (id, frameId, ordinal, name, colorArgb, visible, pointAX, pointAY, pointBX, pointBY, pointCX, pointCY) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            arrayOf<Any?>(id, frameId, ordinal, name, 0xFF3366CC.toInt(), 1, 10.0, 10.0, 20.0, 20.0, 30.0, 10.0),
+        )
+    }
+
+    private companion object {
+        val LEGACY_TABLES = listOf(
+            "athletes", "athlete_groups", "athlete_group_cross_ref", "testing_sessions", "testing_participants",
+            "assessments", "attempts", "attempt_events", "attempt_metrics", "attempt_calibrations",
+            "attempt_spatial_marks", "encoder_sessions", "encoder_samples", "encoder_repetitions",
+            "encoder_rep_metrics", "fvp_assessments", "fvp_conditions", "fvp_attempts",
+            "angle_analyses", "angle_marks",
+        )
     }
 
     private fun fvpDocument(): ManualBackupDocument {
@@ -363,6 +543,146 @@ class ManualBackupDaoInstrumentedTest {
             ),
         )
     }
+
+    @Test fun angleRestorePreservesGeometryAndDropsPrivateSourceIdentity() = runBlocking {
+        val document = angleDocument()
+        database.manualBackupDao().replaceAll(document)
+        // La app guarda identidad privada de la fuente en estas columnas; el backup no la lleva.
+        val privateVideoUri = "content://private/angle"
+        val privateIdentity = "private-file-id"
+        val privateHash = "sha256:private-abc"
+        database.openHelper.writableDatabase.execSQL(
+            "UPDATE angle_analyses SET videoUri = '$privateVideoUri', sourceIdentity = '$privateIdentity', sourceHash = '$privateHash' WHERE id = 801",
+        )
+        // El sembrado tiene que haber escrito las tres columnas: si no, el NULL posterior a la
+        // restauracion no probaria que el backup las omite.
+        assertTrue(
+            "el sembrado previo no dejo identidad privada en la base",
+            database.openHelper.writableDatabase.query("SELECT videoUri, sourceIdentity, sourceHash FROM angle_analyses WHERE id = 801").use { cursor ->
+                cursor.moveToFirst() && !cursor.isNull(0) && !cursor.isNull(1) && !cursor.isNull(2)
+            },
+        )
+        val captured = database.manualBackupDao().snapshot()
+        assertEquals(document.tables.angleAnalyses, captured.tables.angleAnalyses)
+        assertEquals(document.tables.angleMarks, captured.tables.angleMarks)
+        val geometry = captured.tables.angleAnalyses.single()
+        assertEquals(2, geometry.revision)
+        assertEquals(1080, geometry.presentationWidth)
+        assertEquals(1920, geometry.presentationHeight)
+        assertEquals(90, geometry.rotationDegrees)
+        assertEquals(42, geometry.frameIndex)
+        assertEquals(1_400_000L, geometry.sourcePtsUs)
+        assertEquals(1, geometry.geometryVersion)
+        assertEquals(2, captured.tables.angleMarks.size)
+        // El documento no modela las columnas privadas, asi que tampoco aparecen en su JSON.
+        val encoded = String(ManualBackupCodec.encode(captured), Charsets.UTF_8)
+        assertFalse(encoded.contains(privateVideoUri))
+        assertFalse(encoded.contains(privateIdentity))
+        assertFalse(encoded.contains(privateHash))
+
+        // Un restore completo devuelve las mismas filas (ids y geometria intactos) y deja la
+        // identidad privada NULL, igual que el contrato de URI de video de intentos y encoder.
+        // La asercion va DESPUES del restore: antes, la base aun conserva lo sembrado.
+        database.manualBackupDao().replaceAll(captured)
+        val restored = database.manualBackupDao().snapshot()
+        assertEquals(captured.tables, restored.tables)
+        assertTrue(
+            "la restauracion debe dejar la identidad privada en NULL",
+            database.openHelper.writableDatabase.query("SELECT videoUri, sourceIdentity, sourceHash FROM angle_analyses WHERE id = 801").use { cursor ->
+                cursor.moveToFirst() && cursor.isNull(0) && cursor.isNull(1) && cursor.isNull(2)
+            },
+        )
+        assertTrue(database.openHelper.writableDatabase.query("PRAGMA foreign_key_check").use { !it.moveToFirst() })
+        assertEquals(1, database.openHelper.writableDatabase.query("SELECT COUNT(*) FROM angle_analyses").use { it.moveToFirst(); it.getInt(0) })
+        assertEquals(2, database.openHelper.writableDatabase.query("SELECT COUNT(*) FROM angle_marks").use { it.moveToFirst(); it.getInt(0) })
+        assertEquals(
+            "Rodilla",
+            database.openHelper.writableDatabase.query("SELECT name FROM angle_marks WHERE id = 812").use { it.moveToFirst(); it.getString(0) },
+        )
+        // Geometria restaurada releida por SQL directo, no solo desde el snapshot del DAO.
+        database.openHelper.writableDatabase.query(
+            "SELECT revision, encodedWidth, encodedHeight, presentationWidth, presentationHeight, " +
+                "rotationDegrees, frameIndex, sourcePtsUs, geometryVersion FROM angle_analyses WHERE id = 801",
+        ).use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(2, cursor.getInt(0))
+            assertEquals(1920, cursor.getInt(1))
+            assertEquals(1080, cursor.getInt(2))
+            assertEquals(1080, cursor.getInt(3))
+            assertEquals(1920, cursor.getInt(4))
+            assertEquals(90, cursor.getInt(5))
+            assertEquals(42, cursor.getInt(6))
+            assertEquals(1_400_000L, cursor.getLong(7))
+            assertEquals(1, cursor.getInt(8))
+        }
+        database.openHelper.writableDatabase.query(
+            "SELECT visible, pointAX, pointAY, pointBX, pointBY, pointCX, pointCY FROM angle_marks WHERE id = 812",
+        ).use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(0, cursor.getInt(0))
+            assertEquals(100.5, cursor.getDouble(1), 0.0)
+            assertEquals(200.25, cursor.getDouble(2), 0.0)
+            assertEquals(300.0, cursor.getDouble(3), 0.0)
+            assertEquals(100.0, cursor.getDouble(4), 0.0)
+            assertEquals(250.0, cursor.getDouble(5), 0.0)
+            assertEquals(300.0, cursor.getDouble(6), 0.0)
+        }
+    }
+
+    @Test fun angleRestoreRollsBackAtomicallyWhenAnInsertFails() = runBlocking {
+        val baseline = fullDocument()
+        database.manualBackupDao().replaceAll(baseline)
+        // La marca falla despues de borrar e insertar todo lo anterior: si la transaccion no fuera
+        // atomica, la base quedaria vacia o a medias.
+        database.openHelper.writableDatabase.execSQL(
+            "CREATE TRIGGER angle_marks_abort BEFORE INSERT ON angle_marks WHEN NEW.name = 'BOOM' " +
+                "BEGIN SELECT RAISE(ABORT, 'boom'); END",
+        )
+        val booming = angleDocument().copy(
+            tables = angleDocument().tables.copy(
+                angleMarks = angleDocument().tables.angleMarks.map { if (it.ordinal == 1) it.copy(name = "BOOM") else it },
+            ),
+        )
+        var failure: Exception? = null
+        try {
+            database.manualBackupDao().replaceAll(booming)
+        } catch (error: Exception) {
+            failure = error
+        }
+        assertTrue("el insert de la marca debe fallar: ${failure?.message}", failure?.message.orEmpty().contains("boom"))
+        val after = database.manualBackupDao().snapshot()
+        assertEquals("el rollback conserva los datos previos", baseline.tables, after.tables)
+        assertTrue(after.tables.angleAnalyses.isEmpty() && after.tables.angleMarks.isEmpty())
+    }
+
+    /** Documento solo-angulos (sin atletas): ejercicio minimo de las tablas de Room 13. */
+    private fun angleDocument() = ManualBackupDocument(
+        contract = MANUAL_BACKUP_CONTRACT,
+        formatVersion = MANUAL_BACKUP_FORMAT_VERSION,
+        sourceRoomSchemaVersion = MANUAL_BACKUP_ROOM_VERSION,
+        createdAtEpochMillis = 2L,
+        mediaIncluded = false,
+        preferencesIncluded = false,
+        tables = ManualBackupTables(
+            athletes = emptyList(), athleteGroups = emptyList(), athleteGroupCrossRef = emptyList(),
+            testingSessions = emptyList(), testingParticipants = emptyList(), assessments = emptyList(),
+            attempts = emptyList(), attemptEvents = emptyList(), attemptMetrics = emptyList(),
+            attemptCalibrations = emptyList(), attemptSpatialMarks = emptyList(), encoderSessions = emptyList(),
+            encoderSamples = emptyList(), encoderRepetitions = emptyList(), encoderRepMetrics = emptyList(),
+            angleAnalyses = listOf(
+                BackupAngleAnalysis(
+                    id = 801L, sessionKey = "angle-restore-key", athleteId = null, createdAt = 10L,
+                    updatedAt = 20L, revision = 2, encodedWidth = 1920, encodedHeight = 1080,
+                    presentationWidth = 1080, presentationHeight = 1920, rotationDegrees = 90,
+                    frameIndex = 42, sourcePtsUs = 1_400_000L, geometryVersion = 1,
+                ),
+            ),
+            angleMarks = listOf(
+                BackupAngleMark(811L, 801L, 0, "Cadera", 0xFF3366CC.toInt(), true, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0),
+                BackupAngleMark(812L, 801L, 1, "Rodilla", 0x803366CC.toInt(), false, 100.5, 200.25, 300.0, 100.0, 250.0, 300.0),
+            ),
+        ),
+    )
 
     private fun fullDocument() = ManualBackupDocument(
         contract = MANUAL_BACKUP_CONTRACT,

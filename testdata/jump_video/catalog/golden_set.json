@@ -1,0 +1,651 @@
+{
+  "schema": "com.openjump.jump-golden",
+  "schema_version": 1,
+  "corpus_version": "1.0.0",
+  "total_trials": 22,
+  "protocol_breakdown": {
+    "CMJ": 9,
+    "SJ": 5,
+    "UNILATERAL": 4,
+    "DROP_JUMP": 4
+  },
+  "trials": [
+    {
+      "test_id": "JUMP-CMJ-01",
+      "trial_id": "rep_01",
+      "protocol": "CMJ",
+      "side": null,
+      "drop_height_cm": null,
+      "clip_file": "JUMP-CMJ-01_rep_01.mp4",
+      "clip_sha256": "fe5c1f8a6f91c1681d417d5528a4a65043565ab2fa34518b3926e44e9c242902",
+      "events_pts_us": {
+        "takeoff_us": 1419000,
+        "landing_us": 2086000,
+        "movement_start_us": 750000
+      },
+      "ballistic_expected": {
+        "flight_time_ms": 667.0,
+        "height_cm": 54.53588389812501,
+        "takeoff_velocity_mps": 3.270517775,
+        "time_to_takeoff_ms": 669.0,
+        "rsi": null,
+        "rsi_mod": 0.8151851105848281
+      },
+      "instrument_measurement": {
+        "height_cm": 54.0,
+        "contact_time_ms": null,
+        "method": "direct platform/contact-mat display",
+        "device": "Hawkin Dynamics Dual Force Plates (1000 Hz)",
+        "provenance": "FORCE_PLATE; Athlete performing bilateral CMJ on dual force plates with hands on hips. Live tablet HUD displays force curve and 0.54m impulse-momentum height."
+      }
+    },
+    {
+      "test_id": "JUMP-CMJ-01",
+      "trial_id": "rep_02",
+      "protocol": "CMJ",
+      "side": null,
+      "drop_height_cm": null,
+      "clip_file": "JUMP-CMJ-01_rep_02.mp4",
+      "clip_sha256": "52b0f7fb596fd84a8f7d0e380f8908c5127e14bea39977c8c25e808d464055d5",
+      "events_pts_us": {
+        "takeoff_us": 1398000,
+        "landing_us": 2032000,
+        "movement_start_us": 600000
+      },
+      "ballistic_expected": {
+        "flight_time_ms": 634.0,
+        "height_cm": 49.2730225925,
+        "takeoff_velocity_mps": 3.1087080499999997,
+        "time_to_takeoff_ms": 798.0,
+        "rsi": null,
+        "rsi_mod": 0.6174564234649123
+      },
+      "instrument_measurement": {
+        "height_cm": 51.5,
+        "contact_time_ms": null,
+        "method": "direct platform/contact-mat display",
+        "device": "Hawkin Dynamics Dual Force Plates (1000 Hz)",
+        "provenance": "FORCE_PLATE; Second repetition in tutorial trial."
+      }
+    },
+    {
+      "test_id": "JUMP-CMJ-02",
+      "trial_id": "rep_01",
+      "protocol": "CMJ",
+      "side": null,
+      "drop_height_cm": null,
+      "clip_file": "JUMP-CMJ-02_rep_01.mp4",
+      "clip_sha256": "9aa202f81c03ccd5db05e94a519b8f4d07c36a71b950d554ddc826fc19c9a1f4",
+      "events_pts_us": {
+        "takeoff_us": 1505000,
+        "landing_us": 2089000,
+        "movement_start_us": 700000
+      },
+      "ballistic_expected": {
+        "flight_time_ms": 584.0,
+        "height_cm": 41.807710279999995,
+        "takeoff_velocity_mps": 2.8635417999999997,
+        "time_to_takeoff_ms": 805.0,
+        "rsi": null,
+        "rsi_mod": 0.5193504382608695
+      },
+      "instrument_measurement": {
+        "height_cm": 41.8,
+        "contact_time_ms": null,
+        "method": "direct platform/contact-mat display",
+        "device": "Hawkin Dynamics Dual Force Plates (1000 Hz)",
+        "provenance": "FORCE_PLATE; High-speed 60fps video with synchronized live vGRF curve overlay."
+      }
+    },
+    {
+      "test_id": "JUMP-CMJ-03",
+      "trial_id": "rep_01",
+      "protocol": "CMJ",
+      "side": null,
+      "drop_height_cm": null,
+      "clip_file": "JUMP-CMJ-03_rep_01.mp4",
+      "clip_sha256": "67382c922c3e8396d039c9994da5ee2463629ae893683efea97ea0731b70ef41",
+      "events_pts_us": {
+        "takeoff_us": 1371000,
+        "landing_us": 1972000,
+        "movement_start_us": 700000
+      },
+      "ballistic_expected": {
+        "flight_time_ms": 601.0,
+        "height_cm": 44.277147333124994,
+        "takeoff_velocity_mps": 2.946898325,
+        "time_to_takeoff_ms": 671.0,
+        "rsi": null,
+        "rsi_mod": 0.6598680675577495
+      },
+      "instrument_measurement": {
+        "height_cm": 44.2,
+        "contact_time_ms": null,
+        "method": "direct platform/contact-mat display",
+        "device": "Hawkin Dynamics Dual Force Plates (1000 Hz)",
+        "provenance": "FORCE_PLATE; Jump 1 of 3 rapid series jumps on dual force plates."
+      }
+    },
+    {
+      "test_id": "JUMP-CMJ-03",
+      "trial_id": "rep_02",
+      "protocol": "CMJ",
+      "side": null,
+      "drop_height_cm": null,
+      "clip_file": "JUMP-CMJ-03_rep_02.mp4",
+      "clip_sha256": "0315d6e590c6156261cdbd8acf6c5a294f531d539f9c5962a37ac4ebb13db9b8",
+      "events_pts_us": {
+        "takeoff_us": 1378000,
+        "landing_us": 1979000,
+        "movement_start_us": 700000
+      },
+      "ballistic_expected": {
+        "flight_time_ms": 601.0,
+        "height_cm": 44.277147333124994,
+        "takeoff_velocity_mps": 2.946898325,
+        "time_to_takeoff_ms": 678.0,
+        "rsi": null,
+        "rsi_mod": 0.6530552704000736
+      },
+      "instrument_measurement": {
+        "height_cm": 44.0,
+        "contact_time_ms": null,
+        "method": "direct platform/contact-mat display",
+        "device": "Hawkin Dynamics Dual Force Plates (1000 Hz)",
+        "provenance": "FORCE_PLATE; Jump 2 of 3 rapid series jumps."
+      }
+    },
+    {
+      "test_id": "JUMP-CMJ-03",
+      "trial_id": "rep_03",
+      "protocol": "CMJ",
+      "side": null,
+      "drop_height_cm": null,
+      "clip_file": "JUMP-CMJ-03_rep_03.mp4",
+      "clip_sha256": "78adb1a8a91bc6cd03b917dfcdb1fcaa457dc4e04836a8fcaf696e26668bc010",
+      "events_pts_us": {
+        "takeoff_us": 1385000,
+        "landing_us": 1952000,
+        "movement_start_us": 700000
+      },
+      "ballistic_expected": {
+        "flight_time_ms": 567.0,
+        "height_cm": 39.409126273125,
+        "takeoff_velocity_mps": 2.7801852749999996,
+        "time_to_takeoff_ms": 685.0,
+        "rsi": null,
+        "rsi_mod": 0.5753157120164233
+      },
+      "instrument_measurement": {
+        "height_cm": 39.5,
+        "contact_time_ms": null,
+        "method": "direct platform/contact-mat display",
+        "device": "Hawkin Dynamics Dual Force Plates (1000 Hz)",
+        "provenance": "FORCE_PLATE; Jump 3 of 3 rapid series jumps."
+      }
+    },
+    {
+      "test_id": "JUMP-CMJ-04",
+      "trial_id": "rep_01",
+      "protocol": "CMJ",
+      "side": null,
+      "drop_height_cm": null,
+      "clip_file": "JUMP-CMJ-04_rep_01.mp4",
+      "clip_sha256": "6b81ecdb45af0de2523c9ee50ca1d94c1001cb76bbe47920079a85363d1045f0",
+      "events_pts_us": {
+        "takeoff_us": 1350000,
+        "landing_us": 1936000,
+        "movement_start_us": 600000
+      },
+      "ballistic_expected": {
+        "flight_time_ms": 586.0,
+        "height_cm": 42.09455479249999,
+        "takeoff_velocity_mps": 2.8733484499999995,
+        "time_to_takeoff_ms": 750.0,
+        "rsi": null,
+        "rsi_mod": 0.5612607305666666
+      },
+      "instrument_measurement": {
+        "height_cm": 42.1,
+        "contact_time_ms": null,
+        "method": "direct platform/contact-mat display",
+        "device": "Chronojump Bosco Contact Mat (1000 Hz)",
+        "provenance": "CONTACT_MAT; High frame rate close-up of feet on Chronojump contact platform."
+      }
+    },
+    {
+      "test_id": "JUMP-CMJ-04",
+      "trial_id": "rep_02",
+      "protocol": "CMJ",
+      "side": null,
+      "drop_height_cm": null,
+      "clip_file": "JUMP-CMJ-04_rep_02.mp4",
+      "clip_sha256": "1404d81a2c1d243f10d113d27d54b947f8705436f49c9c6ccd3199439203d2dc",
+      "events_pts_us": {
+        "takeoff_us": 1380000,
+        "landing_us": 1983000,
+        "movement_start_us": 600000
+      },
+      "ballistic_expected": {
+        "flight_time_ms": 603.0,
+        "height_cm": 44.57232749812499,
+        "takeoff_velocity_mps": 2.9567049749999996,
+        "time_to_takeoff_ms": 780.0,
+        "rsi": null,
+        "rsi_mod": 0.5714400961298076
+      },
+      "instrument_measurement": {
+        "height_cm": 44.5,
+        "contact_time_ms": null,
+        "method": "direct platform/contact-mat display",
+        "device": "Chronojump Bosco Contact Mat (1000 Hz)",
+        "provenance": "CONTACT_MAT; Second repetition on Chronojump contact mat."
+      }
+    },
+    {
+      "test_id": "JUMP-CMJ-05",
+      "trial_id": "rep_01",
+      "protocol": "CMJ",
+      "side": null,
+      "drop_height_cm": null,
+      "clip_file": "JUMP-CMJ-05_rep_01.mp4",
+      "clip_sha256": "a813ab2b34e14d76994367d5ecc2ba390ff56bbccb4f91c69910e85f50a61e47",
+      "events_pts_us": {
+        "takeoff_us": 1352000,
+        "landing_us": 1936000,
+        "movement_start_us": 600000
+      },
+      "ballistic_expected": {
+        "flight_time_ms": 584.0,
+        "height_cm": 41.807710279999995,
+        "takeoff_velocity_mps": 2.8635417999999997,
+        "time_to_takeoff_ms": 752.0,
+        "rsi": null,
+        "rsi_mod": 0.5559535941489361
+      },
+      "instrument_measurement": {
+        "height_cm": 41.8,
+        "contact_time_ms": null,
+        "method": "direct platform/contact-mat display",
+        "device": "Chronojump Bosco Contact Mat (1000 Hz)",
+        "provenance": "CONTACT_MAT; Standard Bosco CMJ with hands on hips on contact platform."
+      }
+    },
+    {
+      "test_id": "JUMP-DJ-01",
+      "trial_id": "rep_01",
+      "protocol": "DROP_JUMP",
+      "side": null,
+      "drop_height_cm": 30.0,
+      "clip_file": "JUMP-DJ-01_rep_01.mp4",
+      "clip_sha256": "4e4486ee39893859f8c85e2ef7d0e85336e14dd7a10ef866d8288ed06fc92353",
+      "events_pts_us": {
+        "takeoff_us": 1116000,
+        "landing_us": 1616000,
+        "initial_contact_us": 866000
+      },
+      "ballistic_expected": {
+        "flight_time_ms": 500.0,
+        "height_cm": 30.64578125,
+        "takeoff_velocity_mps": null,
+        "time_to_takeoff_ms": null,
+        "rsi": 1.22583125,
+        "rsi_mod": null,
+        "contact_time_ms": 250.0
+      },
+      "instrument_measurement": {
+        "height_cm": 30.6,
+        "contact_time_ms": 250.0,
+        "method": "direct platform/contact-mat display",
+        "device": "Hawkin Dynamics Dual Force Plates (1000 Hz)",
+        "provenance": "FORCE_PLATE; Drop jump from 30 cm plyo box onto dual force plates with hands on hips."
+      }
+    },
+    {
+      "test_id": "JUMP-DJ-01",
+      "trial_id": "rep_02",
+      "protocol": "DROP_JUMP",
+      "side": null,
+      "drop_height_cm": 30.0,
+      "clip_file": "JUMP-DJ-01_rep_02.mp4",
+      "clip_sha256": "a15ae003eb151b5e6903a606d52dd21db67c39bc50e7f72550622f0b457c7d02",
+      "events_pts_us": {
+        "takeoff_us": 1215000,
+        "landing_us": 1715000,
+        "initial_contact_us": 965000
+      },
+      "ballistic_expected": {
+        "flight_time_ms": 500.0,
+        "height_cm": 30.64578125,
+        "takeoff_velocity_mps": null,
+        "time_to_takeoff_ms": null,
+        "rsi": 1.22583125,
+        "rsi_mod": null,
+        "contact_time_ms": 250.0
+      },
+      "instrument_measurement": {
+        "height_cm": 30.6,
+        "contact_time_ms": 250.0,
+        "method": "direct platform/contact-mat display",
+        "device": "Hawkin Dynamics Dual Force Plates (1000 Hz)",
+        "provenance": "FORCE_PLATE; Second drop jump repetition from 30 cm box."
+      }
+    },
+    {
+      "test_id": "JUMP-DJ-02",
+      "trial_id": "rep_01",
+      "protocol": "DROP_JUMP",
+      "side": null,
+      "drop_height_cm": 30.0,
+      "clip_file": "JUMP-DJ-02_rep_01.mp4",
+      "clip_sha256": "2e684eb6cc1ca0eb789b934e643190d53eac0fe0ce5f5ee100a912f0ba20909f",
+      "events_pts_us": {
+        "takeoff_us": 1120000,
+        "landing_us": 1560000,
+        "initial_contact_us": 880000
+      },
+      "ballistic_expected": {
+        "flight_time_ms": 440.0,
+        "height_cm": 23.732093,
+        "takeoff_velocity_mps": null,
+        "time_to_takeoff_ms": null,
+        "rsi": 0.9888372083333332,
+        "rsi_mod": null,
+        "contact_time_ms": 240.0
+      },
+      "instrument_measurement": {
+        "height_cm": 23.7,
+        "contact_time_ms": 240.0,
+        "method": "direct platform/contact-mat display",
+        "device": "VALD ForceDecks Dual Force Plates (1000 Hz)",
+        "provenance": "FORCE_PLATE; Standard VALD ForceDecks drop jump testing from 30 cm box."
+      }
+    },
+    {
+      "test_id": "JUMP-DJ-02",
+      "trial_id": "rep_02",
+      "protocol": "DROP_JUMP",
+      "side": null,
+      "drop_height_cm": 30.0,
+      "clip_file": "JUMP-DJ-02_rep_02.mp4",
+      "clip_sha256": "982ecfef9deeaaa8b3821540181472df373ecc99fa4535f838d1eccaddce0515",
+      "events_pts_us": {
+        "takeoff_us": 1100000,
+        "landing_us": 1580000,
+        "initial_contact_us": 860000
+      },
+      "ballistic_expected": {
+        "flight_time_ms": 480.0,
+        "height_cm": 28.243152,
+        "takeoff_velocity_mps": null,
+        "time_to_takeoff_ms": null,
+        "rsi": 1.176798,
+        "rsi_mod": null,
+        "contact_time_ms": 240.0
+      },
+      "instrument_measurement": {
+        "height_cm": 28.2,
+        "contact_time_ms": 240.0,
+        "method": "direct platform/contact-mat display",
+        "device": "VALD ForceDecks Dual Force Plates (1000 Hz)",
+        "provenance": "FORCE_PLATE; Second repetition on ForceDecks dual plates."
+      }
+    },
+    {
+      "test_id": "JUMP-SJ-01",
+      "trial_id": "rep_01",
+      "protocol": "SJ",
+      "side": null,
+      "drop_height_cm": null,
+      "clip_file": "JUMP-SJ-01_rep_01.mp4",
+      "clip_sha256": "90f188b4c05c81c2c9164ce121207be01cb8d3cb3873d461b59caaaa6f3ed8ae",
+      "events_pts_us": {
+        "takeoff_us": 2387000,
+        "landing_us": 2921000
+      },
+      "ballistic_expected": {
+        "flight_time_ms": 534.0,
+        "height_cm": 34.9553135925,
+        "takeoff_velocity_mps": 2.61837555,
+        "time_to_takeoff_ms": null,
+        "rsi": null,
+        "rsi_mod": null
+      },
+      "instrument_measurement": {
+        "height_cm": 35.0,
+        "contact_time_ms": null,
+        "method": "direct platform/contact-mat display",
+        "device": "Hawkin Dynamics Dual Force Plates (1000 Hz)",
+        "provenance": "FORCE_PLATE; Athlete pauses at 90 deg knee flexion for 3s (zero velocity / static hold) before concentric drive."
+      }
+    },
+    {
+      "test_id": "JUMP-SJ-01",
+      "trial_id": "rep_02",
+      "protocol": "SJ",
+      "side": null,
+      "drop_height_cm": null,
+      "clip_file": "JUMP-SJ-01_rep_02.mp4",
+      "clip_sha256": "aa3e26af6ef4d77e493a290cbbcc14a6c8cbf4922f24d00241c2405365e4efb6",
+      "events_pts_us": {
+        "takeoff_us": 2265000,
+        "landing_us": 2832000
+      },
+      "ballistic_expected": {
+        "flight_time_ms": 567.0,
+        "height_cm": 39.409126273125,
+        "takeoff_velocity_mps": 2.7801852749999996,
+        "time_to_takeoff_ms": null,
+        "rsi": null,
+        "rsi_mod": null
+      },
+      "instrument_measurement": {
+        "height_cm": 39.4,
+        "contact_time_ms": null,
+        "method": "direct platform/contact-mat display",
+        "device": "Hawkin Dynamics Dual Force Plates (1000 Hz)",
+        "provenance": "FORCE_PLATE; Second repetition of static squat jump."
+      }
+    },
+    {
+      "test_id": "JUMP-SJ-02",
+      "trial_id": "rep_01",
+      "protocol": "SJ",
+      "side": null,
+      "drop_height_cm": null,
+      "clip_file": "JUMP-SJ-02_rep_01.mp4",
+      "clip_sha256": "3f69fb814425659dc6753ef8aa99f5cb457ee9b2672fcf5a01b0d1eddc720e53",
+      "events_pts_us": {
+        "takeoff_us": 1639000,
+        "landing_us": 2190000
+      },
+      "ballistic_expected": {
+        "flight_time_ms": 551.0,
+        "height_cm": 37.216359333125006,
+        "takeoff_velocity_mps": 2.7017320750000002,
+        "time_to_takeoff_ms": null,
+        "rsi": null,
+        "rsi_mod": null
+      },
+      "instrument_measurement": {
+        "height_cm": 37.2,
+        "contact_time_ms": null,
+        "method": "direct platform/contact-mat display",
+        "device": "Hawkin Dynamics Dual Force Plates (1000 Hz)",
+        "provenance": "FORCE_PLATE; 60fps video with static force curve prior to purely concentric takeoff."
+      }
+    },
+    {
+      "test_id": "JUMP-SJ-03",
+      "trial_id": "rep_01",
+      "protocol": "SJ",
+      "side": null,
+      "drop_height_cm": null,
+      "clip_file": "JUMP-SJ-03_rep_01.mp4",
+      "clip_sha256": "af43896c2616f46b0b615b67d363f424681db42aed1ee347f6890cc90aac3d8f",
+      "events_pts_us": {
+        "takeoff_us": 1733000,
+        "landing_us": 2300000
+      },
+      "ballistic_expected": {
+        "flight_time_ms": 567.0,
+        "height_cm": 39.409126273125,
+        "takeoff_velocity_mps": 2.7801852749999996,
+        "time_to_takeoff_ms": null,
+        "rsi": null,
+        "rsi_mod": null
+      },
+      "instrument_measurement": {
+        "height_cm": 39.5,
+        "contact_time_ms": null,
+        "method": "direct platform/contact-mat display",
+        "device": "MotionLab Dual Force Plates (1000 Hz)",
+        "provenance": "FORCE_PLATE; Clinical biomechanics assessment of squat jump."
+      }
+    },
+    {
+      "test_id": "JUMP-SJ-04",
+      "trial_id": "rep_01",
+      "protocol": "SJ",
+      "side": null,
+      "drop_height_cm": null,
+      "clip_file": "JUMP-SJ-04_rep_01.mp4",
+      "clip_sha256": "6484ebdbdd53e119f2ae615adf534d1756a044fb389ccfe722af19bfe9a19c80",
+      "events_pts_us": {
+        "takeoff_us": 1587000,
+        "landing_us": 2121000
+      },
+      "ballistic_expected": {
+        "flight_time_ms": 534.0,
+        "height_cm": 34.9553135925,
+        "takeoff_velocity_mps": 2.61837555,
+        "time_to_takeoff_ms": null,
+        "rsi": null,
+        "rsi_mod": null
+      },
+      "instrument_measurement": {
+        "height_cm": 35.1,
+        "contact_time_ms": null,
+        "method": "direct platform/contact-mat display",
+        "device": "VALD ForceDecks Dual Force Plates (1000 Hz)",
+        "provenance": "FORCE_PLATE; VALD ForceDecks dual plate squat jump test."
+      }
+    },
+    {
+      "test_id": "JUMP-UNI-01",
+      "trial_id": "rep_01_left",
+      "protocol": "UNILATERAL",
+      "side": "LEFT",
+      "drop_height_cm": null,
+      "clip_file": "JUMP-UNI-01_rep_01_left.mp4",
+      "clip_sha256": "07a6211ff0b9369c06d1fcc8ed7365f34f0c2cfaf5da37510c5b4abc29eb6133",
+      "events_pts_us": {
+        "takeoff_us": 1589000,
+        "landing_us": 2023000,
+        "movement_start_us": 800000
+      },
+      "ballistic_expected": {
+        "flight_time_ms": 434.0,
+        "height_cm": 23.0892670925,
+        "takeoff_velocity_mps": 2.12804305,
+        "time_to_takeoff_ms": 789.0,
+        "rsi": null,
+        "rsi_mod": 0.2926396336185044
+      },
+      "instrument_measurement": {
+        "height_cm": 23.2,
+        "contact_time_ms": null,
+        "method": "direct platform/contact-mat display",
+        "device": "Hawkin Dynamics Dual Force Plates (1000 Hz)",
+        "provenance": "FORCE_PLATE; Single leg CMJ on left leg on dual force plates."
+      }
+    },
+    {
+      "test_id": "JUMP-UNI-01",
+      "trial_id": "rep_02_right",
+      "protocol": "UNILATERAL",
+      "side": "RIGHT",
+      "drop_height_cm": null,
+      "clip_file": "JUMP-UNI-01_rep_02_right.mp4",
+      "clip_sha256": "131bb66f61b1bf59f332b8c91a193cf79831d8275968b2570e4effc0ce178c90",
+      "events_pts_us": {
+        "takeoff_us": 1599000,
+        "landing_us": 2066000,
+        "movement_start_us": 800000
+      },
+      "ballistic_expected": {
+        "flight_time_ms": 467.0,
+        "height_cm": 26.734031148125005,
+        "takeoff_velocity_mps": 2.289852775,
+        "time_to_takeoff_ms": 799.0,
+        "rsi": null,
+        "rsi_mod": 0.334593631390801
+      },
+      "instrument_measurement": {
+        "height_cm": 26.7,
+        "contact_time_ms": null,
+        "method": "direct platform/contact-mat display",
+        "device": "Hawkin Dynamics Dual Force Plates (1000 Hz)",
+        "provenance": "FORCE_PLATE; Single leg CMJ on right leg on dual force plates."
+      }
+    },
+    {
+      "test_id": "JUMP-UNI-02",
+      "trial_id": "rep_01",
+      "protocol": "UNILATERAL",
+      "side": "RIGHT",
+      "drop_height_cm": null,
+      "clip_file": "JUMP-UNI-02_rep_01.mp4",
+      "clip_sha256": "eb0dd7b9847b9df51aa44f66242cbfe70a8b2d08c70c0de8b09baf7491f128ff",
+      "events_pts_us": {
+        "takeoff_us": 1514000,
+        "landing_us": 1981000,
+        "movement_start_us": 800000
+      },
+      "ballistic_expected": {
+        "flight_time_ms": 467.0,
+        "height_cm": 26.734031148125005,
+        "takeoff_velocity_mps": 2.289852775,
+        "time_to_takeoff_ms": 714.0,
+        "rsi": null,
+        "rsi_mod": 0.3744262065563726
+      },
+      "instrument_measurement": {
+        "height_cm": 26.6,
+        "contact_time_ms": null,
+        "method": "direct platform/contact-mat display",
+        "device": "Hawkin Dynamics Dual Force Plates (1000 Hz)",
+        "provenance": "FORCE_PLATE; Sagittal view of single leg jump on force plate."
+      }
+    },
+    {
+      "test_id": "JUMP-UNI-03",
+      "trial_id": "rep_01",
+      "protocol": "UNILATERAL",
+      "side": "RIGHT",
+      "drop_height_cm": null,
+      "clip_file": "JUMP-UNI-03_rep_01.mp4",
+      "clip_sha256": "6f21e250a4aff8965baa8f0160b7d68831928d1e5d15a67db27a5259f42a8fd5",
+      "events_pts_us": {
+        "takeoff_us": 1633000,
+        "landing_us": 2067000,
+        "movement_start_us": 800000
+      },
+      "ballistic_expected": {
+        "flight_time_ms": 434.0,
+        "height_cm": 23.0892670925,
+        "takeoff_velocity_mps": 2.12804305,
+        "time_to_takeoff_ms": 833.0,
+        "rsi": null,
+        "rsi_mod": 0.27718207794117644
+      },
+      "instrument_measurement": {
+        "height_cm": 23.1,
+        "contact_time_ms": null,
+        "method": "direct platform/contact-mat display",
+        "device": "VALD ForceDecks Dual Force Plates (1000 Hz)",
+        "provenance": "FORCE_PLATE; Unilateral jump assessment on ForceDecks dual plates."
+      }
+    }
+  ]
+}

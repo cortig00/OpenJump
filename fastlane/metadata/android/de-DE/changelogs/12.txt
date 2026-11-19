@@ -1,0 +1,1 @@
+Winkelanalysen mit mehreren Einzelbildern speichern und Bilder im Verlauf ansehen oder teilen. Beim Markieren von Sprüngen ins Video zoomen, ohne Einzelbilder oder Ergebnisse zu ändern. Der Verlauf wird aktualisiert, ohne die Position zu verlieren. Neu: Hindi und vereinfachtes Chinesisch.

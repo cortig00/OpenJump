@@ -7,6 +7,11 @@
         android:name="android.hardware.camera.any"
         android:required="false" />
 
+    <!-- Keep the UI portrait preference without a required Play hardware feature. -->
+    <uses-feature
+        android:name="android.hardware.screen.portrait"
+        android:required="false" />
+
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission
         android:name="android.permission.INTERNET"

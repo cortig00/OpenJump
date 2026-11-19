@@ -1,5 +1,6 @@
 package com.openjump.app.data
 
+import android.database.sqlite.SQLiteConstraintException
 import androidx.room.testing.MigrationTestHelper
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -22,13 +23,13 @@ class JumpDatabaseMigrationTest {
     )
 
     @Test
-    fun migrate1To12_runsCompleteChain() {
+    fun migrate1To13_runsCompleteChain() {
         val chainDatabase = "migration-chain-test"
         helper.createDatabase(chainDatabase, 1).close()
 
         val db = helper.runMigrationsAndValidate(
             chainDatabase,
-            12,
+            13,
             true,
             JumpDatabase.MIGRATION_1_2,
             JumpDatabase.MIGRATION_2_3,
@@ -41,17 +42,140 @@ class JumpDatabaseMigrationTest {
             JumpDatabase.MIGRATION_9_10,
             JumpDatabase.MIGRATION_10_11,
             JumpDatabase.MIGRATION_11_12,
+            JumpDatabase.MIGRATION_12_13,
         )
         listOf(
             "encoder_sessions", "attempt_calibrations", "attempt_spatial_marks", "athletes",
             "testing_sessions", "testing_participants",
             "fvp_assessments", "fvp_conditions", "fvp_attempts",
+            "angle_analyses", "angle_marks",
         ).forEach { table ->
             db.query("SELECT name FROM sqlite_master WHERE type='table' AND name='$table'").use {
                 assertEquals("Missing $table", 1, it.count)
             }
         }
-        db.query("PRAGMA user_version").use { it.moveToFirst(); assertEquals(12, it.getInt(0)) }
+        db.query("PRAGMA user_version").use { it.moveToFirst(); assertEquals(13, it.getInt(0)) }
+        db.close()
+    }
+
+    @Test
+    fun migrate12To13_addsEmptyAngleTablesWithoutTouchingExistingData() {
+        val name = "migration-angles-test"
+        helper.createDatabase(name, 12).apply {
+            execSQL("INSERT INTO athletes (id, displayName, createdAt, updatedAt) VALUES (31, 'Existing', 1, 1)")
+            execSQL("INSERT INTO assessments (id, sessionKey, athleteId, protocolId, dateTime, primaryMetricKey, primaryMetricValue, primaryMetricUnit, notes) VALUES (32, 'existing-v12', 31, 'SJ', 5, 'HEIGHT_CM', 32.0, 'CENTIMETER', 'nota v12')")
+            execSQL("INSERT INTO attempts (id, assessmentId, ordinal, side, source, detectedFps) VALUES (33, 32, 0, NULL, 'UNKNOWN', 120)")
+            execSQL("INSERT INTO attempt_events (attemptId, type, ordinal, ptsUs) VALUES (33, 'TAKEOFF', 0, 100)")
+            execSQL("INSERT INTO fvp_assessments (id, sessionKey, athleteId, protocolId, dateTime, bodyMassKg, bodyMassSource, pushOffMode, pushOffM, pushOffSource, algorithmVersion, methodVersion, f0N, slopeFv, sfvNsPerM, conditionCount, vMinMps, vMaxMps, fMinN, fMaxN, warningsCsv) VALUES (34, 'fvp-v12', 31, 'CMJ', 6, 74.0, 'PROFILE', 'COMMON', 0.41, 'MEASURED', 'fvp-poc-1.0', 'fvp-app-1.0', 1700.0, -300.0, 300.0, 2, 1.2, 3.0, 1400.0, 2000.0, '')")
+            close()
+        }
+
+        val db = helper.runMigrationsAndValidate(name, 13, true, JumpDatabase.MIGRATION_12_13)
+
+        // (a) Las filas v12 de las tablas existentes siguen intactas.
+        db.query("SELECT displayName FROM athletes WHERE id = 31").use {
+            it.moveToFirst()
+            assertEquals("Existing", it.getString(0))
+        }
+        db.query("SELECT sessionKey, athleteId, primaryMetricValue, notes FROM assessments WHERE id = 32").use {
+            it.moveToFirst()
+            assertEquals("existing-v12", it.getString(0))
+            assertEquals(31L, it.getLong(1))
+            assertEquals(32.0, it.getDouble(2), 0.0001)
+            assertEquals("nota v12", it.getString(3))
+        }
+        db.query("SELECT COUNT(*) FROM attempts WHERE id = 33").use { it.moveToFirst(); assertEquals(1, it.getInt(0)) }
+        db.query("SELECT COUNT(*) FROM attempt_events WHERE attemptId = 33").use {
+            it.moveToFirst()
+            assertEquals(1, it.getInt(0))
+        }
+        db.query("SELECT sessionKey, bodyMassKg, conditionCount FROM fvp_assessments WHERE id = 34").use {
+            it.moveToFirst()
+            assertEquals("fvp-v12", it.getString(0))
+            assertEquals(74.0, it.getDouble(1), 0.0001)
+            assertEquals(2, it.getInt(2))
+        }
+
+        // (b) Las dos tablas nuevas existen y están vacías tras migrar.
+        listOf("angle_analyses", "angle_marks").forEach { table ->
+            db.query("SELECT name FROM sqlite_master WHERE type='table' AND name='$table'").use {
+                assertEquals("Missing $table", 1, it.count)
+            }
+            db.query("SELECT COUNT(*) FROM $table").use { it.moveToFirst(); assertEquals(0, it.getInt(0)) }
+        }
+
+        // (c) Las tablas nuevas aceptan una raíz con dueño válido y sus marcas, en orden estable.
+        db.execSQL(
+            "INSERT INTO angle_analyses (id, sessionKey, athleteId, createdAt, updatedAt, revision, " +
+                "videoUri, sourceIdentity, sourceHash, encodedWidth, encodedHeight, presentationWidth, " +
+                "presentationHeight, rotationDegrees, frameIndex, sourcePtsUs, geometryVersion) " +
+                "VALUES (41, 'angle-v13', 31, 1000, 1000, 0, 'content://video/1', NULL, NULL, " +
+                "1920, 1080, 1080, 1920, 90, 42, 1400000, 1)",
+        )
+        db.execSQL(
+            "INSERT INTO angle_marks (id, analysisId, ordinal, name, colorArgb, visible, " +
+                "pointAX, pointAY, pointBX, pointBY, pointCX, pointCY) " +
+                "VALUES (51, 41, 0, 'Rodilla', -65536, 1, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0)",
+        )
+        db.execSQL(
+            "INSERT INTO angle_marks (id, analysisId, ordinal, name, colorArgb, visible, " +
+                "pointAX, pointAY, pointBX, pointBY, pointCX, pointCY) " +
+                "VALUES (52, 41, 1, 'Cadera', -16711936, 0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0)",
+        )
+        db.query(
+            "SELECT id, ordinal, name, visible, pointAX, pointCY FROM angle_marks " +
+                "WHERE analysisId = 41 ORDER BY ordinal",
+        ).use {
+            assertEquals(2, it.count)
+            it.moveToFirst()
+            assertEquals(51L, it.getLong(0))
+            assertEquals(0, it.getInt(1))
+            assertEquals("Rodilla", it.getString(2))
+            assertEquals(1, it.getInt(3))
+            assertEquals(1.0, it.getDouble(4), 0.0001)
+            assertEquals(6.0, it.getDouble(5), 0.0001)
+            it.moveToNext()
+            assertEquals(52L, it.getLong(0))
+            assertEquals(1, it.getInt(1))
+            assertEquals(0, it.getInt(3))
+        }
+        db.query("SELECT frameIndex, sourcePtsUs, rotationDegrees, geometryVersion FROM angle_analyses WHERE id = 41").use {
+            it.moveToFirst()
+            assertEquals(42, it.getInt(0))
+            assertEquals(1_400_000L, it.getLong(1))
+            assertEquals(90, it.getInt(2))
+            assertEquals(1, it.getInt(3))
+        }
+
+        // (d) El orden por raíz es estable: el índice único rechaza un ordinal repetido.
+        val duplicateOrdinalRejected = try {
+            db.execSQL(
+                "INSERT INTO angle_marks (analysisId, ordinal, name, colorArgb, visible, " +
+                    "pointAX, pointAY, pointBX, pointBY, pointCX, pointCY) " +
+                    "VALUES (41, 0, 'Duplicada', -1, 1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)",
+            )
+            false
+        } catch (_: SQLiteConstraintException) {
+            true
+        }
+        assertTrue("angle_marks debe rechazar dos marcas con el mismo ordinal", duplicateOrdinalRejected)
+
+        // (e) sessionKey es único por análisis.
+        val duplicateSessionKeyRejected = try {
+            db.execSQL(
+                "INSERT INTO angle_analyses (sessionKey, athleteId, createdAt, updatedAt, revision, " +
+                    "encodedWidth, encodedHeight, presentationWidth, presentationHeight, " +
+                    "rotationDegrees, frameIndex, sourcePtsUs, geometryVersion) " +
+                    "VALUES ('angle-v13', 31, 1000, 1000, 0, 1920, 1080, 1080, 1920, 90, 42, 1400000, 1)",
+            )
+            false
+        } catch (_: SQLiteConstraintException) {
+            true
+        }
+        assertTrue("angle_analyses debe rechazar un sessionKey repetido", duplicateSessionKeyRejected)
+
+        db.query("PRAGMA foreign_key_check").use { assertEquals(0, it.count) }
+        db.query("PRAGMA user_version").use { it.moveToFirst(); assertEquals(13, it.getInt(0)) }
         db.close()
     }
 

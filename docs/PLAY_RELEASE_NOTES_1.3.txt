@@ -1,0 +1,42 @@
+<es-ES>
+Guarda análisis de ángulos con varios fotogramas y consulta o comparte sus imágenes desde el Historial. Amplía el vídeo al marcar saltos sin cambiar los fotogramas ni el resultado. El Historial se actualiza sin perder tu posición. Nuevos idiomas: hindi y chino simplificado.
+</es-ES>
+<es-419>
+Guarda análisis de ángulos con varios fotogramas y consulta o comparte sus imágenes desde el Historial. Haz zoom en el video al marcar saltos sin cambiar los fotogramas ni el resultado. El Historial se actualiza sin perder tu posición. Nuevos idiomas: hindi y chino simplificado.
+</es-419>
+<en-US>
+Save multi-frame angle analyses and view or share their images from History. Zoom into video while marking jumps without changing frames or results. History refreshes without losing your place. New languages: Hindi and Simplified Chinese.
+</en-US>
+<de-DE>
+Winkelanalysen mit mehreren Einzelbildern speichern und Bilder im Verlauf ansehen oder teilen. Beim Markieren von Sprüngen ins Video zoomen, ohne Einzelbilder oder Ergebnisse zu ändern. Der Verlauf wird aktualisiert, ohne die Position zu verlieren. Neu: Hindi und vereinfachtes Chinesisch.
+</de-DE>
+<fr-FR>
+Enregistrez des analyses d’angles sur plusieurs images et consultez ou partagez ces images depuis l’historique. Zoomez dans la vidéo pendant le marquage des sauts sans modifier les images ni les résultats. L’historique s’actualise sans perdre votre position. Nouvelles langues : hindi et chinois simplifié.
+</fr-FR>
+<it-IT>
+Salva analisi degli angoli su più fotogrammi e visualizza o condividi le immagini dalla cronologia. Ingrandisci il video mentre contrassegni i salti senza cambiare fotogrammi o risultati. La cronologia si aggiorna senza perdere la posizione. Nuove lingue: hindi e cinese semplificato.
+</it-IT>
+<pt-BR>
+Salve análises de ângulos com vários quadros e visualize ou compartilhe as imagens no histórico. Amplie o vídeo ao marcar saltos sem alterar os quadros ou o resultado. O histórico é atualizado sem perder sua posição. Novos idiomas: hindi e chinês simplificado.
+</pt-BR>
+<pt-PT>
+Guarde análises de ângulos com vários fotogramas e consulte ou partilhe as imagens no histórico. Amplie o vídeo ao marcar saltos sem alterar os fotogramas nem o resultado. O histórico é atualizado sem perder a sua posição. Novos idiomas: hindi e chinês simplificado.
+</pt-PT>
+<tr-TR>
+Birden fazla kare içeren açı analizlerini kaydedin; görüntüleri Geçmiş’ten açın veya paylaşın. Sıçramaları işaretlerken kareleri ve sonuçları değiştirmeden videoyu yakınlaştırın. Geçmiş, konumunuzu kaybetmeden yenilenir. Yeni diller: Hintçe ve Basitleştirilmiş Çince.
+</tr-TR>
+<pl-PL>
+Zapisuj analizy kątów z wielu klatek, a zdjęcia przeglądaj lub udostępniaj z historii. Powiększaj wideo podczas oznaczania skoków bez zmiany klatek ani wyniku. Historia odświeża się bez utraty pozycji. Nowe języki: hindi i chiński uproszczony.
+</pl-PL>
+<ja-JP>
+複数フレームの角度分析を保存し、履歴から画像を表示・共有できます。ジャンプの計測点をマークする際に動画を拡大しても、フレームや結果は変わりません。履歴は表示位置を保ったまま更新されます。ヒンディー語と簡体字中国語に対応しました。
+</ja-JP>
+<ko-KR>
+여러 프레임의 각도 분석을 저장하고 기록에서 이미지를 보거나 공유할 수 있습니다. 점프를 표시할 때 영상을 확대해도 프레임이나 결과는 바뀌지 않습니다. 기록은 보던 위치를 유지하며 새로고침됩니다. 새 언어: 힌디어 및 중국어 간체.
+</ko-KR>
+<hi-IN>
+कई फ़्रेम वाले कोण विश्लेषण सहेजें और इतिहास से उनकी तस्वीरें देखें या साझा करें। छलांग चिह्नित करते समय फ़्रेम या नतीजे बदले बिना वीडियो ज़ूम करें। इतिहास में आपकी जगह बदले बिना सूची अपडेट होती है। नई भाषाएँ: हिंदी और सरलीकृत चीनी।
+</hi-IN>
+<zh-CN>
+保存多帧角度分析，并在历史记录中查看或分享图片。标记跳跃时可以放大视频，不会改变帧或结果。历史记录刷新时会保留浏览位置。新增语言：印地语和简体中文。
+</zh-CN>

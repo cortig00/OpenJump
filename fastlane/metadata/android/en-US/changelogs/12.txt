@@ -1,0 +1,1 @@
+Save multi-frame angle analyses and view or share their images from History. Zoom into video while marking jumps without changing frames or results. History refreshes without losing your place. New languages: Hindi and Simplified Chinese.

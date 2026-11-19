@@ -7,6 +7,9 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import com.openjump.app.angles.AngleGeometry
+import com.openjump.app.angles.AngleMeasurement
+import com.openjump.app.angles.AnglePoint
 import com.openjump.app.data.FVP_REUSE_CONFIRMATION_VERSION
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -410,7 +413,7 @@ class ManualBackupCodecTest {
         assertEquals(document.tables.fvpAssessments, decoded.tables.fvpAssessments)
         assertEquals(document.tables.fvpConditions, decoded.tables.fvpConditions)
         assertEquals(document.tables.fvpAttempts, decoded.tables.fvpAttempts)
-        assertEquals(12, decoded.sourceRoomSchemaVersion)
+        assertEquals(14, decoded.sourceRoomSchemaVersion)
         assertEquals(MANUAL_BACKUP_ROOM_VERSION, decoded.sourceRoomSchemaVersion)
         assertEquals(1, ManualBackupSummary.from(decoded).fvpAssessmentCount)
         assertEquals(2, decoded.tables.fvpConditions.size)
@@ -660,7 +663,7 @@ class ManualBackupCodecTest {
     @Test fun room11DocumentWithFvpRowsAndWithoutProvenanceKeysStillDecodesAndRestores() {
         // Se parte de un documento 12 real, se le quitan las 20 claves y se declara 11: es lo que
         // podia escribir la app Room 11 (que no tenia columnas de procedencia).
-        val v12Json = String(ManualBackupCodec.encode(fvpSample()), Charsets.UTF_8)
+        val v12Json = String(ManualBackupCodec.encode(fvpSample().copy(sourceRoomSchemaVersion = 12)), Charsets.UTF_8)
         val json = legacyJsonWithoutProvenance(v12Json)
             .replace("\"sourceRoomSchemaVersion\":12", "\"sourceRoomSchemaVersion\":11")
         assertFalse("el JSON de Room 11 no lleva acquisitionContextKind", json.contains("\"acquisitionContextKind\""))
@@ -744,12 +747,15 @@ class ManualBackupCodecTest {
     }
 
     @Test fun rejectsUnsupportedFutureRoomSchemaVersions() {
-        listOf(13, 8, 0, -1).forEach { room ->
+        // 14 es la version actual (la barrera V2 vive en el DAO, no en el formato): solo se rechaza
+        // lo que no es ni actual ni un linaje legacy explicito.
+        listOf(15, 8, 0, -1).forEach { room ->
             val error = assertThrows(IllegalArgumentException::class.java) {
                 ManualBackupCodec.encode(sample().copy(sourceRoomSchemaVersion = room))
             }
             assertTrue("Room $room debe rechazarse: ${error.message}", error.message.orEmpty().contains("Room schema version"))
         }
+        assertEquals(14, ManualBackupCodec.decode(ManualBackupCodec.encode(sample().copy(sourceRoomSchemaVersion = 14))).sourceRoomSchemaVersion)
     }
 
     @Test fun rejectsInvalidFvpProvenanceValues() {
@@ -800,15 +806,19 @@ class ManualBackupCodecTest {
         ManualBackupCodec.encode(unknownProvenanceSample())
     }
 
-    @Test fun encodedRoom12DocumentsDeclareTheSchemaAndCarryTheProvenanceKeys() {
-        assertEquals(12, MANUAL_BACKUP_ROOM_VERSION)
+    @Test fun encodedRoom14DocumentsDeclareTheSchemaAndCarryTheProvenanceKeys() {
+        assertEquals(14, MANUAL_BACKUP_ROOM_VERSION)
         assertEquals(11, MANUAL_BACKUP_FVP_INTRODUCED_ROOM_VERSION)
+        assertEquals(12, MANUAL_BACKUP_PROVENANCE_INTRODUCED_ROOM_VERSION)
+        assertEquals(13, MANUAL_BACKUP_ANGLE_INTRODUCED_ROOM_VERSION)
+        // Las tablas V2 nacen en Room 14, pero el formato v1 no las modela: la barrera es del DAO.
+        assertEquals(14, MANUAL_BACKUP_V2_INTRODUCED_ROOM_VERSION)
         val json = String(ManualBackupCodec.encode(fvpSample()), Charsets.UTF_8)
-        assertTrue(json.contains("\"sourceRoomSchemaVersion\":12"))
+        assertTrue(json.contains("\"sourceRoomSchemaVersion\":14"))
         assertTrue(json.contains("\"acquisitionContextKind\":\"SAME_ACQUISITION\""))
         assertTrue(json.contains("\"addedLoadSource\":\"WEIGHED\""))
         assertTrue(json.contains("\"timeMappingEvidenceKey\":\"evidence-1\""))
-        // `encodeDefaults=true`: hasta lo desconocido se emite explicitamente en un documento 12.
+        // `encodeDefaults=true`: hasta lo desconocido se emite explicitamente en un documento 13.
         val unknown = unknownProvenanceSample()
         val unknownJson = String(ManualBackupCodec.encode(unknown), Charsets.UTF_8)
         assertTrue(unknownJson.contains("\"acquisitionContextKind\":\"UNKNOWN\""))
@@ -826,6 +836,357 @@ class ManualBackupCodecTest {
         assertEquals(null, decodedAttempt.timeMappingEvidenceKey)
         assertEquals(null, decodedAttempt.acquiredAt)
     }
+
+    // --- Angulos manuales (Room 13, vigentes en Room 14) -----------------------------------------
+
+    /**
+     * S3b: un documento solo-angulos viaja completo. Se preserva la geometria (dimensiones
+     * codificadas y de presentacion, rotacion, frame, PTS, revision, version de geometria), la
+     * identidad (id, sessionKey, atleta) y la presentacion de cada marca (nombre, color, visible,
+     * ordinal); y NO se emite identidad privada de la fuente (URI, identidad logica, hash).
+     */
+    @Test fun angleOnlyDocumentRoundTripsWithGeometryAndMarks() {
+        val document = angleSample()
+        val json = String(ManualBackupCodec.encode(document), Charsets.UTF_8)
+        assertTrue(json.contains("\"sourceRoomSchemaVersion\":14"))
+        assertTrue(json.contains("\"angleAnalyses\""))
+        assertTrue(json.contains("\"angleMarks\""))
+        assertFalse("la URI privada no viaja en el backup", json.contains("videoUri"))
+        assertFalse(json.contains("sourceIdentity"))
+        assertFalse(json.contains("sourceHash"))
+
+        val decoded = ManualBackupCodec.decode(json)
+        assertEquals(document.tables.angleAnalyses, decoded.tables.angleAnalyses)
+        assertEquals(document.tables.angleMarks, decoded.tables.angleMarks)
+        assertEquals(1, ManualBackupSummary.from(decoded).angleAnalysisCount)
+        assertEquals(1, decoded.tables.angleAnalyses.size)
+        assertEquals(2, decoded.tables.angleMarks.size)
+
+        // 1:1 hacia las entidades de Room: la geometria se conserva y la identidad privada es NULL.
+        val analysis = decoded.tables.angleAnalyses.single()
+        val analysisEntity = analysis.entity()
+        assertEquals(9_000L, analysisEntity.id)
+        assertEquals("angle-key", analysisEntity.sessionKey)
+        assertEquals(null, analysisEntity.athleteId)
+        assertEquals(2, analysisEntity.revision)
+        assertEquals(1920, analysisEntity.encodedWidth)
+        assertEquals(1080, analysisEntity.encodedHeight)
+        assertEquals(1080, analysisEntity.presentationWidth)
+        assertEquals(1920, analysisEntity.presentationHeight)
+        assertEquals(90, analysisEntity.rotationDegrees)
+        assertEquals(42, analysisEntity.frameIndex)
+        assertEquals(1_400_000L, analysisEntity.sourcePtsUs)
+        assertEquals(1, analysisEntity.geometryVersion)
+        assertEquals(null, analysisEntity.videoUri)
+        assertEquals(null, analysisEntity.sourceIdentity)
+        assertEquals(null, analysisEntity.sourceHash)
+
+        val mark = decoded.tables.angleMarks.single { it.id == 9_101L }
+        assertEquals(9_000L, mark.analysisId)
+        assertEquals(1, mark.ordinal)
+        assertEquals("Rodilla", mark.name)
+        assertEquals(0x803366CC.toInt(), mark.colorArgb)
+        assertEquals(false, mark.visible)
+        val markEntity = mark.entity()
+        assertEquals(1, markEntity.ordinal)
+        assertEquals("Rodilla", markEntity.name)
+        assertEquals(0x803366CC.toInt(), markEntity.colorArgb)
+        assertEquals(false, markEntity.visible)
+        assertEquals(100.5, markEntity.pointAX, 0.0)
+        assertEquals(200.25, markEntity.pointAY, 0.0)
+        assertEquals(300.0, markEntity.pointBX, 0.0)
+        assertEquals(100.0, markEntity.pointBY, 0.0)
+        assertEquals(250.0, markEntity.pointCX, 0.0)
+        assertEquals(300.0, markEntity.pointCY, 0.0)
+    }
+
+    /**
+     * La subida a Room 14 no puede romper el linaje historico: un documento 12 con las columnas de
+     * procedencia F-V-P (B0) sigue decodificando y reescribiendose como 12.
+     */
+    @Test fun room12DocumentWithFvpProvenanceStillDecodesAfterTheRoom14Bump() {
+        val json = String(ManualBackupCodec.encode(fvpSample()), Charsets.UTF_8)
+            .replace("\"sourceRoomSchemaVersion\":14", "\"sourceRoomSchemaVersion\":12")
+        val decoded = ManualBackupCodec.decode(json)
+        assertEquals(12, decoded.sourceRoomSchemaVersion)
+        assertEquals("SAME_ACQUISITION", decoded.tables.fvpAssessments.single().acquisitionContextKind)
+        assertEquals("IDENTITY_VERIFIED", decoded.tables.fvpAttempts.single { it.id == 7_200L }.timeMapping)
+        assertTrue(decoded.tables.angleAnalyses.isEmpty() && decoded.tables.angleMarks.isEmpty())
+        val rewritten = ManualBackupCodec.decode(ManualBackupCodec.encode(decoded))
+        assertEquals(12, rewritten.sourceRoomSchemaVersion)
+        assertEquals(decoded.tables.fvpAttempts, rewritten.tables.fvpAttempts)
+    }
+
+    @Test fun legacyRoom9To12DocumentsWithoutAngleRowsStillDecode() {
+        listOf(9, 10, 11, 12).forEach { room ->
+            val legacy = sample().copy(sourceRoomSchemaVersion = room)
+            val json = String(ManualBackupCodec.encode(legacy), Charsets.UTF_8)
+            // Sin filas de angulos el payload conserva la forma previa (claves vacias, nada que
+            // validar): la nueva puerta de geometria no cambia los documentos legacy.
+            assertTrue(json.contains("\"angleAnalyses\":[]") && json.contains("\"angleMarks\":[]"))
+            val decoded = ManualBackupCodec.decode(json)
+            assertEquals(room, decoded.sourceRoomSchemaVersion)
+            assertTrue(decoded.tables.angleAnalyses.isEmpty() && decoded.tables.angleMarks.isEmpty())
+            assertEquals(ManualBackupSummary.from(legacy), ManualBackupSummary.from(decoded))
+        }
+    }
+
+    /**
+     * Compatibilidad de linaje al subir el esquema a Room 14: un JSON escrito por la app Room 13
+     * (angulos legacy ya presentes, sin claves V2) sigue decodificando, conserva su declaracion 13
+     * al reescribirse y no pierde filas. La barrera V2 de [ManualBackupDao] es de base de datos, no
+     * de formato, asi que aqui el documento 13 atraviesa encode/decode sin rechazo.
+     */
+    @Test fun legacyRoom13JsonStillDecodesAndRewritesAsRoom13() {
+        // Con filas de angulos legacy (lo que ya escribia Room 13).
+        val room13AnglesJson = String(ManualBackupCodec.encode(angleSample()), Charsets.UTF_8)
+            .replace("\"sourceRoomSchemaVersion\":14", "\"sourceRoomSchemaVersion\":13")
+        val angleDocument = ManualBackupCodec.decode(room13AnglesJson)
+        assertEquals(13, angleDocument.sourceRoomSchemaVersion)
+        assertEquals(angleSample().tables.angleAnalyses, angleDocument.tables.angleAnalyses)
+        assertEquals(angleSample().tables.angleMarks, angleDocument.tables.angleMarks)
+        val rewrittenAngles = ManualBackupCodec.decode(ManualBackupCodec.encode(angleDocument))
+        assertEquals(13, rewrittenAngles.sourceRoomSchemaVersion)
+        assertEquals(angleDocument.tables, rewrittenAngles.tables)
+        assertTrue(String(ManualBackupCodec.encode(angleDocument), Charsets.UTF_8).contains("\"sourceRoomSchemaVersion\":13"))
+
+        // Un 13 con filas F-V-P y su procedencia (nacida en 12) tambien es un documento legitimo.
+        val room13FvpJson = String(ManualBackupCodec.encode(fvpSample()), Charsets.UTF_8)
+            .replace("\"sourceRoomSchemaVersion\":14", "\"sourceRoomSchemaVersion\":13")
+        val fvpDocument = ManualBackupCodec.decode(room13FvpJson)
+        assertEquals(13, fvpDocument.sourceRoomSchemaVersion)
+        assertEquals(fvpSample().tables.fvpAssessments, fvpDocument.tables.fvpAssessments)
+        assertEquals(fvpSample().tables.fvpAttempts, fvpDocument.tables.fvpAttempts)
+        assertEquals(13, ManualBackupCodec.decode(ManualBackupCodec.encode(fvpDocument)).sourceRoomSchemaVersion)
+    }
+
+    /**
+     * El formato v1 no puede transportar el agregado V2 (ni media) aunque se declare Room 14: no hay
+     * claves para esas tablas y el codec es estricto. Esa es la mitad "de formato" del fail-closed;
+     * la otra mitad (base con filas V2) la cubre [ManualBackupDao].
+     */
+    @Test fun v1JsonCannotCarryAngleV2RowsNorMediaInAnyDeclaredSchema() {
+        val currentJson = String(ManualBackupCodec.encode(angleSample()), Charsets.UTF_8)
+        assertFalse("el formato v1 no tiene clave para las tablas V2", currentJson.contains("angleAnalysisV2"))
+        assertFalse(currentJson.contains("angle_analysis_v2"))
+        val elementNames = (0 until ManualBackupTables.serializer().descriptor.elementsCount)
+            .map { ManualBackupTables.serializer().descriptor.getElementName(it) }
+        assertTrue(elementNames.containsAll(listOf("angleAnalyses", "angleMarks")))
+        assertTrue("el formato v1 no declara ninguna tabla V2", elementNames.none { it.startsWith("angleAnalysisV2") })
+
+        listOf(13, 14).forEach { room ->
+            val declared = currentJson.replace("\"sourceRoomSchemaVersion\":14", "\"sourceRoomSchemaVersion\":$room")
+            // Una raiz V2 colada en el objeto `tables` se rechaza en el decode (clave desconocida).
+            val withV2Root = declared.replaceFirst(
+                "\"tables\":{",
+                "\"tables\":{\"angleAnalysisV2Roots\":[{\"id\":1,\"analysisFormat\":\"ANGLE_MULTI_FRAME_V1\"," +
+                    "\"sessionKey\":\"v2\",\"athleteId\":null,\"createdAt\":1,\"updatedAt\":1,\"revision\":0}],",
+            )
+            val v2Error = assertThrows(IllegalArgumentException::class.java) { ManualBackupCodec.decode(withV2Root) }
+            assertTrue("Room $room con V2 debe rechazarse: ${v2Error.message}", v2Error.message.orEmpty().isNotBlank())
+            // Y media/ficheros tampoco: ni la bandera ni una tabla de medios tienen cabida.
+            assertThrows(IllegalArgumentException::class.java) {
+                ManualBackupCodec.decode(declared.replaceFirst("\"mediaIncluded\":false", "\"mediaIncluded\":true"))
+            }
+            assertThrows(IllegalArgumentException::class.java) {
+                ManualBackupCodec.decode(declared.replaceFirst("\"tables\":{", "\"tables\":{\"mediaFiles\":[{\"imageKey\":\"media-1\"}],"))
+            }
+        }
+    }
+
+    /**
+     * Diagnostico del rechazo transitorio: el tipo es propio (estado de la base, no de formato) y
+     * su cargamento nombra las tres tablas, para que un informe de soporte no dependa del texto.
+     */
+    @Test fun blockedBarrierExceptionReportsPerTableCounts() {
+        val blocked = ManualBackupV2BlockedException(AngleAnalysisV2RowCounts(roots = 2, frames = 0, marks = 3))
+        // Es un estado de la base (IllegalStateException), no un error de formato/validacion: quien
+        // capture IllegalArgumentException para el decode no debe confundirlos.
+        assertTrue(IllegalStateException::class.java.isAssignableFrom(blocked::class.java))
+        assertFalse(IllegalArgumentException::class.java.isAssignableFrom(blocked::class.java))
+        assertEquals(5, blocked.rows.total)
+        assertFalse(blocked.rows.isEmpty)
+        val message = blocked.message.orEmpty()
+        assertTrue(message, message.contains("temporarily blocked"))
+        assertTrue(message, message.contains("angle_analysis_v2_roots=2"))
+        assertTrue(message, message.contains("angle_analysis_v2_frames=0"))
+        assertTrue(message, message.contains("angle_analysis_v2_marks=3"))
+        assertTrue(message, message.contains("no row was replaced"))
+        assertTrue(AngleAnalysisV2RowCounts(0, 0, 0).isEmpty)
+    }
+
+    /**
+     * La validacion del backup es otra frontera de integridad: coherencia schema->forma, IDs/FK,
+     * ordinales unicos, geometria finita y dentro del frame post-rotacion, angulo medible, rotacion
+     * admitida, raices con hijos y frame/versiones razonables. Nada de esto se acepta en silencio.
+     */
+    @Test fun rejectsMalformedAnglePayloads() {
+        val base = angleSample()
+        val analysis = base.tables.angleAnalyses.single()
+        val hip = base.tables.angleMarks.single { it.id == 9_100L }
+        val knee = base.tables.angleMarks.single { it.id == 9_101L }
+        // Frame de un solo pixel (rotacion 0 no intercambia ejes): solo (0,0) es un pixel real.
+        val unitAnalysis = analysis.copy(
+            encodedWidth = 1, encodedHeight = 1, presentationWidth = 1, presentationHeight = 1,
+            rotationDegrees = 0,
+        )
+        fun withRows(
+            analyses: List<BackupAngleAnalysis> = base.tables.angleAnalyses,
+            marks: List<BackupAngleMark> = base.tables.angleMarks,
+        ) = base.copy(tables = base.tables.copy(angleAnalyses = analyses, angleMarks = marks))
+
+        val cases = listOf(
+            withRows(marks = emptyList()) to "has no marks",
+            withRows(marks = base.tables.angleMarks + hip.copy(id = 9_999L, analysisId = 7_777L)) to "unknown analysis",
+            withRows(marks = base.tables.angleMarks + knee.copy(id = 9_998L)) to "ordinal",
+            withRows(marks = base.tables.angleMarks + knee.copy(id = 9_100L, ordinal = 2)) to "angle mark id",
+            withRows(analyses = listOf(analysis, analysis.copy(id = 9_001L))) to "sessionKey",
+            withRows(analyses = listOf(analysis.copy(id = 0L))) to "angle analysis id",
+            withRows(analyses = listOf(analysis, analysis.copy(sessionKey = "other"))) to "Duplicate angle analysis id",
+            withRows(marks = listOf(hip.copy(name = "  ")) + knee) to "name",
+            withRows(marks = listOf(hip.copy(ordinal = -1)) + knee) to "ordinal",
+            withRows(marks = listOf(hip.copy(pointAX = Double.NaN)) + knee) to "finite",
+            withRows(marks = listOf(hip.copy(pointCY = Double.POSITIVE_INFINITY)) + knee) to "finite",
+            withRows(marks = listOf(hip.copy(pointAX = 1080.5)) + knee) to "presentation frame",
+            withRows(marks = listOf(hip.copy(pointBY = -0.1)) + knee) to "presentation frame",
+            // El ultimo pixel es width-1/height-1: la dimension en si no es una coordenada valida.
+            withRows(marks = listOf(hip.copy(pointAX = 1080.0)) + knee) to "presentation frame",
+            withRows(marks = listOf(hip.copy(pointAY = 1920.0)) + knee) to "presentation frame",
+            // Geometria degenerada: sin lado no hay angulo, y persistirla guardaria un falso 0.
+            withRows(marks = listOf(hip.copy(pointAX = hip.pointBX, pointAY = hip.pointBY)) + knee) to "no measurable angle",
+            withRows(marks = listOf(hip.copy(pointCX = hip.pointBX, pointCY = hip.pointBY)) + knee) to "COINCIDENT_VERTEX",
+            // -0.0 pasa los limites pero el vector nulo lo detecta AngleGeometry (Double.equals
+            // distingue -0.0 de 0.0, asi que la coincidencia no la ve el data class).
+            withRows(marks = listOf(hip.copy(pointAX = -0.0, pointAY = -0.0, pointBX = 0.0, pointBY = 0.0)) + knee) to "no measurable angle",
+            // Dimensiones unitarias: el limite superior es 0 (sin negativos) y todo punto es el
+            // vertice, asi que el unico pixel posible es a su vez geometria degenerada.
+            withRows(analyses = listOf(unitAnalysis), marks = listOf(hip.copy(pointAX = 1.0))) to "presentation frame",
+            withRows(
+                analyses = listOf(unitAnalysis),
+                marks = listOf(hip.copy(pointAX = 0.0, pointAY = 0.0, pointBX = 0.0, pointBY = 0.0, pointCX = 0.0, pointCY = 0.0)),
+            ) to "no measurable angle",
+            withRows(analyses = listOf(analysis.copy(rotationDegrees = 45))) to "rotationDegrees",
+            withRows(analyses = listOf(analysis.copy(rotationDegrees = 0))) to "cannot swap",
+            withRows(analyses = listOf(analysis.copy(rotationDegrees = 90, presentationWidth = 1920, presentationHeight = 1080))) to "must swap",
+            withRows(analyses = listOf(analysis.copy(frameIndex = -1))) to "frameIndex",
+            withRows(analyses = listOf(analysis.copy(sourcePtsUs = -1L))) to "sourcePtsUs",
+            withRows(analyses = listOf(analysis.copy(geometryVersion = 0))) to "geometryVersion",
+            withRows(analyses = listOf(analysis.copy(revision = -1))) to "revision",
+            withRows(analyses = listOf(analysis.copy(encodedWidth = 0))) to "encoded dimensions",
+            withRows(analyses = listOf(analysis.copy(presentationHeight = 0))) to "presentation dimensions",
+            withRows(analyses = listOf(analysis.copy(createdAt = -1L))) to "createdAt",
+        )
+        cases.forEachIndexed { index, (document, token) ->
+            val error = assertThrows("caso $index debe rechazarse", IllegalArgumentException::class.java) {
+                ManualBackupCodec.encode(document)
+            }
+            assertTrue("caso $index: se esperaba '$token', fue: ${error.message}", error.message.orEmpty().contains(token))
+        }
+
+        // Coherencia schema->forma: las tablas de angulos nacen en Room 13 y un 12 no puede traerlas.
+        val room12WithAngles = assertThrows(IllegalArgumentException::class.java) {
+            ManualBackupCodec.encode(base.copy(sourceRoomSchemaVersion = 12))
+        }
+        assertTrue(
+            "un 12 con filas de angulos debe rechazarse: ${room12WithAngles.message}",
+            room12WithAngles.message.orEmpty().contains("cannot contain angle rows"),
+        )
+        // Y un 13 solo-angulos (sin atletas) sigue siendo un backup restaurable, no vacio.
+        ManualBackupCodec.encode(base)
+    }
+
+    /**
+     * Solo se rechaza lo que no mide: A == C con B distinto es 0 grados legitimo, la colinealidad
+     * con B entre A y C mide 180 y el ultimo pixel del frame (`width-1`, `height-1`) es coordenada
+     * valida. Las tres marcas atraviesan encode/decode sin cambios.
+     */
+    @Test fun angleMarksAcceptCollinearZeroOneEightyAndTheLastPixel() {
+        val base = angleSample()
+        val zero = BackupAngleMark(9_102L, 9_000L, 2, "Tobillo 0", 0xFF112233.toInt(), true, 10.0, 10.0, 20.0, 20.0, 10.0, 10.0)
+        val oneEighty = BackupAngleMark(9_103L, 9_000L, 3, "Tobillo 180", 0xFF223344.toInt(), true, 10.0, 10.0, 20.0, 10.0, 30.0, 10.0)
+        // Esquina inferior-derecha como vertice: A y C usan los otros bordes del frame.
+        val lastPixel = BackupAngleMark(9_104L, 9_000L, 4, "Esquina", 0xFF334455.toInt(), false, 0.0, 1919.0, 1079.0, 1919.0, 1079.0, 0.0)
+        val document = base.copy(
+            tables = base.tables.copy(angleMarks = base.tables.angleMarks + listOf(zero, oneEighty, lastPixel)),
+        )
+
+        // La validez no viaja en el formato: se recalcula desde las marcas con AngleGeometry.
+        fun degreesOf(mark: BackupAngleMark): Double = when (
+            val measured = AngleGeometry.measure(
+                AnglePoint(mark.pointAX, mark.pointAY),
+                AnglePoint(mark.pointBX, mark.pointBY),
+                AnglePoint(mark.pointCX, mark.pointCY),
+            )
+        ) {
+            is AngleMeasurement.Measured -> measured.degrees
+            is AngleMeasurement.Invalid -> throw AssertionError("la marca ${mark.id} deberia medir: ${measured.reason}")
+        }
+        assertEquals(0.0, degreesOf(zero), 1e-9)
+        assertEquals(180.0, degreesOf(oneEighty), 1e-9)
+        assertEquals(90.0, degreesOf(lastPixel), 1e-9)
+
+        val decoded = ManualBackupCodec.decode(ManualBackupCodec.encode(document))
+        assertEquals(5, decoded.tables.angleMarks.size)
+        assertEquals(zero, decoded.tables.angleMarks.single { it.id == 9_102L })
+        assertEquals(oneEighty, decoded.tables.angleMarks.single { it.id == 9_103L })
+        assertEquals(lastPixel, decoded.tables.angleMarks.single { it.id == 9_104L })
+    }
+
+    @Test fun angleListsAreSortedDeterministicallyInThePayload() {
+        val base = angleSample()
+        val shuffled = base.copy(
+            tables = base.tables.copy(angleMarks = base.tables.angleMarks.reversed()),
+        )
+        val sorted = base.copy(
+            tables = base.tables.copy(angleMarks = base.tables.angleMarks.sortedBy { it.ordinal }),
+        )
+        assertEquals(
+            String(ManualBackupCodec.encode(sorted), Charsets.UTF_8),
+            String(ManualBackupCodec.encode(shuffled), Charsets.UTF_8),
+        )
+        val json = String(ManualBackupCodec.encode(shuffled), Charsets.UTF_8)
+        assertTrue(json.indexOf("\"ordinal\":0") < json.indexOf("\"ordinal\":1"))
+    }
+
+    /** Documento solo-angulos (sin atletas): las tablas de angulos bastan como dato restaurable. */
+    private fun angleSample() = ManualBackupDocument(
+        contract = MANUAL_BACKUP_CONTRACT,
+        formatVersion = MANUAL_BACKUP_FORMAT_VERSION,
+        sourceRoomSchemaVersion = MANUAL_BACKUP_ROOM_VERSION,
+        createdAtEpochMillis = 1_700_000_100_000L,
+        mediaIncluded = false,
+        preferencesIncluded = false,
+        tables = emptyTables().copy(
+            angleAnalyses = listOf(
+                BackupAngleAnalysis(
+                    id = 9_000L,
+                    sessionKey = "angle-key",
+                    athleteId = null,
+                    createdAt = 1_700_000_000_000L,
+                    updatedAt = 1_700_000_050_000L,
+                    revision = 2,
+                    encodedWidth = 1920,
+                    encodedHeight = 1080,
+                    presentationWidth = 1080,
+                    presentationHeight = 1920,
+                    rotationDegrees = 90,
+                    frameIndex = 42,
+                    sourcePtsUs = 1_400_000L,
+                    geometryVersion = 1,
+                ),
+            ),
+            angleMarks = listOf(
+                BackupAngleMark(
+                    9_100L, 9_000L, 0, "Cadera", 0xFF3366CC.toInt(), true,
+                    10.0, 20.0, 30.0, 40.0, 50.0, 60.0,
+                ),
+                BackupAngleMark(
+                    9_101L, 9_000L, 1, "Rodilla", 0x803366CC.toInt(), false,
+                    100.5, 200.25, 300.0, 100.0, 250.0, 300.0,
+                ),
+            ),
+        ),
+    )
 
     private fun fvpSample(): ManualBackupDocument {
         val base = sample()

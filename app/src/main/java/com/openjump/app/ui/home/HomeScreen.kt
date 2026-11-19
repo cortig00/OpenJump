@@ -64,6 +64,7 @@ fun HomeScreen(
     recordFeedback: List<PersonalRecord> = emptyList(),
     onRecordFeedbackConsumed: () -> Unit = {},
     onJumpsSelected: () -> Unit,
+    onAnglesSelected: () -> Unit = {},
     onEncoderSelected: () -> Unit,
     onHistorySelected: () -> Unit,
     onMeasurementSelected: (Long) -> Unit,
@@ -156,6 +157,11 @@ fun HomeScreen(
                             modifier = Modifier.padding(start = 72.dp),
                             color = MaterialTheme.colorScheme.outlineVariant,
                         )
+                        AnglesEntry(onAnglesSelected)
+                        HorizontalDivider(
+                            modifier = Modifier.padding(start = 72.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant,
+                        )
                         EncoderEntry(onEncoderSelected)
                         if (fvpProfileEnabled) {
                             HorizontalDivider(
@@ -200,6 +206,10 @@ fun HomeScreen(
                                     when (item) {
                                         is MeasurementHistoryItem.Jump -> onMeasurementSelected(item.id)
                                         is MeasurementHistoryItem.Encoder -> onEncoderSessionSelected(item.id)
+                                        // La actividad reciente de Home sólo mezcla saltos y encoder
+                                        // (`mergeMeasurementHistory` sin ángulos): esta rama existe
+                                        // sólo para que el `when` sea exhaustivo.
+                                        is MeasurementHistoryItem.Angle -> Unit
                                     }
                                 },
                                 showDivider = index < recentActivity.lastIndex,
@@ -219,6 +229,18 @@ private fun JumpEntry(onClick: () -> Unit) = AnalysisEntryRow(
     title = stringResource(R.string.home_jumps_title),
     description = stringResource(R.string.home_jumps_description),
     icon = R.drawable.ic_jumps,
+    onClick = onClick,
+)
+
+/**
+ * Entrada explícita al editor manual de ángulos: el llamante abre el selector de vídeo existente y
+ * navega al editor ya construido. La fila no crea sesiones, borradores ni vídeos por su cuenta.
+ */
+@Composable
+private fun AnglesEntry(onClick: () -> Unit) = AnalysisEntryRow(
+    title = stringResource(R.string.home_angles_title),
+    description = stringResource(R.string.home_angles_description),
+    icon = R.drawable.ic_videocam,
     onClick = onClick,
 )
 

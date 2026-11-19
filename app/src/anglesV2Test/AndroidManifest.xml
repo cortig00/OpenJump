@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Overlay de la variante anglesV2Test: solo cambia la etiqueta visible del lanzador para que el
+  usuario distinga el APK de prueba del OpenJump normal. El resto del manifiesto (application,
+  permisos, provider y sus roots) sigue viniendo de src/main/AndroidManifest.xml sin cambios.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <application
+        android:label="OpenJump V2 (prueba)"
+        tools:replace="android:label" />
+</manifest>

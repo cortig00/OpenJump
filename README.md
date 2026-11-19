@@ -42,21 +42,17 @@ Localized store graphics are kept under
 
 ## Install
 
-The official Android package is **`com.openjump.app`**. Google Play is the current
-official user distribution channel. The F-Droid recipe is in the official
-`fdroiddata` repository; stable releases are detected from annotated tags.
+The official Android package is **`com.openjump.app`**. Install OpenJump from
+[Google Play](https://play.google.com/store/apps/details?id=com.openjump.app) or
+[F-Droid](https://f-droid.org/packages/com.openjump.app/). The two channels use
+different app signing certificates; switching channels is not an in-place update.
 
-[OpenJump on Google Play](https://play.google.com/store/apps/details?id=com.openjump.app)
-
-This repository contains the source for **OpenJump 1.2.2 (`versionCode 10`)**. It
-does not contain signed APKs, bundles or signing credentials. You can build a
-debug APK locally using the steps below.
-
-Current status (2026-10-25): production on Play is 1.2.1 / code 8; 1.2.2 / code 10
-is a user-reported manual submission (see [publication record](docs/RELEASE_1.2.2_PUBLICATION.md)),
-not verified review/publication. F-Droid still lists 1.0 / code 7; official 1.2.2
-publication is pending. Store release notes cover eight locales (en-US, es-ES,
-de-DE, fr-FR, it-IT, pt-BR, pt-PT, tr-TR).
+This source snapshot prepares **OpenJump 1.3 (`versionCode 12`)**. It does not
+contain signed APKs, bundles or signing credentials. As checked on 2026-11-19,
+F-Droid lists 1.2.2 / code 10; 1.3 is not published there. A commit on a branch
+does not trigger an F-Droid update: the official updater watches stable tags.
+See the [F-Droid handoff](docs/FDROID_1.3_HANDOFF.md) and
+[1.3 changelog](CHANGELOG.md#13-versioncode-12--prepared-source).
 
 ## Build from source
 

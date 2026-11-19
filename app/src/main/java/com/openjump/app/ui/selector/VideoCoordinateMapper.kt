@@ -8,6 +8,15 @@ import kotlin.math.min
 const val MIN_CROP_ZOOM = 1.0
 const val MAX_CROP_ZOOM = 4.0
 
+/**
+ * Desbordamiento por redondeo que no cuenta como recorte real (px).
+ *
+ * `width * (viewport.width / width)` puede quedar 1e-13 px por encima del viewport; tratarlo como
+ * recorte haría que la alineación (o el pan) desplazara una imagen FIT que en la práctica no
+ * desborda. El umbral es inobservable en pantalla y muy inferior a cualquier recorte intencionado.
+ */
+private const val FIT_ROUNDING_OVERFLOW_EPSILON = 1e-6
+
 data class ViewportSize(val width: Double, val height: Double) {
     init {
         require(width > 0.0 && height > 0.0 && width.isFinite() && height.isFinite())
@@ -91,16 +100,35 @@ fun VideoCoordinateMapper.isPlateCircleVisible(
     }
 }
 
+/**
+ * Mapper puro del visor de vídeo.
+ *
+ * Comportamiento por defecto (sin opt-in) **exactamente** el de siempre: con [VideoScaleMode.FIT]
+ * la imagen completa se centra e ignora `zoom`/`cropAlignment`; con [VideoScaleMode.CROP] se amplía
+ * al máximo y el recorte sigue `zoom`/`cropAlignment`.
+ *
+ * @param allowFitZoom opt-in explícito para que `zoom` (y el pan por `cropAlignment`) actúen también
+ *   sobre [VideoScaleMode.FIT]. En ese modo el zoom es **relativo al tamaño completo**: 1x es la
+ *   imagen entera como hoy y no hay ampliación implícita tipo CROP, de modo que subir el zoom no
+ *   cambia de modo ni provoca un salto. El eje que no desborda queda centrado y el que desborda se
+ *   puede desplazar con recorte acotado. Ningún consumidor existente cambia: el valor por defecto
+ *   es `false`.
+ */
 class VideoCoordinateMapper(
     val video: VideoPresentationGeometry,
     val viewport: ViewportSize,
     val scaleMode: VideoScaleMode = VideoScaleMode.FIT,
     val cropAlignment: CropAlignment = CropAlignment.Centered,
     val zoom: Double = MIN_CROP_ZOOM,
+    val allowFitZoom: Boolean = false,
 ) {
     init {
         require(zoom.isFinite() && zoom in MIN_CROP_ZOOM..MAX_CROP_ZOOM)
     }
+
+    /** Zoom que se aplica de verdad: con FIT solo cuenta si el llamador hizo opt-in. */
+    private val appliedZoom: Double =
+        if (scaleMode == VideoScaleMode.CROP || allowFitZoom) zoom else MIN_CROP_ZOOM
 
     private val widthScale = viewport.width / video.width
     private val heightScale = viewport.height / video.height
@@ -108,7 +136,7 @@ class VideoCoordinateMapper(
         VideoScaleMode.FIT -> min(widthScale, heightScale)
         VideoScaleMode.CROP -> max(widthScale, heightScale)
     }
-    private val contentScale = baselineScale * if (scaleMode == VideoScaleMode.CROP) zoom else 1.0
+    private val contentScale = baselineScale * appliedZoom
     private val contentWidth = video.width * contentScale
     private val contentHeight = video.height * contentScale
 
@@ -116,34 +144,45 @@ class VideoCoordinateMapper(
     val cropOverflowY: Double = (contentHeight - viewport.height).coerceAtLeast(0.0)
 
     val contentRect: ContentRect = ContentRect(
-        left = when (scaleMode) {
-            VideoScaleMode.FIT -> (viewport.width - contentWidth) / 2.0
-            VideoScaleMode.CROP -> -cropOverflowX * cropAlignment.x
-        },
-        top = when (scaleMode) {
-            VideoScaleMode.FIT -> (viewport.height - contentHeight) / 2.0
-            VideoScaleMode.CROP -> -cropOverflowY * cropAlignment.y
-        },
+        left = axisOrigin(viewport.width, contentWidth, cropOverflowX, cropAlignment.x),
+        top = axisOrigin(viewport.height, contentHeight, cropOverflowY, cropAlignment.y),
         width = contentWidth,
         height = contentHeight,
     )
 
     /** Scale applied to exo_content_frame on top of Media3's baseline resize. */
-    val nativeScale: Double = if (scaleMode == VideoScaleMode.CROP) zoom else 1.0
+    val nativeScale: Double = appliedZoom
 
-    /** Translation from Media3's centered ZOOM position to this crop viewport. */
+    /**
+     * Translation from Media3's centered position to this viewport.
+     *
+     * Se deriva del mismo rectángulo de contenido que usan puntos y píxeles: sin zoom aplicado la
+     * imagen queda centrada y la traslación es exactamente 0, así que FIT por defecto no cambia.
+     */
     val contentTranslation: ImagePoint = ImagePoint(
-        x = if (scaleMode == VideoScaleMode.CROP) {
-            contentRect.left - (viewport.width - contentWidth) / 2.0
-        } else {
-            0.0
-        },
-        y = if (scaleMode == VideoScaleMode.CROP) {
-            contentRect.top - (viewport.height - contentHeight) / 2.0
-        } else {
-            0.0
-        },
+        x = contentRect.left - (viewport.width - contentWidth) / 2.0,
+        y = contentRect.top - (viewport.height - contentHeight) / 2.0,
     )
+
+    /**
+     * Origen de un eje del contenido.
+     *
+     * CROP conserva el recorte por alineación. FIT **sin opt-in** centra siempre: es el
+     * comportamiento exacto anterior, y además un desbordamiento de redondeo de ~1e-13 px no puede
+     * hacer que la alineación personalizada desplace una imagen que debe ignorar el zoom. FIT con
+     * opt-in centra el eje que no desborda y solo permite desplazarlo cuando hay recorte real.
+     */
+    private fun axisOrigin(
+        viewportExtent: Double,
+        contentExtent: Double,
+        overflow: Double,
+        alignment: Double,
+    ): Double = when {
+        scaleMode == VideoScaleMode.CROP -> -overflow * alignment
+        !allowFitZoom -> (viewportExtent - contentExtent) / 2.0
+        overflow > FIT_ROUNDING_OVERFLOW_EPSILON -> -overflow * alignment
+        else -> (viewportExtent - contentExtent) / 2.0
+    }
 
     /** Moves the cropped content with the finger and clamps it so no empty area is exposed. */
     fun alignmentAfterPan(deltaX: Double, deltaY: Double): CropAlignment = CropAlignment(
@@ -169,7 +208,7 @@ class VideoCoordinateMapper(
         panDeltaX: Double = 0.0,
         panDeltaY: Double = 0.0,
     ): CropViewportState {
-        if (scaleMode != VideoScaleMode.CROP || !zoomChange.isFinite() ||
+        if (!supportsZoom || !zoomChange.isFinite() ||
             !panDeltaX.isFinite() || !panDeltaY.isFinite()
         ) return CropViewportState(zoom, cropAlignment)
 
@@ -180,18 +219,23 @@ class VideoCoordinateMapper(
             viewPoint = centroid,
             nextZoom = nextZoom,
         )
+        // El nuevo estado se recrea con el MISMO modo y opt-in: un gesto nunca cambia FIT por CROP.
         val nextMapper = VideoCoordinateMapper(
             video = video,
             viewport = viewport,
-            scaleMode = VideoScaleMode.CROP,
+            scaleMode = scaleMode,
             cropAlignment = anchoredAlignment,
             zoom = nextZoom,
+            allowFitZoom = allowFitZoom,
         )
         return CropViewportState(
             zoom = nextZoom,
             alignment = nextMapper.alignmentAfterPan(panDeltaX, panDeltaY),
         )
     }
+
+    /** `true` si este mapper puede cambiar de zoom (CROP siempre; FIT solo con opt-in). */
+    val supportsZoom: Boolean get() = scaleMode == VideoScaleMode.CROP || allowFitZoom
 
     private fun alignmentForSourceAt(
         source: ImagePoint,

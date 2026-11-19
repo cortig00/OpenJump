@@ -119,4 +119,74 @@ class AppLanguageTest {
             AppLanguage.SPANISH_LATIN_AMERICA.titleResource(),
         )
     }
+
+    @Test
+    fun `hindi and simplified chinese are offered with canonical tags and distinct labels`() {
+        assertEquals("hi", AppLanguage.HINDI.languageTag)
+        assertEquals("zh-Hans", AppLanguage.CHINESE_SIMPLIFIED.languageTag)
+        val entries = AppLanguage.entries
+        org.junit.Assert.assertTrue(entries.contains(AppLanguage.HINDI))
+        org.junit.Assert.assertTrue(entries.contains(AppLanguage.CHINESE_SIMPLIFIED))
+        assertEquals("15 opciones: SYSTEM + 12 idiomas previos + 2 nuevos", 15, entries.size)
+        val labels = entries.map { it.titleResource() }
+        labels.forEach { org.junit.Assert.assertNotEquals(0, it) }
+        assertEquals("cada opción necesita una etiqueta propia", labels.size, labels.distinct().size)
+        org.junit.Assert.assertNotEquals(AppLanguage.HINDI.titleResource(), AppLanguage.CHINESE_SIMPLIFIED.titleResource())
+    }
+
+    @Test
+    fun `hindi claims only whole language tags across regions case and separators`() {
+        listOf("hi", "hi-IN", "hi_Deva_IN", "HI-in", " hi-IN ", "hi-Deva", "hi-Deva-IN", "hi-IN-u-nu-latn").forEach {
+            assertEquals("'$it' debe resolverse a hindi", AppLanguage.HINDI, AppLanguage.fromLanguageTag(it))
+        }
+        // Coincidencia de idioma completa: nada de prefijos (`high`, `hindi`) ni códigos de tres letras.
+        listOf("high", "hindi", "himalaya", "hin", "hif").forEach {
+            assertEquals("'$it' no debe reclamarse como hindi", AppLanguage.SYSTEM, AppLanguage.fromLanguageTag(it))
+        }
+    }
+
+    @Test
+    fun `simplified chinese follows script and region and never claims traditional`() {
+        listOf("zh", "zh-Hans", "zh-Hans-CN", "zh-Hans-SG", "zh-Hans-TW", "ZH-hans-cn", "zh_CN", "zh-CN", "zh-SG")
+            .forEach {
+                assertEquals(
+                    "'$it' debe resolverse a chino simplificado",
+                    AppLanguage.CHINESE_SIMPLIFIED,
+                    AppLanguage.fromLanguageTag(it),
+                )
+            }
+        // Hant explícito, Taiwán/Hong Kong/Macao sin script y `hans` solo como texto de extensión
+        // no se sirven con el catálogo simplificado.
+        listOf(
+            "zh-Hant",
+            "zh-Hant-CN",
+            "zh-Hant-TW",
+            "zh-TW",
+            "zh-HK",
+            "zh-MO",
+            "zh-TW-u-co-hans",
+            "zho-CN",
+            "zhx",
+        ).forEach {
+            assertEquals("'$it' no debe reclamarse", AppLanguage.SYSTEM, AppLanguage.fromLanguageTag(it))
+        }
+    }
+
+    @Test
+    fun `new language tags round trip through their persisted values`() {
+        listOf(AppLanguage.HINDI, AppLanguage.CHINESE_SIMPLIFIED).forEach { language ->
+            assertEquals(
+                "${language.name} debe resolverse desde '${language.languageTag}'",
+                language,
+                AppLanguage.fromLanguageTag(language.languageTag),
+            )
+        }
+        // Las quince opciones siguen resolviéndose desde su tag guardado.
+        AppLanguage.entries.forEach { language ->
+            assertEquals(language, AppLanguage.fromLanguageTag(language.languageTag))
+        }
+        // El comportamiento previo no cambia: desconocidos continúan cayendo en SYSTEM.
+        assertEquals(AppLanguage.SYSTEM, AppLanguage.fromLanguageTag("pt"))
+        assertEquals(AppLanguage.SYSTEM, AppLanguage.fromLanguageTag("nl-NL"))
+    }
 }

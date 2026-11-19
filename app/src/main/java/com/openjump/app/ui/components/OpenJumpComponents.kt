@@ -217,6 +217,7 @@ fun OpenJumpTopAppBar(
                 } else {
                     Column {
                         Text(
+                            modifier = Modifier.fillMaxWidth(),
                             text = title,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,

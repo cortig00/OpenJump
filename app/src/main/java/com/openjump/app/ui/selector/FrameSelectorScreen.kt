@@ -2,9 +2,6 @@ package com.openjump.app.ui.selector
 
 import android.content.Intent
 import android.os.SystemClock
-import android.view.SurfaceHolder
-import android.view.SurfaceView
-import android.view.View
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.OptIn
@@ -83,15 +80,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.ui.AspectRatioFrameLayout
-import androidx.media3.ui.PlayerView
-import androidx.media3.ui.R as Media3UiR
 import com.openjump.app.R
 import com.openjump.app.OpenJumpApp
 import com.openjump.app.data.anthropometricsSnapshotFor
@@ -119,6 +112,7 @@ import com.openjump.app.ui.components.JumpFlowStep
 import com.openjump.app.ui.components.OpenJumpTopAppBar
 import com.openjump.app.ui.components.ProtocolFeedbackBanner
 import com.openjump.app.data.PersonalRecord
+import com.openjump.app.ui.angles.AngleSourceZoomControls
 import com.openjump.app.ui.athletes.PersonalRecordFeedbackBanner
 import com.openjump.app.ui.components.ProtocolFeedbackLevel
 import com.openjump.app.ui.components.QuickAthletePicker
@@ -374,6 +368,17 @@ fun FrameSelectorScreen(
     var cropAlignment by remember(index) { mutableStateOf(CropAlignment.Centered) }
     var cropZoom by remember(index) { mutableStateOf(MIN_CROP_ZOOM) }
     var isCropFraming by remember(index) { mutableStateOf(false) }
+    // 1.3: solo el borrador TEMPORAL de Saltos adopta zoom local sobre la imagen completa. La
+    // política es pura y se prueba en JumpFitZoomTest; Horizontal y Encoder (referencia, revisión
+    // de placa, A-B) conservan su flujo FIT/CROP completo sin cambios.
+    val jumpFitZoomEligible = isJumpFitZoomEligible(
+        protocolId = draft?.protocolId,
+        temporalMarkingEventCount = requiredEvents.size,
+        encoderDraftPresent = encoderDraft != null,
+    )
+    // Estado visual por FUENTE, nunca por fotograma: avanzar/retroceder dentro del mismo vídeo
+    // conserva el encuadre y cambiar de vídeo o de protocolo vuelve a 1x centrado. No se persiste.
+    var jumpFitZoomState by remember(videoUri, draft?.protocolId) { mutableStateOf(CropViewportState()) }
     val reviewActive = plateDetectionState.phase == PlateDetectionPhase.REVIEW
     // Review uses a synchronous effective viewport so the PlayerView and mapper
     // cannot expose one composition of the previous CROP transform. The user's
@@ -400,7 +405,10 @@ fun FrameSelectorScreen(
     // encoder guard and renders disabled; the synchronous claim in onCompute
     // already drops a second tap before this recomposes.
     val effectiveMarkingAction = withResultNavigationInFlight(markingAction, resultNavigationInFlight)
-    val coordinateMapper = remember(index, videoViewport, effectiveScaleMode, effectiveCropAlignment, effectiveCropZoom) {
+    val coordinateMapper = remember(
+        index, videoViewport, effectiveScaleMode, effectiveCropAlignment, effectiveCropZoom,
+        jumpFitZoomEligible, jumpFitZoomState,
+    ) {
         val frameIndex = index
         if (frameIndex != null && frameIndex.width > 0 && frameIndex.height > 0 &&
             videoViewport.width > 0 && videoViewport.height > 0
@@ -412,13 +420,57 @@ fun FrameSelectorScreen(
                     frameIndex.rotationDegrees,
                 ),
                 viewport = ViewportSize(videoViewport.width.toDouble(), videoViewport.height.toDouble()),
-                scaleMode = effectiveScaleMode,
-                cropAlignment = effectiveCropAlignment,
-                zoom = effectiveCropZoom,
+                // Opt-in SOLO en la rama elegible: FIT con zoom relativo a la imagen completa. El
+                // resto de ramas y consumidores conservan los valores por defecto de siempre.
+                scaleMode = if (jumpFitZoomEligible) VideoScaleMode.FIT else effectiveScaleMode,
+                cropAlignment = if (jumpFitZoomEligible) {
+                    jumpFitZoomState.alignment
+                } else {
+                    effectiveCropAlignment
+                },
+                zoom = if (jumpFitZoomEligible) jumpFitZoomState.zoom else effectiveCropZoom,
+                allowFitZoom = jumpFitZoomEligible,
             )
         } else {
             null
         }
+    }
+    // Guardas de seguridad de ESTA rama: botones y gesto exigen fuente real, fotograma ya
+    // renderizado, índice y mapper válidos, además de los gates heredados (carga, tracking,
+    // exportación y revisión). Las demás ramas conservan exactamente sus propias guardas.
+    val jumpFitZoomControlsEnabled = jumpFitZoomEligible && framingEnabled &&
+        player != null && hasVideoIndex && videoUri != null &&
+        coordinateMapper != null && displayState.canMark
+    val jumpFitZoomGestureEnabled = jumpFitZoomControlsEnabled
+    val jumpFitZoomGeometry = remember(index) {
+        index?.takeIf { it.width > 0 && it.height > 0 }?.let {
+            VideoPresentationGeometry.fromEncoded(it.width, it.height, it.rotationDegrees)
+        }
+    }
+    // Reconstruye el mapper con la geometría, el viewport y el estado ACUMULADO en el instante de
+    // cada evento (no el de la composición previa), así varios deltas antes de recomponer se suman
+    // sobre lo ya aplicado. El zoom es estado visual: no marca, no busca, no pausa ni escribe datos.
+    fun applyJumpFitZoomGesture(centroid: ImagePoint, zoomChange: Double, panDx: Double, panDy: Double) {
+        jumpFitZoomState = jumpFitZoomStateAfterGesture(
+            geometry = jumpFitZoomGeometry,
+            viewportWidth = videoViewport.width.toDouble(),
+            viewportHeight = videoViewport.height.toDouble(),
+            state = jumpFitZoomState,
+            centroid = centroid,
+            zoomChange = zoomChange,
+            panDx = panDx,
+            panDy = panDy,
+        )
+    }
+
+    fun stepJumpFitZoom(delta: Double) {
+        jumpFitZoomState = jumpFitZoomStateAfterStep(
+            geometry = jumpFitZoomGeometry,
+            viewportWidth = videoViewport.width.toDouble(),
+            viewportHeight = videoViewport.height.toDouble(),
+            state = jumpFitZoomState,
+            delta = delta,
+        )
     }
     val reviewMapperReady = isPlateReviewMapperReady(plateDetectionState.phase, coordinateMapper)
     val plateProposalVisibleInViewport = coordinateMapper?.let { mapper ->
@@ -671,55 +723,41 @@ fun FrameSelectorScreen(
                 .testTag(AnalysisLayout.VIDEO_PANE_TAG),
             contentAlignment = Alignment.Center,
         ) {
-            AndroidView(
-                factory = { androidContext ->
-                    PlayerView(androidContext).apply {
-                        val playerView = this
-                        useController = false
-                        resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                        setShutterBackgroundColor(android.graphics.Color.BLACK)
-                        setKeepContentOnPlayerReset(true)
-                        this.player = player
-                        (videoSurfaceView as? SurfaceView)?.holder?.addCallback(
-                            object : SurfaceHolder.Callback {
-                                override fun surfaceCreated(holder: SurfaceHolder) {
-                                    // Ejecutar tras el callback interno de PlayerView,
-                                    // cuando ExoPlayer ya posee la nueva superficie.
-                                    playerView.post { viewModel.refreshCurrentFrame() }
-                                }
-
-                                override fun surfaceChanged(
-                                    holder: SurfaceHolder,
-                                    format: Int,
-                                    width: Int,
-                                    height: Int,
-                                ) = Unit
-
-                                override fun surfaceDestroyed(holder: SurfaceHolder) = Unit
-                            },
-                        )
-                    }
-                },
-                update = { playerView ->
-                    playerView.resizeMode = when (effectiveScaleMode) {
-                        VideoScaleMode.FIT -> AspectRatioFrameLayout.RESIZE_MODE_FIT
-                        VideoScaleMode.CROP -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                    }
-                    val contentFrame = playerView.findViewById<View>(Media3UiR.id.exo_content_frame)
-                    val translation = coordinateMapper?.contentTranslation
-                    contentFrame?.apply {
-                        scaleX = coordinateMapper?.nativeScale?.toFloat() ?: 1f
-                        scaleY = coordinateMapper?.nativeScale?.toFloat() ?: 1f
-                        translationX = translation?.x?.toFloat() ?: 0f
-                        translationY = translation?.y?.toFloat() ?: 0f
-                    }
-                    if (playerView.player !== player) {
-                        playerView.player = player
-                        playerView.post { viewModel.refreshCurrentFrame() }
-                    }
-                },
-                modifier = Modifier.fillMaxSize(),
-            )
+            // Superficie compartida: misma creación/re-bind del PlayerView que
+            // antes vivía aquí, ahora reutilizable por otros visores.
+            // 1.3: en el borrador temporal de Saltos el vídeo se compone DENTRO de la arena de
+            // encuadre, de modo que solo una pinza de 2+ dedos sobre la imagen cambia el zoom. La
+            // superficie sigue siendo la misma Media3/SurfaceView y el mismo mapper (no una imagen),
+            // y el resto de ramas (Horizontal, Encoder, revisión) no cambia ni un nodo.
+            if (jumpFitZoomEligible) {
+                JumpFitZoomGestureArena(
+                    mapperProvider = { coordinateMapper },
+                    interactionKey = videoUri,
+                    enabled = jumpFitZoomGestureEnabled,
+                    onGesture = { centroid, zoomChange, panDx, panDy ->
+                        applyJumpFitZoomGesture(centroid, zoomChange, panDx, panDy)
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    AnalysisVideoSurface(
+                        player = player,
+                        coordinateMapper = coordinateMapper,
+                        // En esta rama el zoom es siempre relativo a la imagen completa: FIT
+                        // explícito, sin heredar un CROP residual del estado heredado.
+                        scaleMode = VideoScaleMode.FIT,
+                        onRefreshFrame = viewModel::refreshCurrentFrame,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            } else {
+                AnalysisVideoSurface(
+                    player = player,
+                    coordinateMapper = coordinateMapper,
+                    scaleMode = effectiveScaleMode,
+                    onRefreshFrame = viewModel::refreshCurrentFrame,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
             coordinateMapper?.let { mapper ->
                 // Visual target tracking belongs to the linear encoder flow only.
                 // Jump protocols use event marks or their dedicated horizontal-point overlay.
@@ -820,7 +858,26 @@ fun FrameSelectorScreen(
                 )
             }
             VideoPreparationOverlay(active = preparingFirstRecording, delayMillis = preparationFeedbackDelayMs)
-            if (!terminalErrorWithoutIndex) Row(
+            // Keep the in-video seek indicator unobstructed while its frame is pending.
+            if (jumpFitZoomEligible && hasVideoIndex && videoUri != null &&
+                !terminalErrorWithoutIndex && !(displayState.isSeeking && renderedIdx != null)
+            ) {
+                AngleSourceZoomControls(
+                    zoom = jumpFitZoomState.zoom,
+                    enabled = jumpFitZoomControlsEnabled,
+                    resetEnabled = jumpFitZoomState.zoom != MIN_CROP_ZOOM ||
+                        jumpFitZoomState.alignment != CropAlignment.Centered,
+                    onZoomOut = { stepJumpFitZoom(-JUMP_FIT_ZOOM_STEP) },
+                    onZoomIn = { stepJumpFitZoom(JUMP_FIT_ZOOM_STEP) },
+                    onReset = { jumpFitZoomState = CropViewportState() },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(Spacing.sm)
+                        .zIndex(2f)
+                        .testTag(JUMP_FIT_ZOOM_OVERLAY_TAG),
+                )
+            }
+            if (!terminalErrorWithoutIndex && !jumpFitZoomEligible) Row(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(8.dp)

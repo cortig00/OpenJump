@@ -58,7 +58,10 @@ object CsvDataExportWriter {
             { observationOrder(it.observationType) }, { it.attemptOrdinal ?: -1 }, { it.repetitionOrdinal ?: -1 }, { it.metricKey }, { it.metricUnit }))
         // La familia F-V-P se pagina con su propio cursor, así que sus filas van después de
         // jump/encoder (mismo orden en el escritor streaming y en este camino canónico).
-        return measurements + canonical.fvp.flatMap { fvpObservations(it) }
+        // Los ángulos (V1 y V2) también tienen cursor propio y van al final, igual que en el JSON.
+        return measurements + canonical.fvp.flatMap { fvpObservations(it) } +
+            canonical.angleAnalyses.flatMap { angleObservations(it) } +
+            canonical.angleV2.flatMap { angleV2Observations(it) }
     }
 
     /**
@@ -201,6 +204,113 @@ object CsvDataExportWriter {
         return assessmentRows + conditionRows
     }
 
+    /**
+     * Filas de un análisis de ángulos en formato largo: la cabecera de 29 columnas no cambia, así
+     * que cada atributo es una observación. `measurement_family = "angle"` y `observation_type` es
+     * `ANGLE_ANALYSIS` (una vez por raíz) o `ANGLE_MARK` (una vez por atributo de marca).
+     *
+     * Identidad: `measurement_id` es la clave estable y anónima de la raíz (nunca el `sessionKey`
+     * del editor, que se deriva de la URI del vídeo) y `repetition_ordinal` el ordinal de la marca.
+     * `metric_key` es siempre la clave del atributo; los textuales llevan el texto en
+     * `metric_reason` con `metric_unit = "TEXT"`. Los enteros que no caben con exactitud en un
+     * `Double` (PTS en microsegundos) y los empaquetados ARGB viajan por `metric_value` como
+     * decimal exacto. Las marcas ocultas se incluyen: la visibilidad es un atributo
+     * (`VISIBLE`/`HIDDEN`), no un filtro. Los grados se publican ya calculados; una marca no
+     * medible publica `INVALID_REASON` en lugar de un 0° falso.
+     */
+    internal fun angleObservations(analysis: ExportAngleAnalysis): List<CsvObservation> {
+        fun row(
+            type: String,
+            key: String,
+            value: Double? = null,
+            unit: String = ANGLE_TEXT_UNIT,
+            validity: String? = null,
+            reason: String? = null,
+            markOrdinal: Int? = null,
+            longValue: Long? = null,
+        ) = CsvObservation(
+            observationType = type,
+            measurementFamily = ANGLE_MEASUREMENT_FAMILY,
+            measurementId = analysis.id,
+            dateTimeUtc = analysis.createdAtUtc,
+            athleteId = analysis.athleteId,
+            athleteName = null,
+            athleteBirthDate = null,
+            athleteSex = null,
+            testingSessionId = null,
+            testingGroupName = null,
+            protocolId = null,
+            exercise = null,
+            attemptOrdinal = null,
+            repetitionOrdinal = markOrdinal,
+            side = null,
+            loadKg = null,
+            dropHeightCm = null,
+            distanceCm = null,
+            analysisVersion = null,
+            repetitionQuality = null,
+            qualityReasons = null,
+            metricKey = key,
+            metricValue = value,
+            metricUnit = unit,
+            metricValidity = validity,
+            metricReason = reason,
+            isPrimary = false,
+            notes = null,
+            metricLongValue = longValue,
+        )
+        fun text(type: String, key: String, value: String, markOrdinal: Int? = null) =
+            row(type, key, reason = value, markOrdinal = markOrdinal)
+        fun number(type: String, key: String, value: Int, unit: String, markOrdinal: Int? = null) =
+            row(type, key, value.toDouble(), unit, markOrdinal = markOrdinal)
+        fun pixel(type: String, key: String, value: Double, markOrdinal: Int? = null) =
+            row(type, key, value, ANGLE_PIXEL_UNIT, markOrdinal = markOrdinal)
+        fun exact(type: String, key: String, value: Long, unit: String, markOrdinal: Int? = null) =
+            row(type, key, unit = unit, markOrdinal = markOrdinal, longValue = value)
+
+        // Misma forma canónica que el JSON (marcas por ordinal y grados derivados): los dos
+        // caminos publican las mismas filas aunque el llamador entregue otro orden.
+        val canonical = analysis.canonicalizedAngle()
+        val analysisRows = listOf(
+            number("ANGLE_ANALYSIS", "FRAME_INDEX", canonical.frameIndex, ANGLE_COUNT_UNIT),
+            // PTS exacto: 9007199254740993 no es representable en Double.
+            exact("ANGLE_ANALYSIS", "SOURCE_PTS", canonical.sourcePtsUs, ANGLE_MICROSECOND_UNIT),
+            number("ANGLE_ANALYSIS", "ENCODED_WIDTH", canonical.encodedWidth, ANGLE_PIXEL_UNIT),
+            number("ANGLE_ANALYSIS", "ENCODED_HEIGHT", canonical.encodedHeight, ANGLE_PIXEL_UNIT),
+            number("ANGLE_ANALYSIS", "PRESENTATION_WIDTH", canonical.presentationWidth, ANGLE_PIXEL_UNIT),
+            number("ANGLE_ANALYSIS", "PRESENTATION_HEIGHT", canonical.presentationHeight, ANGLE_PIXEL_UNIT),
+            number("ANGLE_ANALYSIS", "ROTATION_DEGREES", canonical.rotationDegrees, ANGLE_DEGREE_UNIT),
+            number("ANGLE_ANALYSIS", "GEOMETRY_VERSION", canonical.geometryVersion, ANGLE_COUNT_UNIT),
+            number("ANGLE_ANALYSIS", "REVISION", canonical.revision, ANGLE_COUNT_UNIT),
+            text("ANGLE_ANALYSIS", "UPDATED_AT", canonical.updatedAtUtc),
+            // Única referencia al vídeo: cómo interpretar la clave anónima de la raíz.
+            text("ANGLE_ANALYSIS", "VIDEO_REFERENCE_KIND", canonical.video.kind),
+        )
+        val markRows = canonical.marks.flatMap { mark ->
+            buildList {
+                add(text("ANGLE_MARK", "MARK_ID", mark.id, mark.ordinal))
+                add(text("ANGLE_MARK", "MARK_NAME", mark.name, mark.ordinal))
+                add(number("ANGLE_MARK", "ORDINAL", mark.ordinal, ANGLE_COUNT_UNIT, mark.ordinal))
+                add(
+                    row(
+                        "ANGLE_MARK", "VISIBLE", unit = ANGLE_BOOLEAN_UNIT,
+                        validity = if (mark.visible) "VISIBLE" else "HIDDEN", markOrdinal = mark.ordinal,
+                    ),
+                )
+                add(exact("ANGLE_MARK", "COLOR_ARGB", mark.colorArgb.toLong(), ANGLE_ARGB_UNIT, mark.ordinal))
+                add(pixel("ANGLE_MARK", "POINT_A_X", mark.pointAX, mark.ordinal))
+                add(pixel("ANGLE_MARK", "POINT_A_Y", mark.pointAY, mark.ordinal))
+                add(pixel("ANGLE_MARK", "POINT_B_X", mark.pointBX, mark.ordinal))
+                add(pixel("ANGLE_MARK", "POINT_B_Y", mark.pointBY, mark.ordinal))
+                add(pixel("ANGLE_MARK", "POINT_C_X", mark.pointCX, mark.ordinal))
+                add(pixel("ANGLE_MARK", "POINT_C_Y", mark.pointCY, mark.ordinal))
+                mark.degrees?.let { add(row("ANGLE_MARK", "DEGREES", it, ANGLE_DEGREE_UNIT, markOrdinal = mark.ordinal)) }
+                mark.invalidReason?.let { add(text("ANGLE_MARK", "INVALID_REASON", it, mark.ordinal)) }
+            }
+        }
+        return analysisRows + markRows
+    }
+
     private fun observationOrder(type: String) = when (type) {
         "JUMP_METRIC" -> 0
         "ENCODER_REPETITION_METRIC" -> 1
@@ -264,6 +374,16 @@ internal interface DataExportStreamWriter {
 
     /** Raíz F-V-P completa (condiciones e intentos incluidos), ya ensamblada por el repositorio. */
     suspend fun fvp(assessment: ExportFvpAssessment)
+
+    /** Raíz de ángulos completa (marcas incluidas), ya ensamblada y medida por el repositorio. */
+    suspend fun angle(analysis: ExportAngleAnalysis)
+
+    /**
+     * Raíz del agregado multi-fotograma (V2) completa (fotogramas y marcas incluidos), ya
+     * ensamblada y medida por el repositorio. Se emite después de [angle] y nunca comparte
+     * colección con él: `angleV2` es la familia multi-frame y `angleAnalyses` la de un frame.
+     */
+    suspend fun angleV2(analysis: ExportAngleV2Analysis)
     suspend fun finish()
 }
 
@@ -275,7 +395,12 @@ internal class StreamingJsonDataExportWriter(delegate: java.io.Writer) : DataExp
     private var firstMetric = true
     private var firstRepetition = true
     private var firstFvp = true
+    private var firstAngle = true
+    private var firstAngleV2 = true
     private var measurementsClosed = false
+    private var fvpClosed = false
+    private var anglesClosed = false
+    private var angleV2Closed = false
     private var pendingMetric: String? = null
     private var measurementOpen = false
     private var currentNotes: String? = null
@@ -412,15 +537,44 @@ internal class StreamingJsonDataExportWriter(delegate: java.io.Writer) : DataExp
     }
 
     /**
+     * Cierra `measurements` exactamente una vez. `following` deja la coma que separa la sección de
+     * la siguiente; los bytes son los mismos que produce el camino canónico, así que el documento
+     * es idéntico se emita o no alguna de las familias posteriores.
+     */
+    private suspend fun closeMeasurements(following: Boolean) {
+        if (measurementsClosed) return
+        raw(if (firstMeasurement) "    \"measurements\": []" else "\n    ]")
+        raw(if (following) ",\n" else "\n")
+        measurementsClosed = true
+    }
+
+    private suspend fun closeFvp(following: Boolean) {
+        if (firstFvp || fvpClosed) return
+        raw("\n    ]")
+        raw(if (following) ",\n" else "\n")
+        fvpClosed = true
+    }
+
+    private suspend fun closeAngles(following: Boolean) {
+        if (firstAngle || anglesClosed) return
+        raw("\n    ]")
+        raw(if (following) ",\n" else "\n")
+        anglesClosed = true
+    }
+
+    private suspend fun closeAngleV2() {
+        if (firstAngleV2 || angleV2Closed) return
+        raw("\n    ]\n")
+        angleV2Closed = true
+    }
+
+    /**
      * Cierra `measurements` (si seguía abierta) y emite la raíz F-V-P. El objeto se produce con el
      * mismo `Json` configurado del camino canónico y se re-indenta 8 espacios, de modo que un
      * documento con datos F-V-P es byte a byte idéntico entre el camino legacy y el streaming.
      */
     override suspend fun fvp(assessment: ExportFvpAssessment) {
-        if (!measurementsClosed) {
-            raw(if (firstMeasurement) "    \"measurements\": [],\n" else "\n    ],\n")
-            measurementsClosed = true
-        }
+        closeMeasurements(following = true)
         if (firstFvp) { raw("    \"fvp\": [\n"); firstFvp = false } else raw(",\n")
         raw(
             exportJson.encodeToString(ExportFvpAssessment.serializer(), assessment)
@@ -429,14 +583,45 @@ internal class StreamingJsonDataExportWriter(delegate: java.io.Writer) : DataExp
     }
 
     override suspend fun finish() {
-        if (!measurementsClosed) {
-            raw(if (firstMeasurement) "    \"measurements\": []\n" else "\n    ]\n")
-            measurementsClosed = true
-        } else if (!firstFvp) {
-            raw("\n    ]\n")
-        }
+        // Cierra en orden las secciones que sigan abiertas: sin coma final y sin saltos de más,
+        // de modo que cada combinación (vacío, sólo una familia, mixta) sigue siendo JSON válido.
+        closeMeasurements(following = false)
+        closeFvp(following = false)
+        closeAngles(following = false)
+        closeAngleV2()
         raw("}")
         out.flush()
+    }
+
+    /**
+     * Cierra `fvp` (si seguía abierta) y emite la raíz de ángulos. Misma indentación y mismo `Json`
+     * configurado que el camino canónico, así que con o sin ángulos el documento es idéntico byte a
+     * byte entre ambos caminos.
+     */
+    override suspend fun angle(analysis: ExportAngleAnalysis) {
+        closeMeasurements(following = true)
+        closeFvp(following = true)
+        if (firstAngle) { raw("    \"angleAnalyses\": [\n"); firstAngle = false } else raw(",\n")
+        raw(
+            exportJson.encodeToString(ExportAngleAnalysis.serializer(), analysis.canonicalizedAngle())
+                .lineSequence().joinToString("\n") { "        $it" },
+        )
+    }
+
+    /**
+     * Cierra `angleAnalyses` (si seguía abierta) y emite la raíz V2. La colección va después de
+     * todas las anteriores y usa el mismo `Json` configurado: el documento con datos V2 también es
+     * byte a byte idéntico entre el camino canónico y el streaming.
+     */
+    override suspend fun angleV2(analysis: ExportAngleV2Analysis) {
+        closeMeasurements(following = true)
+        closeFvp(following = true)
+        closeAngles(following = true)
+        if (firstAngleV2) { raw("    \"angleV2\": [\n"); firstAngleV2 = false } else raw(",\n")
+        raw(
+            exportJson.encodeToString(ExportAngleV2Analysis.serializer(), analysis.canonicalizedV2Analysis())
+                .lineSequence().joinToString("\n") { "        $it" },
+        )
     }
 }
 
@@ -519,11 +704,49 @@ internal class StreamingCsvDataExportWriter(delegate: java.io.Writer) : DataExpo
             out.write("\r\n")
         }
     }
+    override suspend fun angle(analysis: ExportAngleAnalysis) {
+        CsvDataExportWriter.angleObservations(analysis).forEach { observation ->
+            out.write(CsvDataExportWriter.csvLine(observation))
+            out.write("\r\n")
+        }
+    }
+    override suspend fun angleV2(analysis: ExportAngleV2Analysis) {
+        // Mismas filas que el camino canónico (`observations`), en el mismo orden: después de la
+        // familia de ángulos V1 y con la familia `angleV2` como discriminante.
+        angleV2Observations(analysis).forEach { observation ->
+            out.write(CsvDataExportWriter.csvLine(observation))
+            out.write("\r\n")
+        }
+    }
     override suspend fun finish() { out.flush() }
 }
 
 /** Valor de `measurement_family` de las observaciones F-V-P. */
 internal const val FVP_MEASUREMENT_FAMILY = "fvp"
+
+/** Valor de `measurement_family` de las observaciones de análisis de ángulos. */
+internal const val ANGLE_MEASUREMENT_FAMILY = "angle"
+
+/** `metric_unit` de las observaciones textuales (el texto viaja en `metric_reason`). */
+internal const val ANGLE_TEXT_UNIT = "TEXT"
+
+/** `metric_unit` de un PTS de frame en microsegundos (el entero exacto viaja en `metric_value`). */
+internal const val ANGLE_MICROSECOND_UNIT = "MICROSECOND"
+
+/** `metric_unit` de las coordenadas de una marca y de las dimensiones del frame. */
+internal const val ANGLE_PIXEL_UNIT = "PIXEL"
+
+/** `metric_unit` de los grados y de la rotación. */
+internal const val ANGLE_DEGREE_UNIT = "DEGREE"
+
+/** `metric_unit` de los contadores y ordinales. */
+internal const val ANGLE_COUNT_UNIT = "COUNT"
+
+/** `metric_unit` de un color ARGB empaquetado (el entero exacto viaja en `metric_value`). */
+internal const val ANGLE_ARGB_UNIT = "ARGB"
+
+/** `metric_unit` de los atributos booleanos (el valor viaja en `metric_validity`). */
+internal const val ANGLE_BOOLEAN_UNIT = "BOOLEAN"
 
 /** `metric_unit` de las observaciones F-V-P textuales (el texto viaja en `metric_reason`). */
 internal const val FVP_TEXT_UNIT = "TEXT"

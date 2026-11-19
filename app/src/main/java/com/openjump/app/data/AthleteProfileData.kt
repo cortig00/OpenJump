@@ -127,7 +127,16 @@ data class AthleteHistoryPage(
 data class AthleteHistoryCursor(
     val dateTime: Long,
     val id: Long,
-    /** Stable source tie-breaker for equal timestamps and ids. */
+    /**
+     * Discriminador de FUENTE para desempatar timestamps e ids iguales.
+     *
+     * No es sólo una etiqueta de familia visual: `id` pertenece a una tabla concreta y dos fuentes
+     * distintas pueden compartir número. Por eso `'ANGLE'` (raíz legacy de `angle_analyses`) y
+     * `'ANGLE_V2'` (raíz multi-fotograma de `angle_analysis_v2_roots`) son posiciones distintas del
+     * orden global y una no puede consumir la página de la otra. El orden es
+     * `ENCODER` < `JUMP` < `ANGLE` < `ANGLE_V2` y debe coincidir con los literales de las fronteras
+     * SQL de `JumpDao`.
+     */
     val kind: String,
 )
 

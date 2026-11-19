@@ -120,6 +120,9 @@ fun TeamHubScreen(
                     val type = when (it) {
                         is MeasurementHistoryItem.Jump -> "jump"
                         is MeasurementHistoryItem.Encoder -> "encoder"
+                        // TeamHub sólo mezcla saltos y encoder (`mergeMeasurementHistory` sin
+                        // ángulos): la clave de ángulos existe por exhaustividad del sealed type.
+                        is MeasurementHistoryItem.Angle -> "angle"
                     }
                     "$type-${it.id}-${it.dateTime}"
                 }) { item ->
@@ -127,6 +130,7 @@ fun TeamHubScreen(
                         when (item) {
                             is MeasurementHistoryItem.Jump -> onMeasurementSelected(item.id)
                             is MeasurementHistoryItem.Encoder -> onEncoderSelected(item.id)
+                            is MeasurementHistoryItem.Angle -> Unit
                         }
                     }, showDivider = item != recentActivity.last(), recent = true)
                 }

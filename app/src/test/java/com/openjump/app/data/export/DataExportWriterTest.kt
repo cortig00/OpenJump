@@ -18,19 +18,26 @@ import org.junit.Test
  * snapshot/streaming de la familia F-V-P se cubren en [DataExportWritersTest].
  *
  * El esquema 5 no promete byte-igualdad con documentos 3: cambia `schemaVersion`. Lo que aqui se
- * fija es el valor/forma de cada campo nuevo, no una compatibilidad de lectores antiguos.
+ * fija es el valor/forma de cada campo nuevo, no una compatibilidad de lectores antiguos. Con el
+ * esquema 7 ese mismo criterio se mantiene: un documento 6 se canoniza a 7 y el agregado V2 viaja
+ * en su propia coleccion, sin tocar las familias legacy.
  */
 class DataExportWriterTest {
 
     @Test
-    fun emitsSchemaVersionFiveAndCanonicalizesLegacyDocumentsToFive() {
-        assertEquals(5, DATA_EXPORT_SCHEMA_VERSION)
+    fun emitsSchemaVersionSevenAndCanonicalizesLegacyDocumentsToSeven() {
+        assertEquals(7, DATA_EXPORT_SCHEMA_VERSION)
         val json = JsonDataExportWriter.write(document(fvp = listOf(knownProvenanceAssessment())))
-        assertTrue(json.contains("\"schemaVersion\": 5"))
+        assertTrue(json.contains("\"schemaVersion\": 7"))
         assertFalse("el escritor no puede seguir emitiendo 3", json.contains("\"schemaVersion\": 3"))
-        assertEquals(5, document().copy(schemaVersion = 1).canonicalized().schemaVersion)
-        assertEquals(5, document().copy(schemaVersion = 2).canonicalized().schemaVersion)
-        assertEquals(5, document().copy(schemaVersion = 3).canonicalized().schemaVersion)
+        assertFalse("el escritor ya no emite el schema 6", json.contains("\"schemaVersion\": 6"))
+        assertEquals(7, document().copy(schemaVersion = 1).canonicalized().schemaVersion)
+        assertEquals(7, document().copy(schemaVersion = 2).canonicalized().schemaVersion)
+        assertEquals(7, document().copy(schemaVersion = 3).canonicalized().schemaVersion)
+        // El schema 5 (B0/B3) sigue leyéndose: se canoniza a 7 sin perder sus campos.
+        assertEquals(7, document().copy(schemaVersion = 5).canonicalized().schemaVersion)
+        // El schema 6 (ángulos V1) también: la canonización no pierde la familia anterior.
+        assertEquals(7, document().copy(schemaVersion = 6).canonicalized().schemaVersion)
         assertEquals(
             "openjump-graph-export",
             Json.parseToJsonElement(json).jsonObject["contract"]!!.jsonPrimitive.content,
@@ -38,8 +45,8 @@ class DataExportWriterTest {
     }
 
     @Test
-    fun acceptsLegacyOneTwoThreeAndFiveAndRejectsFourAndUnknownVersions() {
-        listOf(1, 2, 3, 5).forEach { version ->
+    fun acceptsLegacyOneTwoThreeFiveSixAndSevenAndRejectsFourAndUnknownVersions() {
+        listOf(1, 2, 3, 5, 6, 7).forEach { version ->
             assertEquals(
                 version,
                 document(fvp = listOf(knownProvenanceAssessment())).copy(schemaVersion = version).validated().schemaVersion,
@@ -55,11 +62,11 @@ class DataExportWriterTest {
         assertTrue(runCatching { JsonDataExportWriter.write(document().copy(schemaVersion = 4)) }.exceptionOrNull() is IllegalArgumentException)
         assertTrue(runCatching { CsvDataExportWriter.write(document().copy(schemaVersion = 4)) }.exceptionOrNull() is IllegalArgumentException)
 
-        val unsupported = runCatching { document().copy(schemaVersion = 6).validated() }.exceptionOrNull()
+        val unsupported = runCatching { document().copy(schemaVersion = 8).validated() }.exceptionOrNull()
         assertTrue(unsupported is IllegalArgumentException)
         assertTrue(
-            "un 6 no puede confundirse con el rechazo de Motion: ${unsupported?.message}",
-            unsupported!!.message.orEmpty().contains("unsupported export schemaVersion 6"),
+            "un 8 no puede confundirse con el rechazo de Motion: ${unsupported?.message}",
+            unsupported!!.message.orEmpty().contains("unsupported export schemaVersion 8"),
         )
         listOf(-1, 0, 99).forEach { version ->
             assertTrue(
@@ -218,7 +225,7 @@ class DataExportWriterTest {
             finish()
         }
         assertEquals(expected, output.toString())
-        assertTrue(expected.contains("\"schemaVersion\": 5"))
+        assertTrue(expected.contains("\"schemaVersion\": 7"))
         assertTrue(expected.contains("\"takeoffPtsUs\": 9007199254740993"))
     }
 
