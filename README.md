@@ -1,193 +1,69 @@
+<div align="center">
+
+<img src="docs/screenshots/openjump-banner.png" alt="OpenJump — Jump analysis for everyone" width="760">
+
 # OpenJump
 
+**Video analysis for jumps and movement, right on your Android device.**
+
+Record or import a video, mark jump events frame by frame, and measure angles.<br>
+Track each athlete’s progress without an account or an internet connection.
+
+**[Get it on Google Play](https://play.google.com/store/apps/details?id=com.openjump.app) · [Get it on F-Droid](https://f-droid.org/packages/com.openjump.app/)**
+
+Android 8.0+ · [GPL-3.0-or-later](LICENSE) · [Changelog](CHANGELOG.md)
+
+</div>
+
 <p align="center">
-  <img src="app/src/main/res/drawable-nodpi/ic_openjump_logo.png" alt="OpenJump logo" width="120">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/2.jpg" width="180" alt="Mark jump events frame by frame">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/1.jpg" width="180" alt="Review jump height, flight time and the timing breakdown">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/4.jpg" width="180" alt="Explore a repetition and its velocity curve in the experimental video Encoder">
+  <img src="docs/screenshots/playstore-en-7-angulos.png" width="180" alt="Measure and share angles from video frames; example analysis showing 50.7°">
 </p>
 
-**Offline video analysis for jumps and athletic performance on Android.**
+<details>
+<summary>More screenshots</summary>
 
-[![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)](https://developer.android.com/)
-[![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](LICENSE)
-[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-Support-FFDD00?logo=buymeacoffee&logoColor=000000)](https://buymeacoffee.com/cortig00)
+<p align="center">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/3.jpg" width="200" alt="Browse jump protocols and review athlete progress">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/5.jpg" width="200" alt="Compare velocity across tracked repetitions">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/6.jpg" width="200" alt="OpenJump’s offline, open-source approach to sports analysis">
+</p>
 
-OpenJump lets you record or import video, mark jump events frame by frame and
-save results locally. Real video presentation timestamps—not nominal frame
-rates—provide the timing used in calculations.
+[Store screenshots in other languages](fastlane/metadata/android/)
+
+</details>
 
 ## Features
 
-- Six jump protocols: countermovement jump (CMJ), squat jump (SJ), Abalakov,
-  unilateral jump, drop jump and standing horizontal jump.
-- Jump height, flight time, takeoff velocity and protocol-specific metrics;
-  calibrated horizontal distance.
-- Athlete profiles, teams, local history, progress and comparisons.
-- Camera recording, video import and precise frame-by-frame review.
-- **Experimental video Encoder:** scale calibration, visual tracking, repetition
-  analysis, velocity/trajectory charts and trajectory-video export.
-- User-initiated JSON/CSV exports and restorable manual backups.
-- Spanish (including Latin American Spanish), English, French, German, Italian,
-  Turkish, Brazilian Portuguese, European Portuguese, Polish, Japanese and
-  Korean; configurable units and light/dark appearance.
+- **Jump analysis.** Record or import a video, mark takeoff and landing frame by frame, and review height, flight time and other metrics depending on the test. Timing uses the video’s actual presentation timestamps, not its nominal frame rate. OpenJump supports CMJ, squat jump, Abalakov, unilateral jump, drop jump and standing horizontal jump.
+- **Angle analysis.** Measure angles on individual video frames. Save analyses with multiple frames and view or share their images from History.
+- **Athletes and history.** Keep results organised by athlete or team, compare attempts and follow progress. Export data in JSON or CSV, or create a manual backup.
+- **Experimental video Encoder.** Calibrate scale, track movement and review repetitions, velocity and trajectories from video. It has not been validated against a physical encoder.
 
-## Screenshots
+## Privacy and limitations
 
-<p align="center">
-  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/1.jpg" alt="Jump result with height, flight time and timing structure" width="240">
-  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/2.jpg" alt="Frame-by-frame takeoff and landing marking" width="240">
-  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/4.jpg" alt="Encoder repetition analysis with velocity curve" width="240">
-</p>
+Analysis runs on your device. No accounts, ads or automatic analytics. Videos and measurements are not uploaded by OpenJump; sharing, exports and backups only happen when you choose them. Manual backups are not encrypted. See the [privacy policy](PRIVACY.md) for details.
 
-Localized store graphics are kept under
-[`fastlane/metadata/android/`](fastlane/metadata/android/) for the F-Droid listing.
-
-## Install
-
-The official Android package is **`com.openjump.app`**. Install OpenJump from
-[Google Play](https://play.google.com/store/apps/details?id=com.openjump.app) or
-[F-Droid](https://f-droid.org/packages/com.openjump.app/). The two channels use
-different app signing certificates; switching channels is not an in-place update.
-
-This source snapshot prepares **OpenJump 1.3 (`versionCode 12`)**. It does not
-contain signed APKs, bundles or signing credentials. As checked on 2026-11-19,
-F-Droid lists 1.2.2 / code 10; 1.3 is not published there. A commit on a branch
-does not trigger an F-Droid update: the official updater watches stable tags.
-See the [F-Droid handoff](docs/FDROID_1.3_HANDOFF.md) and
-[1.3 changelog](CHANGELOG.md#13-versioncode-12--prepared-source).
+OpenJump is a sports-performance tool, not a medical device. Results depend on the recording, camera angle, calibration and the frames you mark.
 
 ## Build from source
 
-Requirements:
-
-- JDK 21 (the app targets Java 17 bytecode).
-- Android SDK with platform 36 and the required build tools.
-- Android 8.0 / API 26 or newer to run the app.
+Requirements: JDK 21 and Android SDK platform 36. Set `ANDROID_HOME` or point `sdk.dir` to your SDK in an untracked `local.properties` file.
 
 ```bash
 git clone https://github.com/cortig00/OpenJump.git
 cd OpenJump
-```
-
-Set `ANDROID_HOME` to your SDK, or create an untracked `local.properties` with
-`sdk.dir` pointing to it. Then use the included, checksum-pinned Gradle wrapper:
-
-```bash
-# macOS / Linux
 ./gradlew :app:assembleDebug :app:lintDebug
-
-# Windows
-.\gradlew.bat :app:assembleDebug :app:lintDebug
 ```
 
-Debug APK: `app/build/outputs/apk/debug/app-debug.apk`.
-Dependencies are resolved from Google Maven, Maven Central and the Gradle plugin
-portal. No LaTeX installation is needed for a normal app build: generated formula
-vectors are checked in. Their editable sources and optional generator are in
-[`tools/encoder-formulas`](tools/encoder-formulas/README.md).
+On Windows, use `gradlew.bat` instead. The debug APK is at `app/build/outputs/apk/debug/app-debug.apk`. See the [F-Droid build and distribution guide](docs/FDROID.md) for release details. Google Play and F-Droid builds use different signing certificates and cannot update one another in place.
 
-### Release builds
+## Contribute and support
 
-```bash
-./gradlew :app:bundleRelease
-```
+[Report an issue](https://github.com/cortig00/OpenJump/issues/new) · [Email support](mailto:openjump.app@gmail.com) · [Support development](https://buymeacoffee.com/cortig00)
 
-Without upload-key properties this creates an **unsigned** bundle, not a Play-ready
-release. To sign your own distribution, supply all four `OPENJUMP_UPLOAD_*` Gradle
-project properties outside this repository: `STORE_FILE`, `STORE_PASSWORD`,
-`KEY_ALIAS` and `KEY_PASSWORD`. For example, use user-level Gradle properties or
-`ORG_GRADLE_PROJECT_OPENJUMP_UPLOAD_*` environment variables. Never commit keys or
-passwords. Only the maintainer can sign updates for the official Play application;
-your own key cannot update that installation.
+For bug reports, include the app version, Android version and steps to reproduce. Please don’t share private athlete information or videos.
 
-## Privacy
-
-Measurement and analysis happen on your device. OpenJump has no accounts, backend,
-ads or automatic analytics, and does not request Internet, microphone or location
-permission. Local storage uses Android's app sandbox; automatic Android backup is
-disabled.
-
-Recorded videos are saved to shared device storage. User-initiated sharing,
-exports, manual backups and support email can send copies to other applications
-or providers. Backup JSON is **not encrypted**. Read the full
-[privacy policy](PRIVACY.md) for details.
-
-## Limitations
-
-OpenJump is a sports-performance tool, **not a medical or clinically validated
-device**. Results depend on video quality, viewpoint, calibration and event
-selection. Encoder is experimental and has not been validated against a physical
-encoder; do not treat its measurements as certified accuracy. Save an analysis
-before leaving it: unsaved work does not survive process death.
-
-## Contributing and support
-
-Bug reports and focused pull requests are welcome. Include your Android version,
-app version and reproducible steps. Do not post private athlete information,
-identifiable videos, backups, credentials or signing files in issues or commits.
-Check that the app compiles and lint completes before submitting a change. This
-minimal source distribution does not include the development test corpus.
-
-- [Report an issue](https://github.com/cortig00/OpenJump/issues)
-- Support email: **openjump.app@gmail.com**
-- [Buy Me a Coffee](https://buymeacoffee.com/cortig00) — optional support for development.
-
-## License
-
-OpenJump is free software under **GNU GPL-3.0-or-later**. See [`LICENSE`](LICENSE).
-Third-party dependencies retain their respective licenses. See
-[third-party notices](THIRD_PARTY_NOTICES.md) and [artwork licensing](ASSET_LICENSES.md).
-License texts and runtime attributions are bundled in the APK.
-
-## F-Droid
-
-See [F-Droid preparation](docs/FDROID.md) for the audited dependencies, shared
-Fastlane metadata, build recipe, signing differences and future release workflow.
-[Local validation](docs/FDROID_VALIDATION.md) and the
-[first-inclusion record](docs/FDROID_SUBMISSION.md) document the original 1.0
-submission. Updates are detected from stable tags; F-Droid's own build and
-signature remain independent of Play.
-There is no special flavor and no removal of the analysis features. F-Droid and
-Play use different signing certificates: switching channels requires a manual
-backup and reinstall; neither channel can install an update over the other.
-
-Validate the eight-language store metadata with:
-
-```bash
-python tools/check_store_metadata.py
-```
-
-### Checklist for future releases (Play + F-Droid)
-
-1. **Keep one release source and variant.** Integrate this preparation into the
-   development/publication base before the next release, retaining its licenses
-   and Fastlane files. Keep the first recipe's pinned commit publicly reachable;
-   do not orphan it by squashing and deleting its only branch.
-2. **Update versions and listing together.** Increase `VERSION_CODE` in
-   `version.properties`, choose an unused stable `VERSION_NAME` and add
-   `changelogs/<new-code>.txt` in all eight locales. Never reuse a published code
-   or move a published tag. Recheck dependency/asset licenses when they change.
-3. **Validate and build once locally.** Commit the exact release candidate, run
-   the normal code gates and applicable Android smoke on that source, and archive
-   the signed Play AAB with its checksum. If a sideload APK is also needed, request
-   `:app:assembleRelease` together with `:app:bundleRelease` in one Gradle invocation
-   so compilation tasks can be shared. Do not clean/rebuild another clone merely
-   to validate store text; the Python metadata check does not compile the app.
-4. **Publish the exact source.** Tag the validated commit `v<versionName>` and
-   prepare its GitHub Release; upload the already-built Play AAB manually, without
-   rebuilding an immutable artifact. F-Droid watches stable tags, not GitHub
-   Release drafts. If Play must be live first, publish the tag only after Play
-   acceptance. Beta/alpha tags do not trigger the configured stable updater.
-5. **Let F-Droid build its channel.** After initial inclusion, ordinary stable
-   updates are detected automatically; a new fdroiddata MR is normally needed
-   only for recipe changes. F-Droid's own source build and signing are separate
-   and unavoidable—not a second local Play build. Check the exact new source's
-   metadata/scanner results; reserve an additional full local `fdroid build` for
-   build-tool/dependency/recipe changes or diagnosing failures, rather than
-   routinely repeating a successful build. Official CI/review still must pass.
-6. **Keep channel signatures separate.** Never provide Play keys to F-Droid or
-   upload its APK to Play. Updates within each channel retain its signing identity;
-   switching channels needs manual backup, uninstall and restore. Keep backups
-   and videos outside the app; backups do not restore video links or preferences.
-
-See [the release workflow](docs/FDROID.md#future-simultaneous-releases) for details
-and [the first-inclusion record](docs/FDROID_SUBMISSION.md). Local validation is
-not official F-Droid acceptance.
+OpenJump is released under [GPL-3.0-or-later](LICENSE). See the [third-party notices](THIRD_PARTY_NOTICES.md) and [artwork licenses](ASSET_LICENSES.md).
