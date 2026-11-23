@@ -1,6 +1,6 @@
 <div align="center">
 
-<!-- Insert the maintainer's OpenJump banner here once the original file is available. -->
+<img src="docs/screenshots/openjump-banner.png" alt="OpenJump — Jump analysis for everyone" width="760">
 
 # OpenJump
 
@@ -16,9 +16,10 @@ Android 8.0+ · [GPL-3.0-or-later](LICENSE) · [Changelog](CHANGELOG.md)
 </div>
 
 <p align="center">
-  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/2.jpg" width="200" alt="Mark jump events frame by frame">
-  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/1.jpg" width="200" alt="Review jump height, flight time and the timing breakdown">
-  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/4.jpg" width="200" alt="Explore a repetition and its velocity curve in the experimental video Encoder">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/2.jpg" width="180" alt="Mark jump events frame by frame">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/1.jpg" width="180" alt="Review jump height, flight time and the timing breakdown">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/4.jpg" width="180" alt="Explore a repetition and its velocity curve in the experimental video Encoder">
+  <img src="docs/screenshots/playstore-en-7-angulos.png" width="180" alt="Measure and share angles from video frames; example analysis showing 50.7°">
 </p>
 
 <details>
@@ -28,7 +29,6 @@ Android 8.0+ · [GPL-3.0-or-later](LICENSE) · [Changelog](CHANGELOG.md)
   <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/3.jpg" width="200" alt="Browse jump protocols and review athlete progress">
   <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/5.jpg" width="200" alt="Compare velocity across tracked repetitions">
   <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/6.jpg" width="200" alt="OpenJump’s offline, open-source approach to sports analysis">
-  <img src="docs/screenshots/angle-analysis-demo.png" width="170" alt="Angle analysis with three marked points and a 91.1° reading on a demo frame">
 </p>
 
 [Store screenshots in other languages](fastlane/metadata/android/)
