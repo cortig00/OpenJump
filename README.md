@@ -28,6 +28,7 @@ Android 8.0+ · [GPL-3.0-or-later](LICENSE) · [Changelog](CHANGELOG.md)
   <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/3.jpg" width="200" alt="Browse jump protocols and review athlete progress">
   <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/5.jpg" width="200" alt="Compare velocity across tracked repetitions">
   <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/6.jpg" width="200" alt="OpenJump’s offline, open-source approach to sports analysis">
+  <img src="docs/screenshots/angle-analysis-demo.png" width="170" alt="Angle analysis with three marked points and a 91.1° reading on a demo frame">
 </p>
 
 [Store screenshots in other languages](fastlane/metadata/android/)
