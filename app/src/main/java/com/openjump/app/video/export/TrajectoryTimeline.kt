@@ -1,7 +1,11 @@
 package com.openjump.app.video.export
 
+import com.openjump.app.encoder.EncoderSample
 import com.openjump.app.tracking.ImagePoint
+import com.openjump.app.tracking.TrackingDiagnostics
 import com.openjump.app.tracking.TrackingFrameResult
+import com.openjump.app.tracking.TrackingResult
+import com.openjump.app.tracking.TrackingSample
 import com.openjump.app.tracking.TrackingStatus
 import com.openjump.app.video.VideoFrameIndex
 
@@ -92,6 +96,46 @@ class TrajectoryTimeline(
 
     fun sampleAtOrBefore(presentationTimeUs: Long): TrajectorySample? =
         indexAtOrBefore(presentationTimeUs).takeIf { it >= 0 }?.let(samples::get)
+
+    companion object {
+        /**
+         * Builds a [TrajectoryTimeline] from persisted/analyzed [EncoderSample]s.
+         * Returns null gracefully when samples cannot be mapped to [sourceIndex] or carry no points.
+         */
+        fun fromEncoderSamples(
+            sourceIndex: VideoFrameIndex,
+            encoderSamples: List<EncoderSample>,
+        ): TrajectoryTimeline? {
+            if (encoderSamples.isEmpty()) return null
+            val mapped = encoderSamples
+                .asSequence()
+                .filter { it.frameIndex in 0 until sourceIndex.frameCount }
+                .sortedBy { it.frameIndex }
+                .distinctBy { it.frameIndex }
+                .mapNotNull { sample ->
+                    val canonicalPtsUs = sourceIndex.timeOf(sample.frameIndex)
+                    val point = sample.rawPixelPoint
+                    val status = if (point == null) TrackingStatus.LOST else sample.trackingStatus
+                    TrackingFrameResult(
+                        frameIndex = sample.frameIndex,
+                        result = TrackingResult(
+                            sample = TrackingSample(
+                                timestampUs = canonicalPtsUs,
+                                point = point,
+                                confidence = sample.confidence,
+                                status = status,
+                            ),
+                            region = null,
+                            featurePoints = emptyList(),
+                            diagnostics = TrackingDiagnostics.EMPTY,
+                        ),
+                    )
+                }
+                .toList()
+            if (mapped.none { it.result.sample.point != null }) return null
+            return runCatching { TrajectoryTimeline(sourceIndex, mapped) }.getOrNull()
+        }
+    }
 }
 
 /**

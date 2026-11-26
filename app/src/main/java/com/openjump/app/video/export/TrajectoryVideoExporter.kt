@@ -2,6 +2,7 @@ package com.openjump.app.video.export
 
 import android.content.Context
 import android.content.pm.ApplicationInfo
+import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
@@ -14,6 +15,7 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.effect.OverlayEffect
 import androidx.media3.effect.Presentation
+import androidx.media3.effect.TextureOverlay
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.DefaultEncoderFactory
 import androidx.media3.transformer.DefaultMuxer
@@ -62,27 +64,69 @@ class TrajectoryVideoExporter(context: Context) {
         trackingResults: List<TrackingFrameResult>,
         listener: Listener,
     ) {
+        val timeline = TrajectoryTimeline(sourceIndex, trackingResults)
+        startWithOverlays(
+            sourceUri = sourceUri,
+            sourceIndex = sourceIndex,
+            timeline = timeline,
+            hudSpec = null,
+            exportOptions = VideoExportOptions(showLogo = false, showHud = false, showTrajectory = true),
+            logoBitmap = null,
+            listener = listener,
+        )
+    }
+
+    @MainThread
+    fun startWithOverlays(
+        sourceUri: Uri,
+        sourceIndex: VideoFrameIndex,
+        timeline: TrajectoryTimeline? = null,
+        hudSpec: VideoHudSpec? = null,
+        exportOptions: VideoExportOptions = VideoExportOptions(),
+        logoBitmap: Bitmap? = null,
+        listener: Listener,
+    ) {
         check(Looper.myLooper() == Looper.getMainLooper()) { "La exportación debe iniciarse en main." }
         check(active == null) { "Ya hay una exportación en curso." }
 
-        val timeline = TrajectoryTimeline(sourceIndex, trackingResults)
+        val firstSourcePtsUs = sourceIndex.frameTimesUs.first()
+        val profile = CompatibleExportProfile.from(sourceIndex)
+        val overlays = mutableListOf<TextureOverlay>()
+        if (exportOptions.showTrajectory && timeline != null) {
+            val repStarts = if (
+                exportOptions.trajectoryMode == VideoTrajectoryMode.PER_REP &&
+                hudSpec != null &&
+                hudSpec.encoderReps.size >= 2
+            ) {
+                hudSpec.encoderReps.map { (it.startPtsUs - firstSourcePtsUs).coerceAtLeast(0L) }
+            } else {
+                emptyList()
+            }
+            overlays += TrajectoryLineOverlay(timeline, repStarts, profile.sourceGeometry)
+            overlays += CurrentTrajectoryPointOverlay(timeline, profile.sourceGeometry)
+        }
+        if (hudSpec != null && exportOptions.hasAnyCanvasHud) {
+            overlays += VideoHudCanvasOverlay(
+                spec = hudSpec,
+                options = exportOptions,
+                firstSourcePtsUs = firstSourcePtsUs,
+                logoBitmap = logoBitmap,
+            )
+        }
+        require(overlays.isNotEmpty()) { "Debe activarse al menos una capa visual para exportar el vídeo." }
+
         exportDirectory.mkdirs()
         require(exportDirectory.isDirectory) { "No se pudo preparar la caché de exportación." }
         pruneOldExports()
         val output = File(exportDirectory, "openjump_trayectoria_${System.currentTimeMillis()}.mp4")
 
-        val profile = CompatibleExportProfile.from(sourceIndex)
-        val overlayEffect = OverlayEffect(
-            listOf(
-                TrajectoryLineOverlay(timeline),
-                CurrentTrajectoryPointOverlay(timeline),
-            ),
-        )
-        val videoEffects = mutableListOf<Effect>(overlayEffect)
+        val videoEffects = mutableListOf<Effect>()
         if (profile.shouldDownscale) {
-            // Scale after drawing so tracking coordinates stay in the source presentation space.
+            // Downscale before drawing overlays: cuts 4K overlay bitmap RAM & GPU upload 4x
+            // while Trajectory overlays project cleanly via profile.sourceGeometry and HUD scales natively.
             videoEffects += Presentation.createForShortSide(CompatibleExportProfile.MAX_SHORT_SIDE_PX)
         }
+        videoEffects += OverlayEffect(overlays)
         val editedMediaItem = EditedMediaItem.Builder(MediaItem.fromUri(sourceUri))
             .setEffects(Effects(emptyList(), videoEffects))
             .build()

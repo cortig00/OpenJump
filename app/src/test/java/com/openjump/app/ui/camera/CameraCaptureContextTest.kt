@@ -179,7 +179,7 @@ class CameraCaptureContextTest {
         }
         assertFalse(
             "no unconditional protocol subscription may remain",
-            source.contains("AppSession.draft.collectAsState()"),
+            source.contains("AppSession.draft.collectAsState"),
         )
     }
 
@@ -220,16 +220,16 @@ class CameraCaptureContextTest {
         )
         assertFalse(
             "a nullable protocol flow must never be seeded with a null placeholder",
-            source.contains("collectAsState(initial = null)"),
+            source.contains("collectAsStateWithLifecycle(initialValue = null)"),
         )
         assertEquals(
             "both StateFlow overloads must read the immediate value",
             2,
-            Regex("flow\\.collectAsState\\(\\)").findAll(source).count(),
+            Regex("flow\\.collectAsStateWithLifecycle\\(\\)").findAll(source).count(),
         )
         assertTrue(
             "plain Flow (AthleteRepository.active) keeps the legacy neutral initial value",
-            source.contains("flow.collectAsState(initial = neutral)"),
+            source.contains("flow.collectAsStateWithLifecycle(initialValue = neutral)"),
         )
     }
 

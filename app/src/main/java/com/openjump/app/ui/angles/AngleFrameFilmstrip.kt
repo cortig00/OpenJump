@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -38,6 +37,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.openjump.app.R
 import com.openjump.app.angles.AngleFrameId
+import com.openjump.app.ui.theme.ShapeTokens
 import com.openjump.app.ui.theme.Spacing
 
 /** Contenedor de la tira de miniaturas (vídeo + fotogramas), único por pantalla. */
@@ -148,13 +148,13 @@ private fun FilmstripVideoTile(
         modifier = Modifier
             .width(72.dp)
             .height(56.dp)
-            .clip(RoundedCornerShape(Spacing.sm))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clip(ShapeTokens.small)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .then(
                 if (selected) {
                     Modifier.border(
                         BorderStroke(2.dp, MaterialTheme.colorScheme.primary),
-                        RoundedCornerShape(Spacing.sm),
+                        ShapeTokens.small,
                     )
                 } else {
                     Modifier
@@ -229,13 +229,13 @@ private fun FilmstripThumbnail(
         modifier = Modifier
             .width(88.dp)
             .aspectRatio(4f / 3f)
-            .clip(RoundedCornerShape(Spacing.sm))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clip(ShapeTokens.small)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .then(
                 if (selected) {
                     Modifier.border(
                         BorderStroke(2.dp, MaterialTheme.colorScheme.primary),
-                        RoundedCornerShape(Spacing.sm),
+                        ShapeTokens.small,
                     )
                 } else {
                     Modifier

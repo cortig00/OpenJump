@@ -23,7 +23,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -32,7 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.openjump.app.R
 import com.openjump.app.settings.ExperienceMode
-import com.openjump.app.ui.theme.LightPrimary
+import com.openjump.app.ui.theme.OpenJumpTheme
 import com.openjump.app.ui.theme.ShapeTokens
 
 /** Compact global mode control intended for the trailing edge of a top app bar. */
@@ -50,17 +49,13 @@ fun ExperienceModePicker(
     val currentLabel = modes.first { it.first == mode }.second
     val currentLabelText = stringResource(currentLabel)
     val modeTitle = stringResource(R.string.mode_title)
-    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val isDark = OpenJumpTheme.isDark
 
     Box(modifier) {
         Surface(
             onClick = { expanded = true },
             shape = ShapeTokens.full,
-            color = if (isDark) {
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-            } else {
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)
-            },
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
             border = BorderStroke(
                 width = 1.dp,
                 color = if (isDark) {
@@ -85,9 +80,7 @@ fun ExperienceModePicker(
                     modifier = Modifier
                         .size(6.dp)
                         .clip(CircleShape)
-                        .background(
-                            if (isDark) MaterialTheme.colorScheme.primary else LightPrimary
-                        )
+                        .background(MaterialTheme.colorScheme.primary)
                 )
                 Text(
                     text = currentLabelText,

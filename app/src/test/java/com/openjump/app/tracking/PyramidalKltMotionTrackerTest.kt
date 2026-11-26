@@ -147,6 +147,45 @@ class PyramidalKltMotionTrackerTest {
         assertTrue(abs(requireNotNull(result.sample.point).x - 100.0) < 0.01)
     }
 
+    @Test
+    fun `roi feature replenishment tracks accurately on larger frames with distant texture`() {
+        val width = 320
+        val height = 240
+        fun largeFrame(cx: Int, cy: Int): GrayFrame {
+            val pixels = ByteArray(width * height) { 20 }
+            // Add high-contrast distant background texture far from the target ROI
+            for (y in 10..60) {
+                for (x in 10..70) {
+                    pixels[y * width + x] = if ((x / 3 + y / 3) % 2 == 0) 240.toByte() else 10.toByte()
+                }
+            }
+            for (y in -24..24) {
+                for (x in -24..24) {
+                    val px = cx + x
+                    val py = cy + y
+                    if (px !in 0 until width || py !in 0 until height) continue
+                    val checker = if (((x + 24) / 4 + (y + 24) / 4) % 2 == 0) 225 else 45
+                    val detail = (x * 13 + y * 7).and(15)
+                    pixels[py * width + px] = (checker - detail).toByte()
+                }
+            }
+            return GrayFrame(width, height, pixels)
+        }
+
+        val tracker = PyramidalKltMotionTracker()
+        val init = tracker.initialize(largeFrame(180, 150), 0L, ImagePoint(180.0, 150.0))
+        assertNotEquals(TrackingStatus.LOST, init.sample.status)
+
+        var last = init
+        for (i in 1..15) {
+            last = tracker.track(largeFrame(180 + i * 2, 150 - i * 2), i * 16_667L)
+            assertNotEquals("frame $i lost", TrackingStatus.LOST, last.sample.status)
+        }
+        val pt = requireNotNull(last.sample.point)
+        assertEquals(210.0, pt.x, 2.0)
+        assertEquals(120.0, pt.y, 2.0)
+    }
+
     @Suppress("UNCHECKED_CAST")
     private fun activeFeatureIds(tracker: PyramidalKltMotionTracker): Set<Long> {
         val field = PyramidalKltMotionTracker::class.java.getDeclaredField("klt").apply { isAccessible = true }

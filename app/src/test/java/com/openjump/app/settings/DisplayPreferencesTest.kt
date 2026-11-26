@@ -63,6 +63,14 @@ class DisplayPreferencesTest {
         assertFalse(ThemeMode.LIGHT.isDark(true))
     }
 
+    @Test fun `dynamic color defaults to false and decodes explicit true`() {
+        assertFalse(DisplayPreferences().dynamicColor)
+        assertFalse(DisplayPreferencesCodec.decodeDynamicColor(null))
+        assertFalse(DisplayPreferencesCodec.decodeDynamicColor("false"))
+        assertFalse(DisplayPreferencesCodec.decodeDynamicColor("unexpected"))
+        assertTrue(DisplayPreferencesCodec.decodeDynamicColor("true"))
+    }
+
     @Test fun `stable ids do not depend on enum ordinals`() {
         assertEquals(ShortLengthUnit.INCH, ShortLengthUnit.decode("in"))
         assertEquals(EncoderDisplacementUnit.CENTIMETER, EncoderDisplacementUnit.decode("cm"))

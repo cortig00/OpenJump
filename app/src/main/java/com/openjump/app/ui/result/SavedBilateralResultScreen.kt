@@ -12,7 +12,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -34,10 +34,10 @@ fun SavedBilateralResultRoute(
     attemptOrdinal: Int? = null,
     viewModel: SavedBilateralResultViewModel = viewModel(factory = SavedBilateralResultViewModel.factory(assessmentId)),
 ) {
-    val state by viewModel.state.collectAsState()
-    val deleting by viewModel.deleting.collectAsState()
-    val deleteFailed by viewModel.deleteFailed.collectAsState()
-    val noteState by viewModel.noteState.collectAsState()
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    val deleting by viewModel.deleting.collectAsStateWithLifecycle()
+    val deleteFailed by viewModel.deleteFailed.collectAsStateWithLifecycle()
+    val noteState by viewModel.noteState.collectAsStateWithLifecycle()
     var editNote by rememberSaveable { mutableStateOf(false) }
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
     when (val current = state) {

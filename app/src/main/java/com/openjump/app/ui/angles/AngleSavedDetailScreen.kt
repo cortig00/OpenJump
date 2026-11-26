@@ -1,5 +1,6 @@
 package com.openjump.app.ui.angles
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,16 +11,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -40,6 +41,7 @@ import com.openjump.app.ui.components.OpenJumpTopAppBar
 import com.openjump.app.ui.currentAppLocale
 import com.openjump.app.ui.history.HistoryDeleteDialogs
 import com.openjump.app.ui.theme.OpenJumpTypes
+import com.openjump.app.ui.theme.ShapeTokens
 import com.openjump.app.ui.theme.Spacing
 
 /**
@@ -75,9 +77,9 @@ fun AngleSavedDetailScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val state by viewModel.state.collectAsState()
-    val deleting by viewModel.deleting.collectAsState()
-    val deleteFailed by viewModel.deleteFailed.collectAsState()
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    val deleting by viewModel.deleting.collectAsStateWithLifecycle()
+    val deleteFailed by viewModel.deleteFailed.collectAsStateWithLifecycle()
     var pendingDelete by rememberSaveable { mutableStateOf(false) }
     // El objetivo no es serializable; se reconstruye desde el id de la entrada (la confirmación
     // pendiente sí sobrevive a la recreación mediante el booleano guardable).
@@ -217,7 +219,12 @@ fun AngleSavedDetailScreen(
 internal fun SavedMarkCard(mark: AngleSavedDetailMark) {
     val locale = currentAppLocale()
     val degreesFormat = stringResource(R.string.angle_degrees_value)
-    Card(Modifier.fillMaxWidth()) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = ShapeTokens.medium,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+    ) {
         Column(
             Modifier.fillMaxWidth().padding(Spacing.md),
             verticalArrangement = Arrangement.spacedBy(Spacing.xs),

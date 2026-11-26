@@ -1,5 +1,6 @@
 package com.openjump.app.ui.settings
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -11,16 +12,20 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -47,6 +52,7 @@ import com.openjump.app.ui.theme.Spacing
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UnitPreferencesScreen(
     onBack: () -> Unit,
@@ -55,15 +61,18 @@ fun UnitPreferencesScreen(
     val context = LocalContext.current
     val app = context.applicationContext as? OpenJumpApp
     val store = preferencesStore ?: requireNotNull(app).displayPreferencesStore
-    val preferences by store.state.collectAsState()
+    val preferences by store.state.collectAsStateWithLifecycle()
     val profile = preferences.unitProfile
     val locale = currentAppLocale()
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             OpenJumpTopAppBar(
                 title = stringResource(R.string.settings_units_title),
                 onNavigationClick = onBack,
                 navigationContentDescription = stringResource(R.string.common_back),
+                scrollBehavior = scrollBehavior,
             )
         },
     ) { padding ->
@@ -76,15 +85,22 @@ fun UnitPreferencesScreen(
                 Text(stringResource(R.string.settings_units_description), style = OpenJumpTypes.Body)
             }
             item {
+                val activePreset = profile.preset()
                 Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                    Text(stringResource(R.string.settings_units_profile, stringResource(profile.preset().titleResource())), style = OpenJumpTypes.SectionTitle)
+                    Text(stringResource(R.string.settings_units_profile, stringResource(activePreset.titleResource())), style = OpenJumpTypes.SectionTitle)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                        Button(onClick = { store.setUnitProfile(UnitProfile.METRIC) }, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
-                            Text(stringResource(R.string.settings_units_metric))
-                        }
-                        Button(onClick = { store.setUnitProfile(UnitProfile.UNITED_STATES) }, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
-                            Text(stringResource(R.string.settings_units_us))
-                        }
+                        UnitPresetButton(
+                            label = stringResource(R.string.settings_units_metric),
+                            selected = activePreset == com.openjump.app.settings.UnitPreset.METRIC,
+                            onClick = { store.setUnitProfile(UnitProfile.METRIC) },
+                            modifier = Modifier.weight(1f),
+                        )
+                        UnitPresetButton(
+                            label = stringResource(R.string.settings_units_us),
+                            selected = activePreset == com.openjump.app.settings.UnitPreset.UNITED_STATES,
+                            onClick = { store.setUnitProfile(UnitProfile.UNITED_STATES) },
+                            modifier = Modifier.weight(1f),
+                        )
                     }
                 }
             }
@@ -119,7 +135,12 @@ fun UnitPreferencesScreen(
                 }
             }
             item {
-                Surface(shape = ShapeTokens.medium, color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
+                Surface(
+                    shape = ShapeTokens.medium,
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
                     Column(Modifier.padding(Spacing.lg), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                         Text(stringResource(R.string.settings_units_preview_title), style = OpenJumpTypes.SectionTitle)
                         PreviewRow(stringResource(R.string.settings_units_short_length), MeasurementFormatting.format(45.0, MeasurementQuantity.SHORT_LENGTH_CM, profile, locale))
@@ -132,6 +153,20 @@ fun UnitPreferencesScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun UnitPresetButton(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (selected) {
+        Button(onClick = onClick, modifier = modifier.heightIn(min = 48.dp)) { Text(label) }
+    } else {
+        OutlinedButton(onClick = onClick, modifier = modifier.heightIn(min = 48.dp)) { Text(label) }
     }
 }
 
@@ -151,7 +186,12 @@ private fun PreviewRow(label: String, value: String) {
 private fun UnitSection(title: String, options: List<String>, selected: String, onSelected: (String) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
         Text(title, style = OpenJumpTypes.SectionTitle)
-        Surface(shape = ShapeTokens.medium, color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
+        Surface(
+            shape = ShapeTokens.medium,
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
             Column {
                 options.forEach { option ->
                     val isSelected = option == selected

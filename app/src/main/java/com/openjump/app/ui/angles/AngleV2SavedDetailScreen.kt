@@ -40,7 +40,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.Stable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -106,8 +106,8 @@ fun AngleV2SavedDetailScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val state by viewModel.state.collectAsState()
-    val shareAllBusy by viewModel.shareAllBusy.collectAsState()
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    val shareAllBusy by viewModel.shareAllBusy.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     // Un solo vuelo compartido entre las dos acciones: mientras una prepara, la otra no arranca.
     val frameShareBusy = remember { mutableStateOf(false) }

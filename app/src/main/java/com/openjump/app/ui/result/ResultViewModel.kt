@@ -70,7 +70,7 @@ class ResultViewModel internal constructor(
                 onSaved(records)
             } catch (error: Exception) {
                 _saveState.value = SaveState.Error(
-                    error.message ?: "No se pudo guardar la medición.",
+                    error.message ?: "Unable to save measurement.",
                 )
             }
         }

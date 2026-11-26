@@ -1,5 +1,6 @@
 package com.openjump.app.ui.history
 
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -38,6 +39,7 @@ import kotlinx.coroutines.withContext
 /** Which persisted measurement roots participate in a history query. */
 enum class HistoryFamily { ALL, JUMP, ENCODER, ANGLE }
 
+@Immutable
 data class HistoryFilters(
     val search: String = "",
     val family: HistoryFamily = HistoryFamily.ALL,
@@ -69,6 +71,7 @@ data class HistoryFilters(
     ).count { it }
 }
 
+@Immutable
 data class HistoryScreenState(
     val filters: HistoryFilters = HistoryFilters(),
     val items: List<MeasurementHistoryItem> = emptyList(),

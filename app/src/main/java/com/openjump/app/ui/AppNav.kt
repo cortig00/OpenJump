@@ -26,7 +26,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -133,6 +133,7 @@ import com.openjump.app.ui.testing.TestingViewModel
 import com.openjump.app.data.TestingFamily
 import com.openjump.app.ui.theme.OpenJumpTheme
 import com.openjump.app.video.AppSession
+import com.openjump.app.video.DemoSampleVideo
 import com.openjump.app.video.SeriesFeedback
 import java.util.UUID
 
@@ -392,10 +393,13 @@ internal fun personalProfileAthleteId(
 fun AppNav() {
     val context = LocalContext.current
     val app = context.applicationContext as OpenJumpApp
-    val displayPreferences by app.displayPreferencesStore.state.collectAsState()
+    val displayPreferences by app.displayPreferencesStore.state.collectAsStateWithLifecycle()
     val darkTheme = displayPreferences.themeMode.isDark(isSystemInDarkTheme())
 
-    OpenJumpTheme(darkTheme = darkTheme) {
+    OpenJumpTheme(
+        darkTheme = darkTheme,
+        dynamicColor = displayPreferences.dynamicColor,
+    ) {
         CompositionLocalProvider(LocalUnitSystem provides displayPreferences.unitProfile) {
             val navController = rememberNavController()
             OpenJumpNavHost(navController)
@@ -421,7 +425,7 @@ fun OpenJumpNavHost(
     val jumpSettings = remember(context) { JumpSettings(context) }
     val app = context.applicationContext as OpenJumpApp
     SideEffect { AppSession.setVideoOwnershipChangedListener(app::requestVideoUriReconciliation) }
-    val mode by app.experienceModeStore.mode.collectAsState()
+    val mode by app.experienceModeStore.mode.collectAsStateWithLifecycle()
     // Freeze the start destination; completing setup must not recreate the navigation graph.
     val startRoute = remember(app) {
         if (app.onboardingPreferencesStore.completion.value == OnboardingCompletion.PENDING) ONBOARDING_ROUTE
@@ -450,16 +454,61 @@ fun OpenJumpNavHost(
         activeAthletes.associate { it.id to it.displayName }
     }
     val athletesLoading = activeAthletesOrNull == null
-    val selectedAthleteId by app.selectedAthleteStore.selectedAthleteId.collectAsState()
+    val selectedAthleteId by app.selectedAthleteStore.selectedAthleteId.collectAsStateWithLifecycle()
     val navScope = rememberCoroutineScope()
+    val recentJumpsOrNull by app.repository.recentFive().collectAsStateWithLifecycle(initialValue = null)
+    val recentEncodersOrNull by app.encoderRepository.recentFive().collectAsStateWithLifecycle(initialValue = null)
+    val showJumpDemoInSetup = recentJumpsOrNull?.isEmpty() == true
+    val showEncoderDemoInSetup = recentEncodersOrNull?.isEmpty() == true
+
+    val launchDemoJumpForAthlete: (Long) -> Unit = { athleteId ->
+        navScope.launch {
+            val uri = runCatching { DemoSampleVideo.ensureCachedUri(context) }.getOrNull()
+                ?: return@launch
+            AppSession.begin(
+                protocolId = ProtocolId.CMJ,
+                athleteId = athleteId,
+                athleteAnthropometrics = activeAthletes.anthropometricsSnapshotFor(athleteId),
+                markMovementStart = false,
+            )
+            AppSession.attachVideo(uri, VideoSource.IMPORTED)
+            navController.navigate("selector")
+        }
+    }
+    val launchDemoJump: () -> Unit = {
+        val targetAthlete = activeAthletes.firstOrNull { it.id == selectedAthleteId }
+            ?: activeAthletes.firstOrNull()
+        if (targetAthlete != null) launchDemoJumpForAthlete(targetAthlete.id)
+    }
+    val launchDemoEncoderForAthlete: (Long) -> Unit = { athleteId ->
+        navScope.launch {
+            val uri = runCatching { DemoSampleVideo.ensureEncoderCachedUri(context) }.getOrNull()
+                ?: return@launch
+            AppSession.beginEncoder(
+                com.openjump.app.encoder.EncoderSetup(
+                    com.openjump.app.encoder.EncoderExercise.SQUAT,
+                    DemoSampleVideo.ENCODER_DEMO_LOAD_KG,
+                ),
+                DemoSampleVideo.ENCODER_DEMO_PLATE_DIAMETER_CM,
+                athleteId,
+            )
+            AppSession.attachVideo(uri, VideoSource.IMPORTED)
+            navController.navigate("selector")
+        }
+    }
+    val launchDemoEncoder: () -> Unit = {
+        val targetAthlete = activeAthletes.firstOrNull { it.id == selectedAthleteId }
+            ?: activeAthletes.firstOrNull()
+        if (targetAthlete != null) launchDemoEncoderForAthlete(targetAthlete.id)
+    }
     // A profile edit emits a new roster object but not new membership. Do not race the
     // onboarding update-then-select transaction with an unnecessary selection resolve.
     val activeAthleteIds = activeAthletesOrNull?.map { it.id }
     LaunchedEffect(app, activeAthleteIds) {
         if (activeAthleteIds != null) app.selectedAthleteStore.resolve(app.athleteRepository)
     }
-    val encoderDraft by AppSession.encoderDraft.collectAsState()
-    val draft by AppSession.draft.collectAsState()
+    val encoderDraft by AppSession.encoderDraft.collectAsStateWithLifecycle()
+    val draft by AppSession.draft.collectAsStateWithLifecycle()
     // D6/R2: UNICO dueño del estado recuperable del flujo F-V-P y de su `SavedStateHandle`. Se crea
     // UNA vez por grafo de navegacion -no por destino- y RESTAURA en su `init` SIN BLOQUEAR (A3):
     // publica PENDIENTE de forma sincrona y reconcilia con la verdad persistida en una corrutina
@@ -475,17 +524,17 @@ fun OpenJumpNavHost(
             null
         }
     val fvpRecoveryNotice: FvpRecoveryNotice =
-        fvpFlowViewModel?.recoveryNotice?.collectAsState()?.value ?: FvpRecoveryNotice.None
+        fvpFlowViewModel?.recoveryNotice?.collectAsStateWithLifecycle()?.value ?: FvpRecoveryNotice.None
     // A3: reconciliacion EN VUELO. Mientras sea `true`, setup/condiciones/resultado en vivo muestran
     // un cuerpo de carga NO interactivo: no siembran formularios, no declaran caducidad, no calculan
     // ni guardan. Historial y resultado GUARDADO no esperan (leen sus propias filas).
     val fvpReconciliationPending: Boolean =
-        fvpFlowViewModel?.reconciliationPending?.collectAsState()?.value == true
-    val fvpDraft by FvpDraftSession.draft.collectAsState()
+        fvpFlowViewModel?.reconciliationPending?.collectAsStateWithLifecycle()?.value == true
+    val fvpDraft by FvpDraftSession.draft.collectAsStateWithLifecycle()
     // Conservar el estado de texto de Saltos al retroceder a Medicion. Solo se restaura la
     // entrada guardada si sigue siendo la MISMA sesion; una nueva identidad no hereda ediciones.
     var savedFvpConditionsSession by rememberSaveable { mutableStateOf<String?>(null) }
-    val videoUri by AppSession.videoUri.collectAsState()
+    val videoUri by AppSession.videoUri.collectAsStateWithLifecycle()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
     val currentRoute = currentDestination?.route
@@ -559,7 +608,9 @@ fun OpenJumpNavHost(
                     val destination = when (choice) {
                         OnboardingExitDestination.HOME -> HOME_ROUTE
                         OnboardingExitDestination.JUMPS -> JUMPS_ROUTE
+                        OnboardingExitDestination.ANGLES -> ANGLES_INTRO_ROUTE
                         OnboardingExitDestination.ENCODER -> "encoder/setup"
+                        OnboardingExitDestination.DEMO_JUMP -> HOME_ROUTE
                     }
                     navController.navigate(HOME_ROUTE) {
                         // First run replaces setup; replay returns to the root Home rather than
@@ -567,7 +618,11 @@ fun OpenJumpNavHost(
                         popUpTo(if (isReplay) HOME_ROUTE else ONBOARDING_ROUTE) { inclusive = !isReplay }
                         launchSingleTop = true
                     }
-                    if (destination != HOME_ROUTE) navController.navigate(destination)
+                    if (choice == OnboardingExitDestination.DEMO_JUMP) {
+                        launchDemoJump()
+                    } else if (destination != HOME_ROUTE) {
+                        navController.navigate(destination)
+                    }
                 }
                 OnboardingScreen(
                     app = app,
@@ -603,6 +658,18 @@ fun OpenJumpNavHost(
                     onHistorySelected = { navController.navigateTopLevel(HISTORY_ROUTE) },
                     onMeasurementSelected = { navController.navigate("measurement/$it") },
                     onEncoderSessionSelected = { navController.navigate("encoder/session/$it") },
+                    onAngleAnalysisSelected = { entry ->
+                        if (entry.source == AngleHistorySource.LEGACY) {
+                            navController.navigate(anglesSavedDetailRoute(entry.id))
+                        }
+                    },
+                    onAngleMultiFrameSelected = { entry ->
+                        if (entry.source == AngleHistorySource.MULTI_FRAME) {
+                            navController.navigate(anglesV2SavedDetailRoute(entry.id))
+                        }
+                    },
+                    onTryDemoJump = launchDemoJump.takeIf { activeAthletes.isNotEmpty() },
+                    onTryDemoEncoder = launchDemoEncoder.takeIf { activeAthletes.isNotEmpty() },
                     onFvpSelected = {
                         if (fvpProfileEnabled) navController.navigateFvp(fvpSetupNavTarget())
                     },
@@ -679,11 +746,11 @@ fun OpenJumpNavHost(
                             ),
                         )
                     }
-                    val angleSaveState by angleEditorViewModel.saveState.collectAsState()
+                    val angleSaveState by angleEditorViewModel.saveState.collectAsStateWithLifecycle()
                     // Recuperacion de un analisis guardado: se intenta UNA vez, cuando el video ya
                     // esta listo (antes no hay frame confirmado que rehidratar). Un rechazo de
                     // compatibilidad deja el editor como analisis nuevo y no navega solo.
-                    val angleVideoState by angleEditorViewModel.videoState.collectAsState()
+                    val angleVideoState by angleEditorViewModel.videoState.collectAsStateWithLifecycle()
                     // `remember` (no `rememberSaveable`) a proposito: al recrear la Activity se
                     // reinicia, y debe hacerlo. Tras una muerte de proceso el ViewModel tambien es
                     // nuevo y la reapertura tiene que ocurrir; tras una recreacion de configuracion
@@ -718,7 +785,7 @@ fun OpenJumpNavHost(
                     // `angle_analyses`). Un rechazo no navega, un id invalido tampoco: la sesion
                     // sigue en pantalla con sus fotogramas y su mensaje de fallo.
                     val multiFrameSaveState by angleEditorViewModel.multiFrameSaveState
-                        .collectAsState()
+                        .collectAsStateWithLifecycle()
                     var multiFrameSavedHandled by remember { mutableStateOf(false) }
                     LaunchedEffect(multiFrameSaveState) {
                         val rootId = when (val saved = multiFrameSaveState) {
@@ -845,7 +912,9 @@ fun OpenJumpNavHost(
                 } else {
                     val teamViewModel: com.openjump.app.ui.people.TeamHubViewModel =
                         androidx.lifecycle.viewmodel.compose.viewModel(factory = com.openjump.app.ui.people.TeamHubViewModel.Factory)
-                    val teamRecent by teamViewModel.recentActivity.collectAsState()
+                    val teamRecent by teamViewModel.recentActivity.collectAsStateWithLifecycle()
+                    val teamAthletesCount by teamViewModel.activeAthletesCount.collectAsStateWithLifecycle()
+                    val teamGroupsCount by teamViewModel.activeGroupsCount.collectAsStateWithLifecycle()
                     TeamHubScreen(
                         onAthletes = { navController.navigate(ATHLETES_ROUTE) },
                         onGroups = { navController.navigate(GROUPS_ROUTE) },
@@ -856,6 +925,8 @@ fun OpenJumpNavHost(
                         recentActivity = teamRecent,
                         onMeasurementSelected = { navController.navigate("measurement/$it") },
                         onEncoderSelected = { navController.navigate("encoder/session/$it") },
+                        activeAthletesCount = teamAthletesCount,
+                        activeGroupsCount = teamGroupsCount,
                     )
                 }
             }
@@ -866,6 +937,8 @@ fun OpenJumpNavHost(
                     onAboutSelected = { navController.navigate(ABOUT_ROUTE) },
                     onUnitsSelected = { navController.navigate(UNITS_ROUTE) },
                     onOnboardingSelected = { navController.navigate(ONBOARDING_ROUTE) },
+                    onTryDemoJump = launchDemoJump.takeIf { activeAthletes.isNotEmpty() },
+                    onTryDemoEncoder = launchDemoEncoder.takeIf { activeAthletes.isNotEmpty() },
                 )
             }
 
@@ -1089,6 +1162,7 @@ fun OpenJumpNavHost(
                         AppSession.beginEncoder(setup, encoderSettings.defaultPlateDiameterCm, athleteId)
                         navController.navigate(CAMERA_ROUTE)
                     },
+                    onTryDemoEncoder = launchDemoEncoderForAthlete.takeIf { showEncoderDemoInSetup },
                 )
             }
 
@@ -1111,6 +1185,7 @@ fun OpenJumpNavHost(
                             navScope.launch { app.selectedAthleteStore.select(app.athleteRepository, athleteId) }
                         },
                         markMovementStart = jumpSettings.markMovementStart,
+                        onTryDemoJump = launchDemoJumpForAthlete.takeIf { definition.id == ProtocolId.CMJ && showJumpDemoInSetup },
                         onImport = { uri, setup, athleteId, targetAttempts ->
                             val pendingImport = app.videoUriGrantReconciler.registerOwner(setOf(uri.toString()))
                             try {
@@ -1235,6 +1310,7 @@ fun OpenJumpNavHost(
                             if (testingId != null) navController.popBackStack("$TESTING_ROUTE/$testingId", false)
                             else navController.popBackStack(HOME_ROUTE, false)
                         },
+                        athleteName = encoderDraft?.athleteId?.let(athleteNamesById::get),
                         onSaved = {
                             val testingId = AppSession.encoderDraft.value?.testingSessionId
                             AppSession.reset()
@@ -1292,6 +1368,7 @@ fun OpenJumpNavHost(
                         onBilateralSaved = { id, _ ->
                             navController.navigateBilateralFinalSave(id)
                         },
+                        athleteName = draft?.athleteId?.let(athleteNamesById::get),
                     )
                 }
             }
@@ -1500,7 +1577,11 @@ private fun OpenJumpNavigationBar(
     mode: ExperienceMode,
     onDestinationSelected: (TopLevelDestination) -> Unit,
 ) {
-    NavigationBar(modifier = Modifier.testTag("bottom-navigation")) {
+    NavigationBar(
+        modifier = Modifier.testTag("bottom-navigation"),
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        tonalElevation = 0.dp,
+    ) {
         topLevelDestinations.forEach { destination ->
             val label = if (destination.route == PEOPLE_ROUTE) peopleLabel(mode) else destination.label
             val selected = currentDestination?.route == destination.route ||
@@ -1517,7 +1598,13 @@ private fun OpenJumpNavigationBar(
                         contentDescription = stringResource(label),
                     )
                 },
-                label = { Text(stringResource(label)) },
+                label = {
+                    Text(
+                        text = stringResource(label),
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    )
+                },
                 colors = NavigationBarItemDefaults.colors(
                     selectedIconColor = OpenJumpTheme.colors.navigationSelectedContent,
                     selectedTextColor = OpenJumpTheme.colors.navigationSelectedContent,

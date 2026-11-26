@@ -22,6 +22,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -36,6 +37,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -77,6 +80,7 @@ fun ProtocolSetupScreen(
     onRecord: (ProtocolSetup, Long, Int) -> Unit,
     /** Current "mark movement start" preference; it shapes the marking summary before starting. */
     markMovementStart: Boolean = false,
+    onTryDemoJump: ((Long) -> Unit)? = null,
 ) {
     var sideName by rememberSaveable { mutableStateOf<String?>(null) }
     var dropHeightInput by rememberSaveable(stateSaver = UnitAwareNumericInputState.Saver) {
@@ -379,6 +383,32 @@ fun ProtocolSetupScreen(
                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                 ) {
                     Text(stringResource(R.string.protocol_full_guide))
+                }
+            }
+            if (definition.id == ProtocolId.CMJ && onTryDemoJump != null) {
+                OutlinedButton(
+                    onClick = {
+                        setupAthleteId?.let { athleteId ->
+                            if (!startDispatched) {
+                                startDispatched = true
+                                onTryDemoJump(athleteId)
+                            }
+                        }
+                    },
+                    enabled = athleteSelected && !startDispatched,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .testTag("protocol-setup-demo"),
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_jumps),
+                        contentDescription = null,
+                    )
+                    Text(
+                        stringResource(R.string.home_try_sample_video),
+                        modifier = Modifier.padding(start = Spacing.sm),
+                    )
                 }
             }
             Spacer(Modifier.height(8.dp))

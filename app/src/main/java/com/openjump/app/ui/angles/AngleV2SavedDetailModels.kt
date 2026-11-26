@@ -1,5 +1,6 @@
 package com.openjump.app.ui.angles
 
+import androidx.compose.runtime.Immutable
 import com.openjump.app.data.AngleAnalysisV2MarkEntity
 import com.openjump.app.data.AngleAnalysisV2StoredAggregate
 import com.openjump.app.data.angles.AngleImageIntegrity
@@ -45,6 +46,7 @@ sealed interface AngleV2SavedDetailState {
 data class AngleV2SavedAthleteIdentity(val name: String?, val avatarKey: String?)
 
 /** Contenido completo del detalle V2: raíz + fotogramas ordenados + marcas de cada fotograma. */
+@Immutable
 data class AngleV2SavedDetailContent(
     val rootId: Long,
     val createdAt: Long,

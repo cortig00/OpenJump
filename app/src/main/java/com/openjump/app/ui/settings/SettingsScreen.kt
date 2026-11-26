@@ -1,9 +1,11 @@
 package com.openjump.app.ui.settings
 
+import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.DrawableRes
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -39,10 +41,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -52,6 +55,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -135,12 +139,14 @@ fun SettingsScreen(
     onAboutSelected: () -> Unit,
     onUnitsSelected: () -> Unit,
     onOnboardingSelected: () -> Unit = {},
+    onTryDemoJump: (() -> Unit)? = null,
+    onTryDemoEncoder: (() -> Unit)? = null,
     cameraSettingsOverride: CameraSettings? = null,
     jumpSettingsOverride: JumpSettings? = null,
 ) {
     val context = LocalContext.current
     val app = context.applicationContext as OpenJumpApp
-    val displayPreferences by app.displayPreferencesStore.state.collectAsState()
+    val displayPreferences by app.displayPreferencesStore.state.collectAsStateWithLifecycle()
     val unitSystem = LocalUnitSystem.current
     val locale = currentAppLocale()
     val cameraSettings = cameraSettingsOverride ?: remember(context) { CameraSettings(context) }
@@ -158,6 +164,7 @@ fun SettingsScreen(
     }
     var language by remember { mutableStateOf(AppLanguageManager.current()) }
     var picker by rememberSaveable { mutableStateOf<SettingsPicker?>(null) }
+    var showSampleVideos by rememberSaveable { mutableStateOf(false) }
     var editPlateDiameter by rememberSaveable { mutableStateOf(false) }
     var plateDiameterCm by remember { mutableStateOf(encoderSettings.defaultPlateDiameterCm) }
     var editDefaultLoads by rememberSaveable { mutableStateOf(false) }
@@ -165,9 +172,9 @@ fun SettingsScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val exportViewModel: DataExportViewModel = viewModel(factory = DataExportViewModel.Factory)
-    val exportState by exportViewModel.state.collectAsState()
+    val exportState by exportViewModel.state.collectAsStateWithLifecycle()
     val backupViewModel: ManualBackupViewModel = viewModel(factory = ManualBackupViewModel.Factory)
-    val backupState by backupViewModel.state.collectAsState()
+    val backupState by backupViewModel.state.collectAsStateWithLifecycle()
     var backupPrivacy by rememberSaveable { mutableStateOf(false) }
     val backupBusy = backupState is ManualBackupState.Creating || backupState is ManualBackupState.Reading || backupState is ManualBackupState.Restoring
     BackHandler(enabled = backupState is ManualBackupState.Restoring) { }
@@ -253,11 +260,15 @@ fun SettingsScreen(
         locale,
     )
 
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             OpenJumpTopAppBar(
                 title = stringResource(R.string.settings_title),
                 showBrandLogo = true,
+                scrollBehavior = scrollBehavior,
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -292,6 +303,17 @@ fun SettingsScreen(
                         summary = stringResource(displayPreferences.themeMode.titleResource()),
                         onClick = { picker = SettingsPicker.THEME },
                     )
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        SettingsDivider()
+                        SettingsSwitchRow(
+                            icon = R.drawable.ic_palette,
+                            title = stringResource(R.string.settings_dynamic_color_title),
+                            description = stringResource(R.string.settings_dynamic_color_description),
+                            checked = displayPreferences.dynamicColor,
+                            onCheckedChange = app.displayPreferencesStore::setDynamicColor,
+                            modifier = Modifier.testTag("settings-dynamic-color"),
+                        )
+                    }
                     SettingsDivider()
                     SettingsRow(
                         icon = R.drawable.ic_people,
@@ -299,6 +321,16 @@ fun SettingsScreen(
                         summary = stringResource(R.string.onboarding_settings_summary),
                         onClick = onOnboardingSelected,
                     )
+                    if (onTryDemoJump != null || onTryDemoEncoder != null) {
+                        SettingsDivider()
+                        SettingsRow(
+                            icon = R.drawable.ic_videocam,
+                            title = stringResource(R.string.settings_sample_videos_title),
+                            summary = stringResource(R.string.settings_sample_videos_summary),
+                            onClick = { showSampleVideos = true },
+                            modifier = Modifier.testTag("settings-sample-videos"),
+                        )
+                    }
                 }
             }
 
@@ -441,11 +473,19 @@ fun SettingsScreen(
             }
 
             item {
+                val installedVersion = remember(context) {
+                    runCatching {
+                        context.packageManager.getPackageInfo(context.packageName, 0).versionName.orEmpty()
+                    }.getOrDefault("")
+                }
                 SettingsGroup(stringResource(R.string.settings_about_section)) {
                     SettingsRow(
-                        icon = R.drawable.ic_settings,
+                        icon = R.drawable.ic_info,
                         title = stringResource(R.string.settings_about_title),
                         summary = stringResource(R.string.settings_about_summary),
+                        supporting = installedVersion.takeIf { it.isNotBlank() }?.let {
+                            stringResource(R.string.about_version, it)
+                        },
                         onClick = onAboutSelected,
                     )
                 }
@@ -514,6 +554,24 @@ fun SettingsScreen(
             )
         }
         null -> Unit
+    }
+
+    if (showSampleVideos) {
+        SampleVideosSheet(
+            onTryDemoJump = onTryDemoJump?.let { action ->
+                {
+                    showSampleVideos = false
+                    action()
+                }
+            },
+            onTryDemoEncoder = onTryDemoEncoder?.let { action ->
+                {
+                    showSampleVideos = false
+                    action()
+                }
+            },
+            onDismiss = { showSampleVideos = false },
+        )
     }
 
     if (backupPrivacy) {
@@ -650,6 +708,10 @@ private fun SettingsGroup(
             modifier = Modifier.fillMaxWidth(),
             shape = ShapeTokens.medium,
             color = MaterialTheme.colorScheme.surfaceContainerLow,
+            border = BorderStroke(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+            ),
         ) {
             Column(content = content)
         }
@@ -724,6 +786,70 @@ private fun SettingsRow(
  * Row plus switch as one toggleable target. The switch itself is not clickable, so a single tap
  * always fires exactly one state change and the whole 72 dp row stays the accessible hit area.
  */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SampleVideosSheet(
+    onTryDemoJump: (() -> Unit)?,
+    onTryDemoEncoder: (() -> Unit)?,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = Spacing.screenHorizontal)
+                .padding(bottom = Spacing.lg),
+            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+        ) {
+            Text(
+                stringResource(R.string.settings_sample_videos_title),
+                style = OpenJumpTypes.ScreenTitle,
+            )
+            Text(
+                stringResource(R.string.settings_sample_videos_summary),
+                style = OpenJumpTypes.Secondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Surface(
+                shape = ShapeTokens.medium,
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                border = BorderStroke(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+                ),
+            ) {
+                Column {
+                    if (onTryDemoJump != null) {
+                        SettingsRow(
+                            icon = R.drawable.ic_jumps,
+                            title = stringResource(R.string.home_jumps_title),
+                            summary = stringResource(R.string.home_try_sample_video),
+                            onClick = onTryDemoJump,
+                            modifier = Modifier.testTag("settings-sample-video-jump"),
+                        )
+                    }
+                    if (onTryDemoJump != null && onTryDemoEncoder != null) {
+                        SettingsDivider()
+                    }
+                    if (onTryDemoEncoder != null) {
+                        SettingsRow(
+                            icon = R.drawable.ic_encoder,
+                            title = stringResource(R.string.home_encoder_title),
+                            summary = stringResource(R.string.encoder_try_sample_video),
+                            onClick = onTryDemoEncoder,
+                            modifier = Modifier.testTag("settings-sample-video-encoder"),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun SettingsSwitchRow(
     @DrawableRes icon: Int,
@@ -778,7 +904,7 @@ private fun SettingsSwitchRow(
 private fun SettingsDivider() {
     HorizontalDivider(
         modifier = Modifier.padding(start = 68.dp),
-        color = MaterialTheme.colorScheme.outlineVariant,
+        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
     )
 }
 

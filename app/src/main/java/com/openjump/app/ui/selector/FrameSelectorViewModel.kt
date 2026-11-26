@@ -5,8 +5,10 @@ import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.graphics.Bitmap
 import android.net.Uri
+import android.os.SystemClock
 import android.util.Log
 import androidx.annotation.OptIn
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -36,8 +38,11 @@ import com.openjump.app.tracking.TrackingPerformanceProfiler
 import com.openjump.app.tracking.TrackingStatus
 import com.openjump.app.tracking.TrackingFrameSource
 import com.openjump.app.video.AppSession
+import com.openjump.app.video.MediaCodecTrackingFrameSource
+import com.openjump.app.video.TrackingDeviceProfile
 import com.openjump.app.video.VideoFrameIndex
 import com.openjump.app.video.VideoFrameIndexer
+import com.openjump.app.video.VideoFrameSafety
 import com.openjump.app.video.isPlateCircleWithinFrame
 import com.openjump.app.video.VideoTrackingFrameSource
 import com.openjump.app.video.toPresentation
@@ -147,6 +152,7 @@ data class PlateDetectionDebug(
     val fallbackReason: String? = null,
 )
 
+@Immutable
 data class PlateDetectionUiState(
     val phase: PlateDetectionPhase = PlateDetectionPhase.IDLE,
     val detection: PlateDetection? = null,
@@ -198,6 +204,7 @@ internal fun isObliquePlateOverrideEligible(proposal: PlateCalibrationProposal):
 internal fun committedPlateDetectionForConfirm(proposal: PlateCalibrationProposal): PlateDetection? =
     if (proposal.adjusted || proposal.requiresAdjustment) null else proposal.originalDetection
 
+@Immutable
 data class TrackingUiState(
     val phase: TrackingPhase = TrackingPhase.IDLE,
     val results: List<TrackingFrameResult> = emptyList(),
@@ -205,9 +212,15 @@ data class TrackingUiState(
     val estimatedRemainingMs: Long? = null,
     val message: String? = null,
     val processingPreview: TrackingProcessingPreview? = null,
+    val endFrameIndex: Int? = null,
 ) {
     val isBusy: Boolean get() = phase == TrackingPhase.INITIALIZING || phase == TrackingPhase.PROCESSING
     val canStart: Boolean get() = phase == TrackingPhase.READY
+    val seedFrameIndex: Int? get() = results.firstOrNull()?.frameIndex
+    val lostFrameIndex: Int?
+        get() = results.lastOrNull()?.takeIf { it.result.sample.status == TrackingStatus.LOST }?.frameIndex
+    val canResumeAfterLoss: Boolean
+        get() = phase == TrackingPhase.LOST && results.any { it.result.sample.point != null }
 }
 
 /**
@@ -482,7 +495,12 @@ class FrameSelectorViewModel(
         plateDetectionJob = viewModelScope.launch {
             var source: VideoTrackingFrameSource? = null
             try {
-                val activeSource = VideoTrackingFrameSource(context, uri, index)
+                val activeSource = VideoTrackingFrameSource(
+                    context = context,
+                    uri = uri,
+                    index = index,
+                    maximumTrackingDimension = TrackingDeviceProfile.recommendedTrackingDimension(context),
+                )
                 source = activeSource
                 val decoded = withContext(Dispatchers.IO) { activeSource.frameAt(proposal.frameIndex) }
                 if (!isCurrentProposal(proposal, generation, decoded.frameIndex, requestIdentity)) return@launch
@@ -966,6 +984,168 @@ class FrameSelectorViewModel(
         initializeTrackingTarget(point, null)
     }
 
+    private fun calibratedPlateDiameterInTrackingPx(
+        index: VideoFrameIndex,
+        trackingWidth: Int,
+        presentationWidth: Int,
+    ): Double? {
+        val draft = AppSession.encoderDraft.value ?: return null
+        val presentationDiameter = draft.plateDetection?.diameterPx ?: draft.calibration?.let { cal ->
+            // Only treat manual A-B calibration as a plate diameter if it matches the session plate diameter.
+            val matchesPlate = kotlin.math.abs(cal.referenceLengthM * 100.0 - draft.sessionPlateDiameterCm) <= 0.5
+            if (matchesPlate) hypot(cal.pointB.x - cal.pointA.x, cal.pointB.y - cal.pointA.y) else null
+        } ?: return null
+        if (!presentationDiameter.isFinite() || presentationDiameter <= 0.0 || presentationWidth <= 1 || trackingWidth <= 1) {
+            return null
+        }
+        return presentationDiameter * (trackingWidth - 1.0) / (presentationWidth - 1.0)
+    }
+
+    private fun createTrackingSource(
+        uri: Uri,
+        index: VideoFrameIndex,
+        performanceProfiler: TrackingPerformanceProfiler,
+        seedFrameIndex: Int,
+        originalPreviewObserver: (Int, Long, Bitmap, Int) -> Unit,
+    ): TrackingFrameSource {
+        val debugFactory = trackingSourceFactory?.takeIf { debugLoggingEnabled }
+        if (debugFactory != null) {
+            return debugFactory.create(
+                context, uri, index, performanceProfiler, seedFrameIndex, originalPreviewObserver,
+            )
+        }
+        return MediaCodecTrackingFrameSource(
+            context = context,
+            uri = uri,
+            index = index,
+            maximumTrackingDimension = TrackingDeviceProfile.recommendedTrackingDimension(context),
+            performanceProfiler = performanceProfiler,
+            previewObserver = originalPreviewObserver,
+        )
+    }
+
+    fun setTrackingEndFrame() {
+        val state = _trackingState.value
+        if (state.phase != TrackingPhase.READY) return
+        val rendered = displayState.value.renderedIndex ?: return
+        val seed = state.seedFrameIndex ?: return
+        if (rendered <= seed) return
+        _trackingState.update { it.copy(endFrameIndex = rendered) }
+    }
+
+    fun clearTrackingEndFrame() {
+        if (_trackingState.value.phase != TrackingPhase.READY) return
+        _trackingState.update { it.copy(endFrameIndex = null) }
+    }
+
+    fun resumeTrackingAfterLoss(point: ImagePoint) {
+        val currentState = _trackingState.value
+        if (!currentState.canResumeAfterLoss) return
+        val display = displayState.value
+        val renderedIndex = display.renderedIndex ?: return
+        if (!display.canMark || currentState.isBusy || _exportState.value.blocksViewer) return
+        val lostIndex = currentState.lostFrameIndex ?: return
+        if (renderedIndex < lostIndex) return
+        val uri = AppSession.videoUri.value ?: return
+        val index = AppSession.frameIndex.value ?: return
+        val priorResults = currentState.results
+
+        disposeOfflineTracker()
+        val generation = ++trackingGeneration
+        trackingSessionKey = AppSession.encoderDraft.value?.sessionKey
+        trackingVideoUri = uri.toString()
+        _trackingState.value = currentState.copy(
+            phase = TrackingPhase.INITIALIZING,
+            message = context.getString(R.string.selector_tracking_initializing),
+            processingPreview = null,
+        )
+        trackingJob = viewModelScope.launch {
+            try {
+                val performanceProfiler = TrackingPerformanceProfiler()
+                var lastPreviewCopyMs = 0L
+                val originalPreviewObserver: (Int, Long, Bitmap, Int) -> Unit = { frame, pts, borrowed, rotation ->
+                    val now = SystemClock.uptimeMillis()
+                    val shouldCopy = frame == index.frameCount - 1 ||
+                        ((frame - renderedIndex) % PROGRESS_UPDATE_INTERVAL == 0 &&
+                            now - lastPreviewCopyMs >= PREVIEW_COPY_MIN_INTERVAL_MS)
+                    if (shouldCopy && trackingPreviewVisible && generation == trackingGeneration &&
+                        _trackingState.value.phase == TrackingPhase.PROCESSING
+                    ) {
+                        lastPreviewCopyMs = now
+                        val owned = copyTrackingPreview(borrowed, rotation)
+                        if (trackingPreviewVisible && generation == trackingGeneration &&
+                            _trackingState.value.phase == TrackingPhase.PROCESSING
+                        ) {
+                            pendingTrackingPreview = PendingTrackingPreview(generation, frame, pts, owned)
+                        } else owned.recycle()
+                    }
+                }
+                val trackingSource = createTrackingSource(
+                    uri = uri,
+                    index = index,
+                    performanceProfiler = performanceProfiler,
+                    seedFrameIndex = renderedIndex,
+                    originalPreviewObserver = originalPreviewObserver,
+                )
+                val trackingDimension = TrackingDeviceProfile.recommendedTrackingDimension(context)
+                val presentation = com.openjump.app.tracking.VideoPresentationGeometry.fromEncoded(
+                    index.width,
+                    index.height,
+                    index.rotationDegrees,
+                )
+                val (expectedWidth, _) = VideoFrameSafety.checkedGraySize(
+                    presentation.width,
+                    presentation.height,
+                    trackingDimension,
+                )
+                val plateDiameterTrackingPx = calibratedPlateDiameterInTrackingPx(
+                    index = index,
+                    trackingWidth = expectedWidth,
+                    presentationWidth = presentation.width,
+                )
+                val runner = OfflineVideoTracker(
+                    source = trackingSource,
+                    tracker = PyramidalKltMotionTracker(
+                        config = PyramidalKltMotionTracker.Config(targetDiameterPx = plateDiameterTrackingPx),
+                        performanceProfiler = performanceProfiler,
+                    ),
+                    performanceProfiler = performanceProfiler,
+                )
+                offlineTracker = runner
+                val resumed = withContext(Dispatchers.Default) {
+                    runner.resumeFrom(renderedIndex, point, priorResults)
+                }
+                if (generation != trackingGeneration) return@launch
+                if (resumed.result.sample.status == TrackingStatus.LOST) {
+                    runner.close()
+                    if (offlineTracker === runner) offlineTracker = null
+                    trackingJob = null
+                    _trackingState.value = currentState.copy(
+                        message = context.getString(R.string.selector_tracking_no_valid_point),
+                    )
+                } else {
+                    _trackingState.value = TrackingUiState(
+                        phase = TrackingPhase.READY,
+                        results = runner.results,
+                        message = context.getString(R.string.selector_tracking_initialized),
+                        endFrameIndex = currentState.endFrameIndex?.takeIf { it > renderedIndex },
+                    )
+                }
+            } catch (_: CancellationException) {
+                // A new selection/reset owns the next state.
+            } catch (_: Exception) {
+                if (generation == trackingGeneration) {
+                    offlineTracker?.close()
+                    offlineTracker = null
+                    trackingJob = null
+                    _trackingState.value = currentState.copy(
+                        message = context.getString(R.string.selector_tracking_init_error),
+                    )
+                }
+            }
+        }
+    }
+
     private fun initializeTrackingTarget(point: ImagePoint, decodedSeedFrame: DecodedTrackingFrame?) {
         val display = displayState.value
         val renderedIndex = display.renderedIndex ?: return
@@ -981,50 +1161,64 @@ class FrameSelectorViewModel(
         trackingJob = viewModelScope.launch {
             try {
                 val performanceProfiler = TrackingPerformanceProfiler()
+                var lastPreviewCopyMs = 0L
                 val originalPreviewObserver: (Int, Long, Bitmap, Int) -> Unit = { frame, pts, borrowed, rotation ->
-                            val shouldCopy = (frame - renderedIndex) % PROGRESS_UPDATE_INTERVAL == 0 || frame == index.frameCount - 1
-                            if (shouldCopy && trackingPreviewVisible && generation == trackingGeneration &&
-                                _trackingState.value.phase == TrackingPhase.PROCESSING
-                            ) {
-                                val owned = copyTrackingPreview(borrowed, rotation)
-                                if (trackingPreviewVisible && generation == trackingGeneration &&
-                                    _trackingState.value.phase == TrackingPhase.PROCESSING
-                                ) {
-                                    pendingTrackingPreview = PendingTrackingPreview(generation, frame, pts, owned)
-                                } else owned.recycle() // Never published/drawn.
-                            }
-                        }
-                val debugFactory = trackingSourceFactory?.takeIf { debugLoggingEnabled }
-                val trackingSource: TrackingFrameSource = debugFactory?.create(
-                    context, uri, index, performanceProfiler, renderedIndex, originalPreviewObserver,
-                ) ?: if (debugLoggingEnabled && PREFETCH_DEFAULT_ON) {
-                    PreviewMmrPrefetchFrameSource(
-                        context = context,
-                        uri = uri,
-                        index = index,
-                        profiler = performanceProfiler,
-                        seedFrameIndex = renderedIndex,
-                        originalPreviewObserver = originalPreviewObserver,
-                    )
-                } else {
-                    VideoTrackingFrameSource(
-                        context = context,
-                        uri = uri,
-                        index = index,
-                        performanceProfiler = performanceProfiler,
-                        previewObserver = originalPreviewObserver,
-                    )
+                    val now = SystemClock.uptimeMillis()
+                    val shouldCopy = frame == index.frameCount - 1 ||
+                        ((frame - renderedIndex) % PROGRESS_UPDATE_INTERVAL == 0 &&
+                            now - lastPreviewCopyMs >= PREVIEW_COPY_MIN_INTERVAL_MS)
+                    if (shouldCopy && trackingPreviewVisible && generation == trackingGeneration &&
+                        _trackingState.value.phase == TrackingPhase.PROCESSING
+                    ) {
+                        lastPreviewCopyMs = now
+                        val owned = copyTrackingPreview(borrowed, rotation)
+                        if (trackingPreviewVisible && generation == trackingGeneration &&
+                            _trackingState.value.phase == TrackingPhase.PROCESSING
+                        ) {
+                            pendingTrackingPreview = PendingTrackingPreview(generation, frame, pts, owned)
+                        } else owned.recycle() // Never published/drawn.
+                    }
                 }
+                val trackingSource = createTrackingSource(
+                    uri = uri,
+                    index = index,
+                    performanceProfiler = performanceProfiler,
+                    seedFrameIndex = renderedIndex,
+                    originalPreviewObserver = originalPreviewObserver,
+                )
+                val trackingDimension = TrackingDeviceProfile.recommendedTrackingDimension(context)
+                val presentation = com.openjump.app.tracking.VideoPresentationGeometry.fromEncoded(
+                    index.width,
+                    index.height,
+                    index.rotationDegrees,
+                )
+                val (expectedWidth, expectedHeight) = VideoFrameSafety.checkedGraySize(
+                    presentation.width,
+                    presentation.height,
+                    trackingDimension,
+                )
+                val plateDiameterTrackingPx = calibratedPlateDiameterInTrackingPx(
+                    index = index,
+                    trackingWidth = expectedWidth,
+                    presentationWidth = presentation.width,
+                )
                 val runner = OfflineVideoTracker(
                     source = trackingSource,
-                    tracker = PyramidalKltMotionTracker(performanceProfiler = performanceProfiler),
+                    tracker = PyramidalKltMotionTracker(
+                        config = PyramidalKltMotionTracker.Config(targetDiameterPx = plateDiameterTrackingPx),
+                        performanceProfiler = performanceProfiler,
+                    ),
                     performanceProfiler = performanceProfiler,
                 )
                 offlineTracker = runner
                 val initial = withContext(Dispatchers.Default) {
-                    if (decodedSeedFrame != null) {
-                        check(decodedSeedFrame.frameIndex == renderedIndex)
-                        runner.initialize(decodedSeedFrame, point)
+                    val reusableSeed = decodedSeedFrame?.takeIf {
+                        it.frameIndex == renderedIndex &&
+                            it.image.width == expectedWidth &&
+                            it.image.height == expectedHeight
+                    }
+                    if (reusableSeed != null) {
+                        runner.initialize(reusableSeed, point)
                     } else {
                         runner.initialize(renderedIndex, point)
                     }
@@ -1053,6 +1247,7 @@ class FrameSelectorViewModel(
             } catch (_: CancellationException) {
                 // A new selection/reset owns the next state.
             } catch (error: Exception) {
+                if (debugLoggingEnabled) Log.w(TRACKING_PERFORMANCE_TAG, "Tracking processing failed", error)
                 if (generation == trackingGeneration) {
                     offlineTracker?.close()
                     offlineTracker = null
@@ -1071,6 +1266,7 @@ class FrameSelectorViewModel(
         if (!canUseConfirmedPlateCalibration(_plateDetectionState.value.phase, AppSession.encoderDraft.value)) return
         if (!_trackingState.value.canStart) return
         val generation = trackingGeneration
+        val endFrameIndex = _trackingState.value.endFrameIndex
         trackingJob = viewModelScope.launch {
             pendingTrackingPreview = null
             pausePlayback()
@@ -1082,7 +1278,7 @@ class FrameSelectorViewModel(
             _trackingState.update { it.copy(phase = TrackingPhase.PROCESSING, progress = 0f, estimatedRemainingMs = null, message = null, processingPreview = null) }
             try {
                 val finalResults = withContext(Dispatchers.Default) {
-                    runner.trackRemaining { result, processed, total ->
+                    runner.trackRemaining(endFrameIndex = endFrameIndex) { result, processed, total ->
                         val shouldPublish = processed == total || processed % PROGRESS_UPDATE_INTERVAL == 0 ||
                             result.result.sample.status == TrackingStatus.LOST
                         if (shouldPublish && generation == trackingGeneration) {
@@ -1173,6 +1369,7 @@ class FrameSelectorViewModel(
             } catch (_: CancellationException) {
                 // Reset/re-selection owns the next state.
             } catch (error: Exception) {
+                if (debugLoggingEnabled) Log.w(TRACKING_PERFORMANCE_TAG, "Tracking processing failed", error)
                 if (generation == trackingGeneration) {
                     offlineTracker?.close()
                     offlineTracker = null
@@ -1486,6 +1683,7 @@ class FrameSelectorViewModel(
 
     companion object {
         private const val PROGRESS_UPDATE_INTERVAL = 5
+        private const val PREVIEW_COPY_MIN_INTERVAL_MS = 150L
         private const val TRACKING_PERFORMANCE_TAG = "OpenJumpTrackingPerf"
         private const val PLATE_DETECTION_TAG = "OpenJumpPlateDetection"
         /** Ephemeral DEBUG-only override; null/OFF = usual route. Cleared in test finally. */

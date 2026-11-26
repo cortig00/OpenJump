@@ -12,6 +12,7 @@ licenses below; this declaration does not claim ownership of third-party marks.
 | `encoder_formula_*.xml` | Generated from the editable `.tex` files under `tools/encoder-formulas/src/`; project equations/resources under GPL-3.0-or-later. The optional generator uses freely licensed LaTeX/dvisvgm/AGP tools. No font binary or formula-rendering SDK is shipped. |
 | Fastlane screenshots | Maintainer-produced OpenJump protocol/catalog screenshots and localized store compositions, GPL-3.0-or-later. They use demo data only; no real athlete video frames, athlete records or signing information are included. |
 | Fastlane icon | Derived from the project's launcher foreground and the existing launcher-background color, GPL-3.0-or-later. |
+| `res/raw/demo_cmj_sample.mp4` and `res/drawable/ic_angles.xml` | Original synthetic 60 fps CMJ demonstration video and custom angle vector icon authored in-repo for OpenJump, distributed under GPL-3.0-or-later. No real athlete footage or third-party media is included. |
 
 The runtime's third-party licenses and notices are in
 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and bundled under

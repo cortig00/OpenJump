@@ -16,7 +16,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -141,7 +141,7 @@ private fun TimeSeriesCanvas(
     onPointSelected: ((Long) -> Unit)?,
 ) {
     val points = series.points
-    val coordinatorState = coordinator?.stateFlow?.collectAsState()?.value
+    val coordinatorState = coordinator?.stateFlow?.collectAsStateWithLifecycle()?.value
     var localSourcePtsUs by remember(series) { mutableStateOf<Long?>(null) }
     val confirmedSourcePtsUs = coordinatorState?.renderedSourcePtsUs
     LaunchedEffect(confirmedSourcePtsUs) {

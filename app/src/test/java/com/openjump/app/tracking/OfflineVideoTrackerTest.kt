@@ -105,6 +105,48 @@ class OfflineVideoTrackerTest {
         assertEquals(TrackingStatus.LOST, repeated.last().result.sample.status)
     }
 
+    @Test
+    fun `trackRemaining stops cleanly at explicit endFrameIndex`() = kotlinx.coroutines.runBlocking {
+        val source = FakeFrameSource(frameCount = 10)
+        val runner = OfflineVideoTracker(source, FakeMotionTracker(lostAtTimestampUs = Long.MAX_VALUE))
+
+        runner.initialize(frameIndex = 1, seedInPresentation = ImagePoint(20.0, 30.0))
+        val progressPairs = mutableListOf<Pair<Int, Int>>()
+        val results = runner.trackRemaining(endFrameIndex = 4) { _, processed, total ->
+            progressPairs += processed to total
+        }
+
+        assertEquals(listOf(1, 2, 3, 4), results.map { it.frameIndex })
+        assertEquals(listOf(2, 3, 4), source.decodedAfterSeed)
+        assertEquals(listOf(1 to 3, 2 to 3, 3 to 3), progressPairs)
+    }
+
+    @Test
+    fun `resumeFrom preserves valid prefix drops lost sentinel and continues tracking`() = kotlinx.coroutines.runBlocking {
+        val source = FakeFrameSource(frameCount = 7)
+        val runner = OfflineVideoTracker(source, FakeMotionTracker(lostAtTimestampUs = 20_000L))
+
+        runner.initialize(frameIndex = 0, seedInPresentation = ImagePoint(50.0, 40.0))
+        val partial = runner.trackRemaining { _, _, _ -> }
+        assertEquals(listOf(0, 1, 2), partial.map { it.frameIndex })
+        assertEquals(TrackingStatus.LOST, partial.last().result.sample.status)
+
+        val resumedSource = FakeFrameSource(frameCount = 7)
+        val resumedRunner = OfflineVideoTracker(resumedSource, FakeMotionTracker(lostAtTimestampUs = Long.MAX_VALUE))
+        val anchor = resumedRunner.resumeFrom(
+            frameIndex = 4,
+            seedInPresentation = ImagePoint(60.0, 40.0),
+            priorResults = partial,
+        )
+        assertEquals(4, anchor.frameIndex)
+        assertEquals(TrackingStatus.TRACKING, anchor.result.sample.status)
+
+        val merged = resumedRunner.trackRemaining(endFrameIndex = 6) { _, _, _ -> }
+        assertEquals(listOf(0, 1, 4, 5, 6), merged.map { it.frameIndex })
+        assertTrue(merged.all { it.result.sample.status == TrackingStatus.TRACKING })
+        assertEquals(listOf(5, 6), resumedSource.decodedAfterSeed)
+    }
+
     private class FakeRun(
         val results: List<TrackingFrameResult>,
         val samples: List<TrackingSample>,

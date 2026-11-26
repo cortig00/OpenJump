@@ -1,5 +1,6 @@
 package com.openjump.app.ui.angles
 
+import android.graphics.Bitmap
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -108,7 +109,11 @@ class AngleV2SavedDetailViewModel(
      * heredado [loadAthleteName] (que se conserva para los llamantes y pruebas anteriores).
      */
     private val loadAthleteIdentity: (suspend (Long) -> AngleV2SavedAthleteIdentity?)? = null,
+    private val decodeImage: (AngleImageReadResult<ByteArray>, AngleV2SavedDetailFrame) -> AngleV2SavedImage = ::angleV2SavedImage,
+    maxImageCacheKb: Int = defaultAngleImageCacheKb(),
 ) : ViewModel() {
+
+    private val imageCache = BoundedAngleImageCache(maxCacheKb = maxImageCacheKb)
 
     private val _state = MutableStateFlow<AngleV2SavedDetailState>(AngleV2SavedDetailState.Loading)
     val state: StateFlow<AngleV2SavedDetailState> = _state.asStateFlow()
@@ -266,6 +271,12 @@ class AngleV2SavedDetailViewModel(
      * mediciones cuando la imagen falta o está corrupta, y nunca sustituirla por una captura falsa.
      */
     suspend fun image(frame: AngleV2SavedDetailFrame): AngleV2SavedImage = withContext(Dispatchers.IO) {
+        val cacheKey = imageCacheKey(frame)
+        imageCache.get(cacheKey)?.let { cached ->
+            val reusable = runCatching { !cached.isRecycled }.getOrDefault(true)
+            if (reusable) return@withContext AngleV2SavedImage.Available(cached)
+            imageCache.remove(cacheKey)
+        }
         val result = try {
             readImageBytes(frame.imageKey, frame.integrity)
         } catch (cancellation: CancellationException) {
@@ -273,8 +284,21 @@ class AngleV2SavedDetailViewModel(
         } catch (_: Exception) {
             return@withContext AngleV2SavedImage.Unreadable
         }
-        angleV2SavedImage(result, frame)
+        val decoded = decodeImage(result, frame)
+        if (decoded is AngleV2SavedImage.Available) {
+            val sizeKb = runCatching { (decoded.bitmap.allocationByteCount / 1024).coerceAtLeast(1) }.getOrDefault(1)
+            imageCache.put(cacheKey, decoded.bitmap, sizeKb)
+        }
+        decoded
     }
+
+    override fun onCleared() {
+        imageCache.clear()
+        super.onCleared()
+    }
+
+    private fun imageCacheKey(frame: AngleV2SavedDetailFrame): String =
+        "${frame.imageKey}:${frame.integrity.sha256Hex}:${frame.imageWidth}x${frame.imageHeight}"
 
     /**
      * Prepara la copia verificada del PNG de [frame] para compartirla fuera de la app.
@@ -411,6 +435,11 @@ class AngleV2SavedDetailViewModel(
 
     companion object {
 
+        internal fun defaultAngleImageCacheKb(): Int {
+            val maxHeapKb = (Runtime.getRuntime().maxMemory() / 1024L).coerceAtLeast(4_096L)
+            return minOf(16 * 1024, (maxHeapKb / 12L).toInt()).coerceAtLeast(4 * 1024)
+        }
+
         /** Factory de producción: la misma base Room y el mismo almacén privado de imágenes. */
         fun factory(): ViewModelProvider.Factory = viewModelFactory {
             initializer {
@@ -432,6 +461,51 @@ class AngleV2SavedDetailViewModel(
                     },
                 )
             }
+        }
+    }
+}
+
+/**
+ * Pure-Kotlin thread-safe LRU bitmap cache bounded by KiB budget.
+ * Avoids Android LruCache stubs in JVM unit tests and never recycles bitmaps during eviction so
+ * Compose/RenderThread cannot draw a recycled bitmap.
+ */
+internal class BoundedAngleImageCache(private val maxCacheKb: Int) {
+    private data class Entry(val bitmap: Bitmap, val sizeKb: Int)
+
+    private val lock = Any()
+    private val map = LinkedHashMap<String, Entry>(16, 0.75f, true)
+    private var currentKb = 0
+
+    fun get(key: String): Bitmap? = synchronized(lock) { map[key]?.bitmap }
+
+    fun remove(key: String) {
+        synchronized(lock) {
+            map.remove(key)?.let { currentKb -= it.sizeKb }
+        }
+    }
+
+    fun put(key: String, bitmap: Bitmap, sizeKb: Int) {
+        val safeSize = sizeKb.coerceAtLeast(1)
+        if (safeSize > maxCacheKb) return
+        synchronized(lock) {
+            map.put(key, Entry(bitmap, safeSize))?.let { previous ->
+                currentKb -= previous.sizeKb
+            }
+            currentKb += safeSize
+            val iterator = map.entries.iterator()
+            while (currentKb > maxCacheKb && iterator.hasNext()) {
+                val eldest = iterator.next()
+                currentKb -= eldest.value.sizeKb
+                iterator.remove()
+            }
+        }
+    }
+
+    fun clear() {
+        synchronized(lock) {
+            map.clear()
+            currentKb = 0
         }
     }
 }

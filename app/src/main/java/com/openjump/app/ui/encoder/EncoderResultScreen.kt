@@ -36,7 +36,7 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -61,8 +61,10 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.openjump.app.R
 import com.openjump.app.encoder.EncoderAnalysis
@@ -89,7 +91,13 @@ import com.openjump.app.ui.theme.Spacing
 import com.openjump.app.video.VideoFrameIndex
 import com.openjump.app.video.EncoderPlaybackCoordinator
 import com.openjump.app.ui.titleResource
+import com.openjump.app.ui.result.JumpResultShareCardData
+import com.openjump.app.ui.result.JumpResultShareMetric
+import com.openjump.app.ui.result.JumpResultShareStager
 import com.openjump.app.ui.result.ResultNoteDialog
+import com.openjump.app.ui.result.ResultShareStudioSheet
+import com.openjump.app.ui.result.ShareCardRepetitionBar
+import com.openjump.app.ui.result.buildEncoderVideoExportSource
 import kotlinx.coroutines.launch
 import java.util.Locale
 
@@ -100,15 +108,38 @@ fun EncoderResultScreen(
     onCorrect: () -> Unit,
     onDiscard: () -> Unit,
     onSaved: (() -> Unit)? = null,
+    athleteName: String? = null,
     viewModel: EncoderResultViewModel = viewModel(factory = EncoderResultViewModel.Factory),
 ) {
-    val state by viewModel.state.collectAsState()
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    var showShareStudio by rememberSaveable { mutableStateOf(false) }
+    var sharingCard by rememberSaveable { mutableStateOf(false) }
+    var shareError by rememberSaveable { mutableStateOf(false) }
+    val shareScope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val contentState = state as? EncoderResultState.Content
     Scaffold(
         topBar = {
             OpenJumpTopAppBar(
                 title = stringResource(R.string.encoder_result_title),
                 onNavigationClick = onCorrect,
                 navigationContentDescription = stringResource(R.string.result_correct),
+                actions = {
+                    if (contentState != null) {
+                        IconButton(
+                            onClick = {
+                                shareError = false
+                                showShareStudio = true
+                            },
+                            enabled = !sharingCard && !contentState.saving,
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_angle_share),
+                                contentDescription = stringResource(R.string.result_share_action),
+                            )
+                        }
+                    }
+                },
             )
         },
     ) { padding ->
@@ -147,6 +178,29 @@ fun EncoderResultScreen(
             )
         }
     }
+    if (showShareStudio && contentState != null) {
+        EncoderShareStudioHost(
+            analysis = contentState.analysis,
+            videoUri = contentState.videoUri,
+            videoIndex = contentState.videoIndex,
+            athleteName = athleteName,
+            dateTime = System.currentTimeMillis(),
+            sharing = sharingCard,
+            shareError = shareError,
+            onShare = { cardData, chooserTitle, options, photos ->
+                sharingCard = true
+                shareError = false
+                shareScope.launch {
+                    val launched = runCatching {
+                        JumpResultShareStager.share(context, cardData, chooserTitle, options, photos)
+                    }.getOrDefault(false)
+                    sharingCard = false
+                    if (launched) showShareStudio = false else shareError = true
+                }
+            },
+            onDismiss = { showShareStudio = false },
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -157,12 +211,18 @@ fun SavedEncoderResultScreen(
     onDeleted: () -> Unit,
     viewModel: SavedEncoderResultViewModel = viewModel(factory = SavedEncoderResultViewModel.factory(sessionId)),
 ) {
-    val state by viewModel.state.collectAsState()
-    val deleting by viewModel.deleting.collectAsState()
-    val deleteFailed by viewModel.deleteFailed.collectAsState()
-    val noteState by viewModel.noteState.collectAsState()
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    val deleting by viewModel.deleting.collectAsStateWithLifecycle()
+    val deleteFailed by viewModel.deleteFailed.collectAsStateWithLifecycle()
+    val noteState by viewModel.noteState.collectAsStateWithLifecycle()
     var editNote by rememberSaveable { mutableStateOf(false) }
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
+    var showShareStudio by rememberSaveable { mutableStateOf(false) }
+    var sharingCard by rememberSaveable { mutableStateOf(false) }
+    var shareError by rememberSaveable { mutableStateOf(false) }
+    val shareScope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val savedContent = state as? SavedEncoderState.Content
     Scaffold(
         topBar = {
             OpenJumpTopAppBar(
@@ -170,7 +230,19 @@ fun SavedEncoderResultScreen(
                 onNavigationClick = { if (!noteState.saving) onBack() },
                 navigationContentDescription = stringResource(R.string.common_back),
                 actions = {
-                    if (state is SavedEncoderState.Content) {
+                    if (savedContent != null) {
+                        IconButton(
+                            onClick = {
+                                shareError = false
+                                showShareStudio = true
+                            },
+                            enabled = !deleting && !noteState.saving && !sharingCard,
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_angle_share),
+                                contentDescription = stringResource(R.string.result_share_action),
+                            )
+                        }
                         TextButton(
                             onClick = { confirmDelete = true },
                             enabled = !deleting && !noteState.saving,
@@ -213,6 +285,29 @@ fun SavedEncoderResultScreen(
                 modifier = Modifier.padding(padding),
             )
         }
+    }
+
+    if (showShareStudio && savedContent != null) {
+        EncoderShareStudioHost(
+            analysis = savedContent.stored.analysis,
+            videoUri = savedContent.stored.videoUri,
+            athleteName = savedContent.stored.athleteName,
+            dateTime = savedContent.stored.dateTime,
+            sharing = sharingCard,
+            shareError = shareError,
+            onShare = { cardData, chooserTitle, options, photos ->
+                sharingCard = true
+                shareError = false
+                shareScope.launch {
+                    val launched = runCatching {
+                        JumpResultShareStager.share(context, cardData, chooserTitle, options, photos)
+                    }.getOrDefault(false)
+                    sharingCard = false
+                    if (launched) showShareStudio = false else shareError = true
+                }
+            },
+            onDismiss = { showShareStudio = false },
+        )
     }
 
     if (editNote) {
@@ -354,7 +449,7 @@ fun EncoderResultContent(
     val showSaveAction = onSave != null && !saved
     var videoVisit by remember(analysis) { mutableIntStateOf(0) }
     val playbackCoordinator = remember(analysis, videoVisit) { EncoderPlaybackCoordinator() }
-    val playbackState by playbackCoordinator.stateFlow.collectAsState()
+    val playbackState by playbackCoordinator.stateFlow.collectAsStateWithLifecycle()
     var videoIntentState by remember(analysis) { mutableStateOf(EncoderResultVideoIntentState()) }
     val summaryScrollState = rememberLazyListState()
     val repetitionsScrollState = rememberLazyListState()
@@ -1780,4 +1875,178 @@ private fun Problem(
             Text(actionLabel ?: stringResource(R.string.common_retry))
         }
     }
+}
+
+@Composable
+private fun EncoderShareStudioHost(
+    analysis: EncoderAnalysis,
+    videoUri: String?,
+    videoIndex: VideoFrameIndex? = null,
+    athleteName: String?,
+    dateTime: Long,
+    sharing: Boolean,
+    shareError: Boolean,
+    onShare: (
+        JumpResultShareCardData,
+        String,
+        com.openjump.app.ui.result.ShareCardOptions,
+        List<com.openjump.app.ui.result.ShareCardPhotoFrame>,
+    ) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val unitSystem = LocalUnitSystem.current
+    val locale = currentAppLocale()
+    val exerciseTitle = stringResource(analysis.setup.exercise.titleResource())
+    val loadLabel = MeasurementFormatting.format(
+        analysis.setup.loadKg,
+        MeasurementQuantity.MASS_KG,
+        unitSystem,
+        locale,
+    )
+    val validReps = analysis.validRepetitions
+    val repsLabel = pluralStringResource(
+        R.plurals.history_valid_repetitions,
+        validReps.size,
+        validReps.size,
+    )
+    val methodLabel = stringResource(R.string.history_encoder_context, loadLabel, repsLabel)
+    val primaryLabel = stringResource(R.string.encoder_metric_mcv)
+    val primaryValue = analysis.bestMcv?.let {
+        MeasurementFormatting.format(it, MeasurementQuantity.SPEED_MPS, unitSystem, locale)
+    } ?: stringResource(R.string.common_value_unavailable)
+
+    val peakVelocityLabel = stringResource(R.string.encoder_metric_peak_velocity_short)
+    val romLabel = stringResource(R.string.encoder_metric_rom_short)
+    val velocityLossLabel = stringResource(EncoderMetricKey.VELOCITY_LOSS.titleResource())
+    val concentricTimeLabel = stringResource(R.string.encoder_metric_concentric_time)
+    val secondaryMetrics = remember(
+        analysis,
+        unitSystem,
+        locale,
+        peakVelocityLabel,
+        romLabel,
+        velocityLossLabel,
+        concentricTimeLabel,
+    ) {
+        buildList {
+            validReps.mapNotNull { it.metric(EncoderMetricKey.PEAK_VELOCITY)?.value }.maxOrNull()?.let { pv ->
+                add(
+                    JumpResultShareMetric(
+                        label = peakVelocityLabel,
+                        value = MeasurementFormatting.format(pv, MeasurementQuantity.SPEED_MPS, unitSystem, locale),
+                    ),
+                )
+            }
+            val vloss = validReps.lastOrNull()?.metric(EncoderMetricKey.VELOCITY_LOSS)
+            if (vloss != null && vloss.validity != MetricValidity.INVALID && validReps.size >= 2) {
+                add(
+                    JumpResultShareMetric(
+                        label = velocityLossLabel,
+                        value = String.format(locale, "%.1f %%", vloss.value),
+                    ),
+                )
+            }
+            validReps.mapNotNull { it.metric(EncoderMetricKey.ROM)?.value }.average().takeIf { it.isFinite() }?.let { avgRom ->
+                add(
+                    JumpResultShareMetric(
+                        label = romLabel,
+                        value = MeasurementFormatting.format(avgRom, MeasurementQuantity.DISPLACEMENT_M, unitSystem, locale),
+                    ),
+                )
+            }
+            validReps.firstOrNull()?.metric(EncoderMetricKey.CONCENTRIC_TIME)?.value?.let { ct ->
+                add(
+                    JumpResultShareMetric(
+                        label = concentricTimeLabel,
+                        value = String.format(locale, "%.2f s", ct),
+                    ),
+                )
+            }
+        }
+    }
+
+    val chooserTitle = stringResource(R.string.result_share_chooser_title)
+    val footerLabel = stringResource(R.string.result_share_footer)
+    val speedUnitSymbol = unitSystem.speed.id
+    val repChartTitle = stringResource(R.string.share_studio_rep_chart_title, speedUnitSymbol)
+    val repChartLegendBest = stringResource(R.string.share_studio_chart_legend_best)
+    val repChartLegendFatigue = stringResource(R.string.share_studio_chart_legend_fatigue, 25)
+    val repetitionBars = remember(validReps, unitSystem, locale) {
+        validReps.mapNotNull { rep ->
+            val mcv = rep.metric(EncoderMetricKey.MCV)?.value ?: return@mapNotNull null
+            val displayNum = MeasurementFormatting.toDisplay(mcv, MeasurementQuantity.SPEED_MPS, unitSystem)
+            ShareCardRepetitionBar(
+                repNumber = rep.ordinal + 1,
+                value = displayNum,
+                displayValue = String.format(locale, "%.2f", displayNum),
+            )
+        }
+    }
+    val baseCardData = remember(
+        exerciseTitle,
+        methodLabel,
+        primaryLabel,
+        primaryValue,
+        secondaryMetrics,
+        dateTime,
+        athleteName,
+        footerLabel,
+        repChartTitle,
+        repChartLegendBest,
+        repChartLegendFatigue,
+        repetitionBars,
+    ) {
+        JumpResultShareCardData(
+            protocolTitle = exerciseTitle,
+            methodLabel = methodLabel,
+            primaryLabel = primaryLabel,
+            primaryValue = primaryValue,
+            secondaryMetrics = secondaryMetrics,
+            dateLabel = Formatting.dateTimeToText(dateTime),
+            athleteName = athleteName,
+            footerLabel = footerLabel,
+            repetitionChartTitle = repChartTitle,
+            repetitionBars = repetitionBars,
+            repetitionChartLegendBest = repChartLegendBest,
+            repetitionChartLegendFatigue = repChartLegendFatigue,
+        )
+    }
+
+    val repPrefix = stringResource(R.string.video_hud_rep_prefix)
+    val videoExportSource = remember(
+        videoUri,
+        videoIndex,
+        baseCardData,
+        analysis,
+        unitSystem,
+        locale,
+        repPrefix,
+        peakVelocityLabel,
+        velocityLossLabel,
+        romLabel,
+    ) {
+        buildEncoderVideoExportSource(
+            videoUri = videoUri,
+            videoIndex = videoIndex,
+            cardData = baseCardData,
+            analysis = analysis,
+            unitSystem = unitSystem,
+            locale = locale,
+            repPrefix = repPrefix,
+            peakVelocityLabel = peakVelocityLabel,
+            velocityLossLabel = velocityLossLabel,
+            romLabel = romLabel,
+        )
+    }
+
+    ResultShareStudioSheet(
+        cardData = baseCardData,
+        videoUri = null,
+        frameRequests = emptyList(),
+        sharing = sharing,
+        shareError = shareError,
+        onConfirmShare = { options, photos -> onShare(baseCardData, chooserTitle, options, photos) },
+        onDismiss = onDismiss,
+        videoExportSource = videoExportSource,
+    )
 }

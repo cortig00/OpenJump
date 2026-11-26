@@ -1,0 +1,5 @@
+OpenJump 1.4.0:
+• Export Studio(PNG/MP4): 점프 프레임·VBT 반복 속도 그래프가 포함된 4:5/9:16 라이트·다크 카드와 로고·4코너 HUD·반복별 ROM/속도·바벨 궤적 영상 내보내기.
+• VBT 인코더 고도화: MediaCodec 고속 추적, 원형 ROI 드리프트 방지, 피로 반복 감지 개선.
+• 설정에서 다시 볼 수 있는 60fps CMJ·스쿼트 샘플 영상 내장.
+• Material Design 3, OLED 다크 모드, 선택적 Material You 지원. 100% 오프라인.

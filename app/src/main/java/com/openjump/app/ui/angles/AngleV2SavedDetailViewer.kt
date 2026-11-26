@@ -7,6 +7,7 @@ import android.view.ViewTreeObserver
 import android.view.WindowManager
 import androidx.annotation.DrawableRes
 import androidx.annotation.RequiresApi
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -27,7 +28,6 @@ import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -74,6 +74,7 @@ import com.openjump.app.R
 import com.openjump.app.ui.Formatting
 import com.openjump.app.ui.currentAppLocale
 import com.openjump.app.ui.theme.OpenJumpTypes
+import com.openjump.app.ui.theme.ShapeTokens
 import com.openjump.app.ui.theme.Spacing
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -442,7 +443,12 @@ fun AngleV2SavedFrameSection(
         image = imageLoader(frame)
     }
     val available = image as? AngleV2SavedImage.Available
-    Card(modifier.fillMaxWidth()) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = ShapeTokens.medium,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+    ) {
         Column(
             Modifier.fillMaxWidth().padding(Spacing.md),
             verticalArrangement = Arrangement.spacedBy(Spacing.sm),
@@ -518,7 +524,7 @@ private fun FrameImageViewport(
                 .heightIn(min = 48.dp)
         }
         Box(
-            modifier = boxModifier.background(MaterialTheme.colorScheme.surfaceVariant),
+            modifier = boxModifier.background(MaterialTheme.colorScheme.surfaceContainerHigh),
             contentAlignment = Alignment.Center,
         ) {
             when (image) {
@@ -1133,7 +1139,7 @@ internal fun AngleV2GalleryImageBox(
             .fillMaxWidth()
             .height(ANGLE_V2_SAVED_GALLERY_IMAGE_HEIGHT_DP.dp)
             .clipToBounds()
-            .background(MaterialTheme.colorScheme.surfaceVariant),
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
         contentAlignment = Alignment.Center,
     ) {
         when (image) {
@@ -1411,7 +1417,7 @@ private fun AngleDetailImageDialog(
                             }
                         }
                         .clipToBounds()
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                         // El handler se recrea con la PETICIÓN COMPLETA (no con el id de fotograma):
                         // cambia de raíz, de clave o de integridad declarada y no arrastra estado.
                         .pointerInput(request) {

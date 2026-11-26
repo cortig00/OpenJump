@@ -33,10 +33,11 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -44,6 +45,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -76,6 +78,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HistoryScreen(
     onMeasurementSelected: (Long) -> Unit,
@@ -84,18 +87,18 @@ fun HistoryScreen(
     onAngleMultiFrameSelected: (AngleAnalysisHistoryEntry) -> Unit,
     viewModel: HistoryViewModel = viewModel(factory = HistoryViewModel.Factory),
 ) {
-    val state by viewModel.state.collectAsState()
-    val athletes by viewModel.athletes.collectAsState()
-    val groups by viewModel.groups.collectAsState()
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    val athletes by viewModel.athletes.collectAsStateWithLifecycle()
+    val groups by viewModel.groups.collectAsStateWithLifecycle()
     // F035 + Ángulos: objetivo pendiente de confirmación (cancelar = null, sin efecto), objetivos
     // con borrado en vuelo y último fallo para reintentar. La lista se conserva hasta que el
     // repositorio confirme el borrado de la raíz.
-    val deletingTargets by viewModel.deletingTargets.collectAsState()
-    val deleteFailedTarget by viewModel.deleteFailedTarget.collectAsState()
+    val deletingTargets by viewModel.deletingTargets.collectAsStateWithLifecycle()
+    val deleteFailedTarget by viewModel.deleteFailedTarget.collectAsStateWithLifecycle()
     // V2: confirmación preparada (cuenta REAL de fotogramas del agregado) y aviso posterior. La
     // prueba exacta no llega a la composición ni se guarda: sólo la tiene el controlador en memoria.
-    val v2DeleteConfirmation by viewModel.v2DeleteConfirmation.collectAsState()
-    val v2DeleteNotice by viewModel.v2DeleteNotice.collectAsState()
+    val v2DeleteConfirmation by viewModel.v2DeleteConfirmation.collectAsStateWithLifecycle()
+    val v2DeleteNotice by viewModel.v2DeleteNotice.collectAsStateWithLifecycle()
     val v2DeleteAvailable = viewModel.angleV2DeleteAvailable
     // Se guarda la clave (familia + id) y no un id suelto: sobrevive a la recreación sin poder
     // confundir un análisis con una sesión de otra familia que comparta número.
@@ -122,11 +125,15 @@ fun HistoryScreen(
         )
     }
 
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             OpenJumpTopAppBar(
                 title = stringResource(R.string.history_title),
                 showBrandLogo = true,
+                scrollBehavior = scrollBehavior,
             )
         },
     ) { padding ->

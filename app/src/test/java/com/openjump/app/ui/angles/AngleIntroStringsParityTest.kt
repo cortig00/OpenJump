@@ -66,12 +66,12 @@ class AngleIntroStringsParityTest {
     }
 
     @Test
-    fun `values es sigue siendo byte a byte el catalogo base`() {
-        // Sin el espejo explícito, Android puede preferir es-419 para un usuario que elige español.
+    fun `values en sigue siendo byte a byte el catalogo base`() {
+        // El catálogo por defecto es inglés para fallback internacional; values-en lo refleja explícitamente.
         assertEquals(
-            "values-es debe conservar íntegro el catálogo español original",
+            "values-en debe conservar íntegro el catálogo inglés por defecto",
             resolve("app/src/main/res/values/strings.xml").readText(),
-            resolve("app/src/main/res/values-es/strings.xml").readText(),
+            resolve("app/src/main/res/values-en/strings.xml").readText(),
         )
     }
 

@@ -24,7 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -102,8 +102,8 @@ fun GroupsScreen(
     onBack: () -> Unit,
     onGroupSelected: (Long) -> Unit,
 ) {
-    val groups by viewModel.groupList.collectAsState()
-    val athletes by viewModel.activeAthletes.collectAsState()
+    val groups by viewModel.groupList.collectAsStateWithLifecycle()
+    val athletes by viewModel.activeAthletes.collectAsStateWithLifecycle()
     var showArchived by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<GroupEntity?>(null) }
     var creating by remember { mutableStateOf(false) }
@@ -280,7 +280,7 @@ fun GroupDetailScreen(
     onAthleteSelected: (Long) -> Unit,
     onTesting: (Long) -> Unit = {},
 ) {
-    val detail by remember(groupId) { viewModel.observeDetail(groupId) }.collectAsState(initial = null)
+    val detail by remember(groupId) { viewModel.observeDetail(groupId) }.collectAsStateWithLifecycle(initialValue = null)
     val group = detail
     if (group == null) {
         EmptyState(stringResource(R.string.group_missing), stringResource(R.string.group_missing_body), Modifier.fillMaxSize())

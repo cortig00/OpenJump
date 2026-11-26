@@ -44,7 +44,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
@@ -94,7 +94,6 @@ import com.openjump.app.settings.CameraSettings
 import com.openjump.app.ui.components.JumpFlowStep
 import com.openjump.app.ui.components.QuickAthletePicker
 import com.openjump.app.ui.components.VideoPreparationOverlay
-import com.openjump.app.ui.labs.ExperimentalBadge
 import com.openjump.app.video.AppSession
 import com.openjump.app.ui.theme.ShapeTokens
 import com.openjump.app.ui.theme.Spacing
@@ -588,7 +587,6 @@ fun CameraScreen(
                     if (CameraCaptureContextPolicy.jumpStepBadgeVisible(captureContext)) {
                         CameraStepBadge(jumpFlowStep)
                     }
-                    if (activeEncoderDraft != null) ExperimentalBadge()
                     // Preserve existing testing-session athlete switching, now on demand.
                     if (showQuickAthletePicker) {
                         QuickAthletePicker(
@@ -675,7 +673,7 @@ fun CameraScreen(
  */
 @Composable
 internal fun <T : Any> appSessionFlowOrNull(enabled: Boolean, flow: StateFlow<T?>): State<T?> =
-    if (enabled) flow.collectAsState() else remember { mutableStateOf(null) }
+    if (enabled) flow.collectAsStateWithLifecycle() else remember { mutableStateOf(null) }
 
 /**
  * Same as [appSessionFlowOrNull] for flows with a non-null neutral value. The neutral
@@ -684,12 +682,12 @@ internal fun <T : Any> appSessionFlowOrNull(enabled: Boolean, flow: StateFlow<T?
  */
 @Composable
 internal fun <T : Any> appSessionFlowOr(enabled: Boolean, flow: Flow<T>, neutral: T): State<T> =
-    if (enabled) flow.collectAsState(initial = neutral) else remember { mutableStateOf(neutral) }
+    if (enabled) flow.collectAsStateWithLifecycle(initialValue = neutral) else remember { mutableStateOf(neutral) }
 
 /** [StateFlow] overload: no placeholder, the current value is available immediately. */
 @Composable
 internal fun <T : Any> appSessionFlowOr(enabled: Boolean, flow: StateFlow<T>, neutral: T): State<T> =
-    if (enabled) flow.collectAsState() else remember { mutableStateOf(neutral) }
+    if (enabled) flow.collectAsStateWithLifecycle() else remember { mutableStateOf(neutral) }
 
 @Composable
 internal fun CameraBackControl(onBack: () -> Unit, modifier: Modifier = Modifier) {

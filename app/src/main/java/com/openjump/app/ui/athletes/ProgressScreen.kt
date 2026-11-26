@@ -31,7 +31,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -96,9 +96,9 @@ fun ProgressScreen(
     onEncoderSelected: (Long) -> Unit,
 ) {
     val model: ProgressViewModel = viewModel(key = "progress-$athleteId", factory = ProgressViewModel.factory(athleteId))
-    val athlete by model.athlete.collectAsState()
-    val jumpSeries by model.jumps.collectAsState()
-    val encoderRecords by model.encoderRecords.collectAsState()
+    val athlete by model.athlete.collectAsStateWithLifecycle()
+    val jumpSeries by model.jumps.collectAsStateWithLifecycle()
+    val encoderRecords by model.encoderRecords.collectAsStateWithLifecycle()
     val pages = remember(jumpSeries, encoderRecords) {
         val jumps = ProtocolId.entries.filter { id -> jumpSeries.orEmpty().any { it.condition.protocolId == id } }
             .map(ProgressPage::Jump)

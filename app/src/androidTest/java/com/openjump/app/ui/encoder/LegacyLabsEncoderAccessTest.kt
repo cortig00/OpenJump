@@ -56,10 +56,10 @@ class LegacyLabsEncoderAccessTest {
     fun legacyDisabledLabsFlagCannotBlockEncoderSetup() {
         ActivityScenario.launch(MainActivity::class.java).use {
             composeRule.waitUntil(5_000) {
-                composeRule.onAllNodesWithText(context.getString(R.string.labs_name))
+                composeRule.onAllNodesWithText(context.getString(R.string.home_encoder_title))
                     .fetchSemanticsNodes().isNotEmpty()
             }
-            composeRule.onNodeWithText(context.getString(R.string.labs_name)).performClick()
+            composeRule.onNodeWithText(context.getString(R.string.home_encoder_title)).performClick()
             composeRule.waitUntil(5_000) {
                 composeRule.onAllNodesWithText(context.getString(R.string.encoder_setup_title))
                     .fetchSemanticsNodes().isNotEmpty()

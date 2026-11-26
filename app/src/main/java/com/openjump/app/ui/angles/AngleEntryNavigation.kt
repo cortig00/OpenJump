@@ -7,7 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -201,8 +201,8 @@ internal fun AnglesIntroDestination(
     val handoff: AngleEntryHandoffViewModel =
         viewModel(viewModelStoreOwner = entry, factory = AngleEntryHandoffViewModel.Factory)
     val scope = rememberCoroutineScope()
-    val state by handoff.state.collectAsState()
-    val selectedAthleteId by handoff.selectedAthleteId.collectAsState()
+    val state by handoff.state.collectAsStateWithLifecycle()
+    val selectedAthleteId by handoff.selectedAthleteId.collectAsStateWithLifecycle()
     val athletes = activeAthletes.orEmpty()
     val loading = activeAthletes == null
 
@@ -425,7 +425,7 @@ internal fun AnglesCameraDestination(
     }
     val handoff: AngleEntryHandoffViewModel =
         viewModel(viewModelStoreOwner = introEntry, factory = AngleEntryHandoffViewModel.Factory)
-    val state by handoff.state.collectAsState()
+    val state by handoff.state.collectAsStateWithLifecycle()
     // `resumed` sólo DESPIERTA el efecto; la autoridad se relee fresca en cada paso.
     val resumed = rememberEntryResumed(entry)
     // Escena autenticada por el ACTOR como intento RECORD propio (ticket/transferencia con token y

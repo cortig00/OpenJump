@@ -1,0 +1,5 @@
+OpenJump 1.4.0:
+• Export Studio (PNG & MP4): share 4:5/9:16 Dark & Light cards (jump frames or Encoder rep velocity chart) & videos with corner HUD, live rep/ROM/flight telemetry, barbell path & OpenJump logo.
+• Faster, sharper VBT Encoder: MediaCodec tracking, anti-drift circular ROI & fatigued-rep detection.
+• Built-in 60 fps CMJ & Squat sample videos (re-playable from Settings).
+• Material Design 3, OLED Dark Mode & optional Material You. 100% offline.

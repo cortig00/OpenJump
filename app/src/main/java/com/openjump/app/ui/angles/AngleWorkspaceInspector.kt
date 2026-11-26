@@ -366,7 +366,10 @@ internal fun AngleWorkspaceInspector(
                     },
                     modifier = Modifier.heightIn(min = Spacing.xxxl),
                 ) {
-                    Text(stringResource(R.string.angle_delete))
+                    Text(
+                        stringResource(R.string.angle_delete),
+                        color = MaterialTheme.colorScheme.error,
+                    )
                 }
             },
             dismissButton = {

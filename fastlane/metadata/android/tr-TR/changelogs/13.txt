@@ -1,0 +1,5 @@
+OpenJump 1.4.0:
+• Export Studio (PNG ve MP4): sıçrama kareleri veya VBT tekrar grafiğiyle 4:5/9:16 (açık/koyu) kartlar; logo, 4 köşe HUD, tekrar başına canlı ROM/hız ve bar yörüngesiyle video dışa aktarımı.
+• Daha hızlı ve hassas VBT Enkoder: MediaCodec takibi, kaymasız dairesel ROI ve yorgun tekrar algılama.
+• Ayarlar'dan açılabilen 60 fps CMJ ve Squat demo videoları.
+• Material Design 3, OLED Koyu Mod ve isteğe bağlı Material You. %100 çevrimdışı.

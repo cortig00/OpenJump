@@ -1,5 +1,6 @@
 package com.openjump.app.ui.result
 
+import androidx.compose.runtime.Immutable
 import com.openjump.app.math.TemporalSensitivityResult
 import com.openjump.app.measurement.MetricCalibration
 import com.openjump.app.protocol.EventType
@@ -11,6 +12,7 @@ import com.openjump.app.protocol.SpatialMark
 import com.openjump.app.protocol.VideoSource
 
 /** Presentation-only model shared by live and persisted result screens. */
+@Immutable
 data class ResultUiModel(
     val protocolId: ProtocolId,
     val protocolTitle: String,

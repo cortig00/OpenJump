@@ -40,7 +40,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -155,7 +155,7 @@ fun FvpSetupScreen(
     // Aviso del dueño (p. ej. "este borrador no tiene recuperacion"): la pantalla NO lo deduce por
     // su cuenta ni lo reconstruye, solo lo pinta.
     val recoveryNotice = if (flowViewModel != null) {
-        val notice by flowViewModel.recoveryNotice.collectAsState()
+        val notice by flowViewModel.recoveryNotice.collectAsStateWithLifecycle()
         notice
     } else {
         FvpRecoveryNotice.None
@@ -166,7 +166,7 @@ fun FvpSetupScreen(
     val mutations: FvpDraftMutations = flowViewModel ?: FvpDraftSession
     // Se observa el StateFlow (nunca `.value` dentro de composicion: lint
     // StateFlowValueCalledInComposition); los `rememberSaveable` de abajo lo usan solo como semilla.
-    val liveDraft by FvpDraftSession.draft.collectAsState()
+    val liveDraft by FvpDraftSession.draft.collectAsStateWithLifecycle()
 
     var setupAthleteId by rememberSaveable { mutableStateOf(selectedAthleteId) }
     // El protocolo es una ELECCION de la serie (chips), no un campo del borrador: se siembra del

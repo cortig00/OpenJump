@@ -73,7 +73,7 @@ class AngleMultiFrameUnavailableMappingTest {
         }
         assertTrue(
             "El aviso debe ofrecer la alternativa de copia local: $message",
-            message.contains("copia local", ignoreCase = true),
+            message.contains("local copy", ignoreCase = true),
         )
     }
 

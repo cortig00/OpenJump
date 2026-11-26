@@ -13,4 +13,9 @@
     <cache-path
         name="angle_frame_shares"
         path="shared-angle-frames/" />
+
+    <!-- Share only generated jump summary PNG cards, never the complete app cache. -->
+    <cache-path
+        name="jump_result_shares"
+        path="shared-jump-cards/" />
 </paths>

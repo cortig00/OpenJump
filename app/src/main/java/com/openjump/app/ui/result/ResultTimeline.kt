@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -30,6 +29,7 @@ import com.openjump.app.ui.titleResource
 import com.openjump.app.ui.LocalUnitSystem
 import com.openjump.app.ui.currentAppLocale
 import com.openjump.app.ui.theme.OpenJumpTheme
+import com.openjump.app.ui.theme.ShapeTokens
 
 /** Proportional PTS timeline. Text legend remains available outside Canvas. */
 @Composable
@@ -69,8 +69,8 @@ fun ResultTimeline(timeline: TimelineUiModel, modifier: Modifier = Modifier) {
             modifier = Modifier
                 .fillMaxWidth()
                 .height(28.dp)
-                .clip(RoundedCornerShape(999.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .clip(ShapeTokens.full)
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                 .clearAndSetSemantics { contentDescription = accessibleSummary },
         ) {
             var x = 0f
@@ -91,7 +91,7 @@ fun ResultTimeline(timeline: TimelineUiModel, modifier: Modifier = Modifier) {
                     Box(
                         modifier = Modifier
                             .size(12.dp)
-                            .clip(RoundedCornerShape(3.dp))
+                            .clip(ShapeTokens.extraSmall)
                             .background(colorFor(segment.kind)),
                     )
                     Spacer(Modifier.size(8.dp))

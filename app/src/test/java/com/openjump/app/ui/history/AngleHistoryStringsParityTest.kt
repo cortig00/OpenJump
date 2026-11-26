@@ -74,11 +74,11 @@ class AngleHistoryStringsParityTest {
     }
 
     @Test
-    fun `el catalogo por defecto es espanol y es419 es neutral`() {
-        val expected = "Opciones"
-        assertEquals("El catálogo por defecto debe declarar la copia española", expected, catalogs.catalog("values").onlyValue(KEY))
-        assertEquals("values-es debe coincidir con el catálogo por defecto", expected, catalogs.catalog("values-es").onlyValue(KEY))
-        assertEquals("es-419 debe usar la copia neutral española", expected, catalogs.catalog("values-b+es+419").onlyValue(KEY))
+    fun `el catalogo por defecto es ingles y espanol y es419 conservan sus copias`() {
+        assertEquals("El catálogo por defecto debe declarar la copia inglesa", "Options", catalogs.catalog("values").onlyValue(KEY))
+        assertEquals("values-en debe coincidir con el catálogo por defecto", "Options", catalogs.catalog("values-en").onlyValue(KEY))
+        assertEquals("values-es debe declarar la copia española", "Opciones", catalogs.catalog("values-es").onlyValue(KEY))
+        assertEquals("es-419 debe usar la copia neutral española", "Opciones", catalogs.catalog("values-b+es+419").onlyValue(KEY))
     }
 
     private companion object {

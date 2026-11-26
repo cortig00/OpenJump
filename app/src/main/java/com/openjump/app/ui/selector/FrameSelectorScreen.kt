@@ -48,7 +48,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -119,7 +119,6 @@ import com.openjump.app.ui.components.QuickAthletePicker
 import com.openjump.app.ui.components.VideoPreparationOverlay
 import com.openjump.app.ui.components.VideoSourceInfoRow
 import com.openjump.app.ui.components.remainingVideoPreparationFeedbackDelayMs
-import com.openjump.app.ui.labs.ExperimentalBadge
 import com.openjump.app.ui.theme.OpenJumpTypes
 import com.openjump.app.ui.theme.ShapeTokens
 import com.openjump.app.ui.titleResource
@@ -183,17 +182,17 @@ fun FrameSelectorScreen(
     recordedVideoStopElapsedMs: Long? = null,
     viewModel: FrameSelectorViewModel = viewModel(factory = FrameSelectorViewModel.Factory),
 ) {
-    val loading by viewModel.loading.collectAsState()
-    val error by viewModel.error.collectAsState()
-    val player by viewModel.player.collectAsState()
-    val displayState by viewModel.displayState.collectAsState()
-    val trackingState by viewModel.trackingState.collectAsState()
-    val plateDetectionState by viewModel.plateDetectionState.collectAsState()
-    val exportState by viewModel.exportState.collectAsState()
+    val loading by viewModel.loading.collectAsStateWithLifecycle()
+    val error by viewModel.error.collectAsStateWithLifecycle()
+    val player by viewModel.player.collectAsStateWithLifecycle()
+    val displayState by viewModel.displayState.collectAsStateWithLifecycle()
+    val trackingState by viewModel.trackingState.collectAsStateWithLifecycle()
+    val plateDetectionState by viewModel.plateDetectionState.collectAsStateWithLifecycle()
+    val exportState by viewModel.exportState.collectAsStateWithLifecycle()
     val androidContext = LocalContext.current
     val app = androidContext.applicationContext as OpenJumpApp
-    val activeAthletes by app.athleteRepository.active().collectAsState(initial = emptyList())
-    val roster by AppSession.testingParticipantIds.collectAsState()
+    val activeAthletes by app.athleteRepository.active().collectAsStateWithLifecycle(initialValue = emptyList())
+    val roster by AppSession.testingParticipantIds.collectAsStateWithLifecycle()
     val shareTrajectoryTitle = stringResource(R.string.selector_share_trajectory)
     val localizedEventLabels = EventType.entries.associateWith { stringResource(it.titleResource()) }
     val saveExportLauncher = rememberLauncherForActivityResult(
@@ -202,14 +201,14 @@ fun FrameSelectorScreen(
         destination?.let(viewModel::saveTrajectoryExport)
     }
 
-    val index by AppSession.frameIndex.collectAsState()
-    val videoUri by AppSession.videoUri.collectAsState()
-    val currentIdx by AppSession.currentFrameIndex.collectAsState()
-    val draft by AppSession.draft.collectAsState()
-    val bilateralSession by AppSession.bilateral.collectAsState()
-    val encoderDraft by AppSession.encoderDraft.collectAsState()
-    val seriesAttempt by AppSession.seriesAttempt.collectAsState()
-    val seriesTargetAttempts by AppSession.seriesTargetAttempts.collectAsState()
+    val index by AppSession.frameIndex.collectAsStateWithLifecycle()
+    val videoUri by AppSession.videoUri.collectAsStateWithLifecycle()
+    val currentIdx by AppSession.currentFrameIndex.collectAsStateWithLifecycle()
+    val draft by AppSession.draft.collectAsStateWithLifecycle()
+    val bilateralSession by AppSession.bilateral.collectAsStateWithLifecycle()
+    val encoderDraft by AppSession.encoderDraft.collectAsStateWithLifecycle()
+    val seriesAttempt by AppSession.seriesAttempt.collectAsStateWithLifecycle()
+    val seriesTargetAttempts by AppSession.seriesTargetAttempts.collectAsStateWithLifecycle()
     // Snapshot at entry: indexing may finish before the first frame is rendered.
     // Reusing a video keeps AppSession.frameIndex, so later visits retain the usual UI.
     val firstRecordedPreparation = remember(videoUri) {
@@ -496,6 +495,15 @@ fun FrameSelectorScreen(
     }
     val targetSelectionEnabled = markingEnabled && navigationEnabled &&
         encoderPanelPolicy?.mode == EncoderPanelMode.MANUAL_TARGET_SELECTION && !reviewPolicy.visible
+    var resumeAfterLossActive by remember(trackingState.phase, trackingState.results.size) {
+        mutableStateOf(false)
+    }
+    val lostFrameIdx = trackingState.lostFrameIndex
+    val canResumeAfterLossHere = resumeAfterLossActive &&
+        trackingState.canResumeAfterLoss &&
+        renderedIdx != null &&
+        lostFrameIdx != null &&
+        renderedIdx >= lostFrameIdx
     val encoderStepPresentation = encoderDraft?.let {
         encoderStepPresentationFor(
             hasCalibration = it.calibration != null,
@@ -709,10 +717,6 @@ fun FrameSelectorScreen(
             if (draft != null && encoderDraft == null && isHorizontal) {
                 Spacer(Modifier.height(Spacing.sm))
             }
-            encoderDraft?.let {
-                ExperimentalBadge()
-                Spacer(Modifier.height(Spacing.sm))
-            }
     }
     val analysisVideoPane: @Composable (Modifier) -> Unit = { paneModifier ->
         Box(
@@ -785,8 +789,16 @@ fun FrameSelectorScreen(
                         trackingPhase = trackingState.phase,
                         plateDetection = plateDetectionState.detection.takeUnless { reviewActive },
                         selectionEnabled = markingEnabled && navigationEnabled &&
-                            !reviewActive && !reviewPolicy.visible && (assistedPlateTap || manualTargetTap),
-                        onTargetSelected = if (assistedPlateTap) viewModel::detectPlateNear else viewModel::selectTrackingTarget,
+                            (canResumeAfterLossHere ||
+                                (!reviewActive && !reviewPolicy.visible && (assistedPlateTap || manualTargetTap))),
+                        onTargetSelected = when {
+                            canResumeAfterLossHere -> { point ->
+                                resumeAfterLossActive = false
+                                viewModel.resumeTrackingAfterLoss(point)
+                            }
+                            assistedPlateTap -> viewModel::detectPlateNear
+                            else -> viewModel::selectTrackingTarget
+                        },
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
@@ -1114,10 +1126,15 @@ fun FrameSelectorScreen(
             isEncoder && encoderDraft != null -> EncoderControls(
                 draft = requireNotNull(encoderDraft),
                 index = index,
+                renderedFrameIndex = renderedIdx,
                 state = trackingState,
                 plateState = plateDetectionState,
                 current = currentTrackingResult,
                 onStart = viewModel::startTracking,
+                onSetEndFrame = viewModel::setTrackingEndFrame,
+                onClearEndFrame = viewModel::clearTrackingEndFrame,
+                resumeAfterLossActive = resumeAfterLossActive,
+                onToggleResumeAfterLoss = { resumeAfterLossActive = !resumeAfterLossActive },
                 onConfirmProposal = viewModel::confirmPlateProposal,
                 onAdjustDiameter = viewModel::adjustPlateDiameter,
                 onResetTracking = viewModel::resetTracking,
@@ -1407,10 +1424,15 @@ private fun VideoInfoChip(
 private fun EncoderControls(
     draft: EncoderDraft,
     index: VideoFrameIndex?,
+    renderedFrameIndex: Int?,
     state: TrackingUiState,
     plateState: PlateDetectionUiState,
     current: TrackingFrameResult?,
     onStart: () -> Unit,
+    onSetEndFrame: () -> Unit,
+    onClearEndFrame: () -> Unit,
+    resumeAfterLossActive: Boolean,
+    onToggleResumeAfterLoss: () -> Unit,
     onConfirmProposal: () -> Unit,
     onAdjustDiameter: (Double) -> Unit,
     onResetTracking: () -> Unit,
@@ -1612,6 +1634,31 @@ private fun EncoderControls(
 
                 EncoderPanelMode.TRACKING_READY -> {
                     TrackingStatusContent(state)
+                    val endIdx = state.endFrameIndex
+                    val seedIdx = state.seedFrameIndex
+                    if (endIdx != null) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                stringResource(R.string.selector_tracking_end_frame_set, endIdx + 1),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.weight(1f),
+                            )
+                            TextButton(
+                                onClick = onClearEndFrame,
+                                modifier = Modifier.heightIn(min = 48.dp),
+                            ) { Text(stringResource(R.string.selector_tracking_clear_end_frame)) }
+                        }
+                    } else if (renderedFrameIndex != null && seedIdx != null && renderedFrameIndex > seedIdx) {
+                        OutlinedButton(
+                            onClick = onSetEndFrame,
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                        ) { Text(stringResource(R.string.selector_tracking_set_end_frame)) }
+                    }
                     Button(
                         onClick = onStart,
                         enabled = state.canStart,
@@ -1643,6 +1690,8 @@ private fun EncoderControls(
                     EncoderCompletedActions(
                         state, exportState, onExport, onCancelExport, onSaveExport, onShareExport,
                         onRequestTargetReselection, onRequestRecalibration,
+                        resumeAfterLossActive = resumeAfterLossActive,
+                        onToggleResumeAfterLoss = onToggleResumeAfterLoss,
                     )
                     TechnicalDetailsDisclosure(state, plateState, current)
                 }
@@ -1912,6 +1961,8 @@ internal fun EncoderCompletedActions(
     onShareExport: () -> Unit,
     onRequestTargetReselection: () -> Unit,
     onRequestRecalibration: () -> Unit,
+    resumeAfterLossActive: Boolean = false,
+    onToggleResumeAfterLoss: (() -> Unit)? = null,
 ) {
     if (state.phase != TrackingPhase.COMPLETED && state.phase != TrackingPhase.LOST) return
     Text(
@@ -1932,6 +1983,31 @@ internal fun EncoderCompletedActions(
                 .testTag("review-lost-partial")
                 .semantics { liveRegion = LiveRegionMode.Polite },
         )
+        if (onToggleResumeAfterLoss != null && state.canResumeAfterLoss) {
+            if (resumeAfterLossActive) {
+                val lostFrameNumber = (state.lostFrameIndex ?: state.results.lastIndex) + 1
+                Text(
+                    stringResource(R.string.selector_tracking_resume_hint, lostFrameNumber),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.fillMaxWidth().padding(top = Spacing.xs),
+                )
+            }
+            OutlinedButton(
+                onClick = onToggleResumeAfterLoss,
+                modifier = Modifier.fillMaxWidth().padding(top = Spacing.xs).heightIn(min = 48.dp),
+            ) {
+                Text(
+                    stringResource(
+                        if (resumeAfterLossActive) {
+                            R.string.selector_tracking_resume_cancel
+                        } else {
+                            R.string.selector_tracking_resume_action
+                        },
+                    ),
+                )
+            }
+        }
     }
     Text(
         stringResource(R.string.selector_review_instruction),

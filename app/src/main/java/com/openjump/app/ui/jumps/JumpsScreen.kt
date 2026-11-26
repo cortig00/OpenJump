@@ -1,5 +1,6 @@
 package com.openjump.app.ui.jumps
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,19 +14,19 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -55,12 +56,15 @@ fun JumpsScreen(
     onBack: () -> Unit,
     onProtocolSelected: (ProtocolId) -> Unit,
 ) {
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             OpenJumpTopAppBar(
                 title = stringResource(R.string.jumps_title),
                 onNavigationClick = onBack,
                 navigationContentDescription = stringResource(R.string.common_back),
+                scrollBehavior = scrollBehavior,
             )
         },
     ) { padding ->
@@ -139,24 +143,26 @@ private fun TestCard(
     } else {
         Modifier.fillMaxWidth().semantics { disabled() }.alpha(0.62f)
     }
+    val border = BorderStroke(
+        width = 1.dp,
+        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+    )
     if (available) {
-        ElevatedCard(
+        Surface(
             onClick = { onProtocolSelected(protocolId) },
             modifier = cardModifier,
             shape = ShapeTokens.medium,
-            colors = CardDefaults.elevatedCardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-            ),
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            border = border,
         ) {
             TestCardContent(protocolId, available)
         }
     } else {
-        ElevatedCard(
+        Surface(
             modifier = cardModifier,
             shape = ShapeTokens.medium,
-            colors = CardDefaults.elevatedCardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-            ),
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            border = border,
         ) {
             TestCardContent(protocolId, available)
         }
@@ -256,7 +262,7 @@ private val jumpIllustrations: Map<ProtocolId, List<Int>> = ProtocolId.entries.a
     when (id) {
         ProtocolId.CMJ -> listOf(R.drawable.cmj_male)
         ProtocolId.SJ -> listOf(R.drawable.squat_jump_male)
-        ProtocolId.ABALAKOV -> listOf(R.drawable.abakalov_jump_male)
+        ProtocolId.ABALAKOV -> listOf(R.drawable.abalakov_jump_male)
         ProtocolId.UNILATERAL -> listOf(
             R.drawable.unilateral_left_male,
             R.drawable.unilateral_right_male,

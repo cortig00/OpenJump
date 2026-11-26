@@ -30,7 +30,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -105,7 +105,7 @@ fun FvpHistoryScreen(
     val historyFlow = remember(athleteId) {
         athleteId?.let { viewModel.historyFor(it) } ?: kotlinx.coroutines.flow.flowOf(emptyList())
     }
-    val summaries by historyFlow.collectAsState(initial = null)
+    val summaries by historyFlow.collectAsStateWithLifecycle(initialValue = null)
     // La lista se abre para EXPLORAR. El modo de seleccion solo se activa con la accion Comparar y
     // todo su estado se reinicia al cambiar de atleta (no se hereda una seleccion de otra lista).
     var compareMode by remember(athleteId) { mutableStateOf(false) }

@@ -100,13 +100,13 @@ class AngleV2SavedDetailStringsParityTest {
     }
 
     @Test
-    fun `el catalogo base y values-es siguen siendo el mismo texto`() {
+    fun `el catalogo base y values-en siguen siendo el mismo texto`() {
         val base = catalogs.catalog(BASE_LOCALE)
-        val spanish = catalogs.catalog("values-es")
+        val english = catalogs.catalog("values-en")
         assertEquals(
-            "El español por defecto debe ser exactamente values-es",
+            "El inglés por defecto debe ser exactamente values-en",
             base.file.readBytes().toList(),
-            spanish.file.readBytes().toList(),
+            english.file.readBytes().toList(),
         )
     }
 

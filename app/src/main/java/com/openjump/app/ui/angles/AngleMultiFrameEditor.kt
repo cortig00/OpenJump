@@ -1258,7 +1258,10 @@ private fun ReadyContent(
                     },
                     modifier = Modifier.heightIn(min = Spacing.xxxl),
                 ) {
-                    Text(stringResource(R.string.angle_multi_frame_remove))
+                    Text(
+                        stringResource(R.string.angle_multi_frame_remove),
+                        color = MaterialTheme.colorScheme.error,
+                    )
                 }
             },
             dismissButton = {
@@ -1304,7 +1307,10 @@ private fun ReadyContent(
                     },
                     modifier = Modifier.heightIn(min = Spacing.xxxl),
                 ) {
-                    Text(stringResource(R.string.angle_delete))
+                    Text(
+                        stringResource(R.string.angle_delete),
+                        color = MaterialTheme.colorScheme.error,
+                    )
                 }
             },
             dismissButton = {
@@ -1557,7 +1563,10 @@ internal fun AngleMultiFrameDiscardDialog(
                 onClick = onConfirm,
                 modifier = Modifier.heightIn(min = Spacing.xxxl),
             ) {
-                Text(stringResource(R.string.angle_multi_frame_discard_confirm))
+                Text(
+                    stringResource(R.string.angle_multi_frame_discard_confirm),
+                    color = MaterialTheme.colorScheme.error,
+                )
             }
         },
         dismissButton = {

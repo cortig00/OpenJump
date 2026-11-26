@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.4.0 (versionCode 13) — Production release candidate
+
+- **Unified Export Studio (Image PNG & Video MP4):**
+  - Customizable result share cards in `4:5` (Post) and `9:16` (Story) formats with Dark and Light themes, official OpenJump header logo, hero number/unit typography, centered symmetric secondary metrics, optional Sayers estimated peak & relative power (when body mass is set on SJ/CMJ), optional jump takeoff/landing key frames, and an Encoder VBT repetition velocity bar chart with best-rep & `≥25%` velocity-loss legend.
+  - Video export (Media3 Transformer + OpenGL overlays) with customizable OpenJump logo and translucent Dark/Light HUD in any of the 4 corners (collision-free automatic stacking), live PTS-synchronized Jump flight phase & timer, optional Sayers estimated peak & relative power strip, live Encoder repetition progression (`REP X/N`), instantaneous speed, per-repetition `PV · Velocity Loss · ROM` in a fixed column order, live per-repetition velocity & position telemetry chart inside the HUD, and optional barbell trajectory overlay in Per-rep (default) or Full-set mode (also from saved sessions). Downscales 4K sources to 1080p before overlay rendering to cut RAM & GPU upload 4×.
+- **Video Barbell Encoder (VBT) upgrades & graduation:**
+  - Graduated Encoder out of the Experimental badge with hardware sequential MediaCodec Y-plane tracking, circular calibrated plate ROI with sub-pixel radial rim anti-drift re-anchoring, and a high-frequency velocity noise estimator (`MAD(Δ²v)/√6`) so continuous high-rep sets accurately detect slow fatigued repetitions.
+- **Built-in 60 fps Sample Videos:**
+  - Bundled 60 fps CMJ and Back Squat Encoder demo clips with auto-hiding first-use demo buttons and a dedicated Sample Videos sheet in Settings for re-testing anytime.
+- **Material Design 3 & OLED Dark Mode polish:**
+  - Refined OLED dark tonal palette, optional Material You Dynamic Color toggle (Android 12+), unified Coach Mode Team Hub and Athlete Profile cards, unified Angles history list items, polished Settings / Unit Preferences / About screens, Edge-to-Edge layout, and ART Baseline Profile.
+- **Localization, packaging & compliance:**
+  - 14 store locales / 15 resource catalogs (`2004` synchronized strings with English default fallback), WebP visual assets (~40% lighter APK), `FVP_ENABLED=false` in release, `ANGLE_MULTI_FRAME_SAVE_UI_ENABLED=true`, 100% offline with zero `INTERNET` and zero `ACCESS_NETWORK_STATE` permissions (Google Play & F-Droid compliant, resolves GitHub #1).
+
 ## 1.3 (versionCode 12) — Prepared source
 
 - Do not require portrait screen hardware to install the app. The main Android activity retains its portrait preference.

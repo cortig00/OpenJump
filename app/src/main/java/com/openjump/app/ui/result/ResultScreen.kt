@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -16,27 +18,34 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.openjump.app.R
 import com.openjump.app.data.PersonalRecord
+import com.openjump.app.ui.Formatting
+import com.openjump.app.ui.LocalUnitSystem
 import com.openjump.app.ui.components.DiscardConfirmDialog
 import com.openjump.app.ui.components.InfoBanner
 import com.openjump.app.ui.components.JumpFlowProgress
 import com.openjump.app.ui.components.JumpFlowStep
 import com.openjump.app.ui.components.OpenJumpTopAppBar
+import com.openjump.app.ui.currentAppLocale
 import com.openjump.app.ui.titleResource
 import com.openjump.app.video.AppSession
 import com.openjump.app.video.BilateralFeedbackKind
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,14 +57,22 @@ fun ResultScreen(
     // callback. Null preserves the legacy records-only behavior for callers
     // that do not navigate to a saved detail.
     onBilateralSaved: ((Long, List<PersonalRecord>) -> Unit)? = null,
+    athleteName: String? = null,
     viewModel: ResultViewModel = viewModel(factory = ResultViewModel.Factory),
 ) {
-    val draft by AppSession.draft.collectAsState()
-    val bilateral by AppSession.bilateral.collectAsState()
-    val frameIndex by AppSession.frameIndex.collectAsState()
-    val seriesAttempt by AppSession.seriesAttempt.collectAsState()
-    val seriesTargetAttempts by AppSession.seriesTargetAttempts.collectAsState()
-    val saveState by viewModel.saveState.collectAsState()
+    val context = LocalContext.current
+    val unitSystem = LocalUnitSystem.current
+    val locale = currentAppLocale()
+    val shareScope = rememberCoroutineScope()
+    var showShareDialog by rememberSaveable { mutableStateOf(false) }
+    var sharingCard by rememberSaveable { mutableStateOf(false) }
+    var shareError by rememberSaveable { mutableStateOf(false) }
+    val draft by AppSession.draft.collectAsStateWithLifecycle()
+    val bilateral by AppSession.bilateral.collectAsStateWithLifecycle()
+    val frameIndex by AppSession.frameIndex.collectAsStateWithLifecycle()
+    val seriesAttempt by AppSession.seriesAttempt.collectAsStateWithLifecycle()
+    val seriesTargetAttempts by AppSession.seriesTargetAttempts.collectAsStateWithLifecycle()
+    val saveState by viewModel.saveState.collectAsStateWithLifecycle()
     // Dismissing only clears this flag; the draft stays intact for Correct/Save.
     // Dialog intent must not reappear for a different draft after process death.
     var confirmDiscard by remember { mutableStateOf(false) }
@@ -126,6 +143,22 @@ fun ResultScreen(
                 ),
                 onNavigationClick = onCorrect,
                 navigationContentDescription = stringResource(R.string.result_correct),
+                actions = {
+                    if (bilateral == null) {
+                        IconButton(
+                            onClick = {
+                                shareError = false
+                                showShareDialog = true
+                            },
+                            enabled = !sharingCard,
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_angle_share),
+                                contentDescription = stringResource(R.string.result_share_action),
+                            )
+                        }
+                    }
+                },
             )
         },
     ) { padding ->
@@ -147,7 +180,7 @@ fun ResultScreen(
                 when (val state = saveState) {
                     is SaveState.Error -> InfoBanner(
                         title = stringResource(R.string.result_save_error),
-                        body = state.message,
+                        body = stringResource(R.string.result_save_error_body),
                         warning = true,
                     )
                     SaveState.Saved -> InfoBanner(
@@ -215,6 +248,100 @@ fun ResultScreen(
                     Text(stringResource(R.string.common_discard))
                 }
             },
+        )
+    }
+    if (showShareDialog && bilateral == null) {
+        val model = presentation.uiModel
+        val protocolTitle = stringResource(model.protocolId.titleResource())
+        val methodLabel = stringResource(model.method.titleResource())
+        val primaryLabel = stringResource(model.primaryMetric.key.titleResource())
+        val primaryValue = ResultText.formatMetric(model.primaryMetric, locale, unitSystem)
+        val secondaryMetrics = model.secondaryMetrics.map { metric ->
+            JumpResultShareMetric(
+                label = stringResource(metric.key.titleResource()),
+                value = ResultText.formatMetric(metric, locale, unitSystem),
+            )
+        }
+        val estPeakPowerLabel = stringResource(R.string.share_studio_est_peak_power_short)
+        val estRelPowerLabel = stringResource(R.string.share_studio_est_rel_power_short)
+        val estPowerNote = stringResource(R.string.share_studio_est_sayers_note)
+        val estimatedPowerMetrics = remember(model.estimatedMetrics, estPeakPowerLabel, estRelPowerLabel, locale, unitSystem) {
+            extractJumpEstimatedPowerMetrics(
+                estimatedMetrics = model.estimatedMetrics,
+                peakPowerLabel = estPeakPowerLabel,
+                relativePowerLabel = estRelPowerLabel,
+                locale = locale,
+                unitSystem = unitSystem,
+            )
+        }
+        val chooserTitle = stringResource(R.string.result_share_chooser_title)
+        val footerLabel = stringResource(R.string.result_share_footer)
+        val baseCardData = remember(
+            protocolTitle,
+            methodLabel,
+            primaryLabel,
+            primaryValue,
+            secondaryMetrics,
+            estimatedPowerMetrics,
+            estPowerNote,
+            athleteName,
+            footerLabel,
+        ) {
+            JumpResultShareCardData(
+                protocolTitle = protocolTitle,
+                methodLabel = methodLabel,
+                primaryLabel = primaryLabel,
+                primaryValue = primaryValue,
+                secondaryMetrics = secondaryMetrics,
+                estimatedPowerMetrics = estimatedPowerMetrics,
+                estimatedPowerNote = if (estimatedPowerMetrics.isNotEmpty()) estPowerNote else null,
+                dateLabel = Formatting.dateTimeToText(System.currentTimeMillis()),
+                athleteName = athleteName,
+                footerLabel = footerLabel,
+            )
+        }
+        val frameRequests = remember(draft, context) {
+            selectJumpShareFrameRequests(draft?.orderedMarks().orEmpty()) { mark ->
+                context.getString(mark.key.type.titleResource(short = true))
+            }
+        }
+        val readyLabel = stringResource(R.string.video_hud_phase_ready)
+        val inFlightLabel = stringResource(R.string.video_hud_phase_flight)
+        val landedLabel = stringResource(R.string.video_hud_phase_landed)
+        val videoExportSource = remember(draft, frameIndex, baseCardData, readyLabel, inFlightLabel, landedLabel) {
+            val marks = draft?.orderedMarks().orEmpty()
+            val takeoffPts = marks.firstOrNull { it.key.type == com.openjump.app.protocol.EventType.TAKEOFF }?.ptsUs
+            val landingPts = marks.lastOrNull { it.key.type == com.openjump.app.protocol.EventType.LANDING }?.ptsUs
+            buildJumpVideoExportSource(
+                videoUri = draft?.videoUri,
+                videoIndex = frameIndex,
+                cardData = baseCardData,
+                takeoffPtsUs = takeoffPts,
+                landingPtsUs = landingPts,
+                readyLabel = readyLabel,
+                inFlightLabel = inFlightLabel,
+                landedLabel = landedLabel,
+            )
+        }
+        ResultShareStudioSheet(
+            cardData = baseCardData,
+            videoUri = draft?.videoUri,
+            frameRequests = frameRequests,
+            sharing = sharingCard,
+            shareError = shareError,
+            onConfirmShare = { options, photos ->
+                sharingCard = true
+                shareError = false
+                shareScope.launch {
+                    val launched = runCatching {
+                        JumpResultShareStager.share(context, baseCardData, chooserTitle, options, photos)
+                    }.getOrDefault(false)
+                    sharingCard = false
+                    if (launched) showShareDialog = false else shareError = true
+                }
+            },
+            onDismiss = { showShareDialog = false },
+            videoExportSource = videoExportSource,
         )
     }
     if (confirmDiscard && discardEnabled) {

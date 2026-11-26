@@ -2,6 +2,7 @@ package com.openjump.app.ui.home
 
 import android.os.SystemClock
 import androidx.annotation.DrawableRes
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -18,10 +19,12 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableLongStateOf
@@ -30,15 +33,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import kotlinx.coroutines.delay
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.openjump.app.FeatureFlags
 import com.openjump.app.R
@@ -48,6 +54,8 @@ import com.openjump.app.ui.components.EmptyState
 import com.openjump.app.ui.components.OpenJumpTopAppBar
 import com.openjump.app.ui.components.ProtocolFeedbackBanner
 import com.openjump.app.ui.components.ProtocolFeedbackLevel
+import com.openjump.app.ui.history.AngleAnalysisHistoryEntry
+import com.openjump.app.ui.history.AngleHistorySource
 import com.openjump.app.ui.history.HistoryEntryRow
 import com.openjump.app.ui.history.MeasurementHistoryItem
 import com.openjump.app.ui.labs.ExperimentalBadge
@@ -69,11 +77,16 @@ fun HomeScreen(
     onHistorySelected: () -> Unit,
     onMeasurementSelected: (Long) -> Unit,
     onEncoderSessionSelected: (Long) -> Unit,
+    onAngleAnalysisSelected: (AngleAnalysisHistoryEntry) -> Unit = {},
+    onAngleMultiFrameSelected: (AngleAnalysisHistoryEntry) -> Unit = {},
+    onTryDemoJump: (() -> Unit)? = null,
+    onTryDemoEncoder: (() -> Unit)? = null,
     onFvpSelected: () -> Unit = {},
     fvpProfileEnabled: Boolean = FeatureFlags.fvpEnabled,
     viewModel: HomeViewModel = viewModel(factory = HomeViewModel.Factory),
 ) {
-    val recentActivity by viewModel.recentActivity.collectAsState()
+    val recentActivity by viewModel.recentActivity.collectAsStateWithLifecycle()
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refresh() }
     var shownSeries by rememberSaveable { mutableStateOf<SeriesFeedback?>(null) }
     var expiresAt by rememberSaveable { mutableLongStateOf(0L) }
     LaunchedEffect(seriesFeedback?.sessionKey) {
@@ -99,12 +112,16 @@ fun HomeScreen(
         }
     }
 
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             OpenJumpTopAppBar(
                 title = stringResource(R.string.app_name),
                 showBrandLogo = true,
                 isHome = true,
+                scrollBehavior = scrollBehavior,
             )
         },
     ) { padding ->
@@ -150,23 +167,27 @@ fun HomeScreen(
                     shape = ShapeTokens.medium,
                     color = MaterialTheme.colorScheme.surfaceContainerLow,
                     contentColor = MaterialTheme.colorScheme.onSurface,
+                    border = BorderStroke(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+                    ),
                 ) {
                     Column {
                         JumpEntry(onJumpsSelected)
                         HorizontalDivider(
                             modifier = Modifier.padding(start = 72.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant,
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                         )
                         AnglesEntry(onAnglesSelected)
                         HorizontalDivider(
                             modifier = Modifier.padding(start = 72.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant,
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                         )
                         EncoderEntry(onEncoderSelected)
                         if (fvpProfileEnabled) {
                             HorizontalDivider(
                                 modifier = Modifier.padding(start = 72.dp),
-                                color = MaterialTheme.colorScheme.outlineVariant,
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                             )
                             FvpEntry(onFvpSelected)
                         }
@@ -191,10 +212,42 @@ fun HomeScreen(
             }
             if (recentActivity.isEmpty()) {
                 item {
-                    EmptyState(
-                        title = stringResource(R.string.home_recent_empty_title),
-                        body = stringResource(R.string.home_recent_empty_body),
-                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                        EmptyState(
+                            title = stringResource(R.string.home_recent_empty_title),
+                            body = stringResource(R.string.home_recent_empty_body),
+                        )
+                        if (onTryDemoJump != null) {
+                            OutlinedButton(
+                                onClick = onTryDemoJump,
+                                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_jumps),
+                                    contentDescription = null,
+                                )
+                                Text(
+                                    stringResource(R.string.home_try_sample_video),
+                                    modifier = Modifier.padding(start = Spacing.sm),
+                                )
+                            }
+                        }
+                        if (onTryDemoEncoder != null) {
+                            OutlinedButton(
+                                onClick = onTryDemoEncoder,
+                                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_encoder),
+                                    contentDescription = null,
+                                )
+                                Text(
+                                    stringResource(R.string.encoder_try_sample_video),
+                                    modifier = Modifier.padding(start = Spacing.sm),
+                                )
+                            }
+                        }
+                    }
                 }
             } else {
                 item {
@@ -206,10 +259,10 @@ fun HomeScreen(
                                     when (item) {
                                         is MeasurementHistoryItem.Jump -> onMeasurementSelected(item.id)
                                         is MeasurementHistoryItem.Encoder -> onEncoderSessionSelected(item.id)
-                                        // La actividad reciente de Home sólo mezcla saltos y encoder
-                                        // (`mergeMeasurementHistory` sin ángulos): esta rama existe
-                                        // sólo para que el `when` sea exhaustivo.
-                                        is MeasurementHistoryItem.Angle -> Unit
+                                        is MeasurementHistoryItem.Angle -> when (item.entry.source) {
+                                            AngleHistorySource.MULTI_FRAME -> onAngleMultiFrameSelected(item.entry)
+                                            AngleHistorySource.LEGACY -> onAngleAnalysisSelected(item.entry)
+                                        }
                                     }
                                 },
                                 showDivider = index < recentActivity.lastIndex,
@@ -240,16 +293,15 @@ private fun JumpEntry(onClick: () -> Unit) = AnalysisEntryRow(
 private fun AnglesEntry(onClick: () -> Unit) = AnalysisEntryRow(
     title = stringResource(R.string.home_angles_title),
     description = stringResource(R.string.home_angles_description),
-    icon = R.drawable.ic_videocam,
+    icon = R.drawable.ic_angles,
     onClick = onClick,
 )
 
 @Composable
 private fun EncoderEntry(onClick: () -> Unit) = AnalysisEntryRow(
-    title = stringResource(R.string.labs_name),
-    description = stringResource(R.string.labs_home_description),
+    title = stringResource(R.string.home_encoder_title),
+    description = stringResource(R.string.home_encoder_description),
     icon = R.drawable.ic_encoder,
-    experimental = true,
     onClick = onClick,
 )
 

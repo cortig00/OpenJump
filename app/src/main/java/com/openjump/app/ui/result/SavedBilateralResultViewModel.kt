@@ -68,7 +68,7 @@ class SavedBilateralResultViewModel(private val id: Long, private val repository
                 _state.value = content.copy(model = content.model.copy(note = request), noteState = _noteState.value)
                 onSaved()
             } catch (error: Exception) {
-                _noteState.value = ResultNotesReducer.saveFailed(_noteState.value, error.message ?: "No se pudo guardar la nota.")
+                _noteState.value = ResultNotesReducer.saveFailed(_noteState.value, error.message ?: "Unable to save note.")
             }
         }
     }
@@ -85,7 +85,7 @@ class SavedBilateralResultViewModel(private val id: Long, private val repository
                 }
                 onDeleted()
             } catch (error: Exception) {
-                _noteState.value = ResultNotesReducer.deleteFailed(_noteState.value, error.message ?: "No se pudo eliminar la nota.")
+                _noteState.value = ResultNotesReducer.deleteFailed(_noteState.value, error.message ?: "Unable to delete note.")
             }
         }
     }

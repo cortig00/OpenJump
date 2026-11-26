@@ -43,7 +43,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -227,34 +227,34 @@ internal fun AngleEditorScreen(
     angleMultiFrameSaveUiEnabled: Boolean = false,
     workspaceRequested: Boolean = false,
 ) {
-    val editor by viewModel.editor.collectAsState()
-    val videoState by viewModel.videoState.collectAsState()
-    val saveState by viewModel.saveState.collectAsState()
+    val editor by viewModel.editor.collectAsStateWithLifecycle()
+    val videoState by viewModel.videoState.collectAsStateWithLifecycle()
+    val saveState by viewModel.saveState.collectAsStateWithLifecycle()
     // Línea base del contenido verificado como persistido (o vacía al abrir). La política pura de
     // cierre la compara con la edición viva; la pantalla no infiere «limpio» de `Saved`, de la
     // selección ni de los ids marcados como persistidos.
-    val closeBaseline by viewModel.closeBaseline.collectAsState()
+    val closeBaseline by viewModel.closeBaseline.collectAsStateWithLifecycle()
     // Recuperación pendiente publicada por el ViewModel: es la ÚNICA fuente que habilita «guardar
     // como análisis nuevo». No se deduce del último `saveState` porque un intento fallido también
     // publica `Failed` y la edición seguiría sin destino.
-    val saveRecovery by viewModel.saveRecovery.collectAsState()
-    val displayState by viewModel.displayState.collectAsState()
-    val player by viewModel.player.collectAsState()
-    val loading by viewModel.loading.collectAsState()
-    val errorMessage by viewModel.error.collectAsState()
+    val saveRecovery by viewModel.saveRecovery.collectAsStateWithLifecycle()
+    val displayState by viewModel.displayState.collectAsStateWithLifecycle()
+    val player by viewModel.player.collectAsStateWithLifecycle()
+    val loading by viewModel.loading.collectAsStateWithLifecycle()
+    val errorMessage by viewModel.error.collectAsStateWithLifecycle()
     // Geometría publicada por el ViewModel desde el índice real, no inferida de `Tracks`: la capa
     // puede dibujarse antes de que Media3 publique el track de vídeo.
-    val videoGeometry by viewModel.videoGeometry.collectAsState()
+    val videoGeometry by viewModel.videoGeometry.collectAsStateWithLifecycle()
     // Puerta observable del ViewModel: cambia cuando un guardado o una reapertura empiezan o
     // terminan. Es imprescindible en la clave de la caché de la confirmación: una reapertura puede
     // acabar conservando el frame ya confirmado sin emitir otra salida de `displayState`.
-    val gestureGate by viewModel.gestureGate.collectAsState()
+    val gestureGate by viewModel.gestureGate.collectAsStateWithLifecycle()
     // Sesión de fotogramas congelados: si hay fotogramas en memoria, ni el guardado mono-fotograma
     // ni el cierre pueden descartarlos en silencio.
-    val multiFrameState by viewModel.multiFrameState.collectAsState()
+    val multiFrameState by viewModel.multiFrameState.collectAsStateWithLifecycle()
     // Estado real del guardado multi-fotograma. Solo llega aquí después de la transacción V2; la
     // pantalla lo muestra tal cual (en vuelo, éxito real o fallo recuperable) y no lo interpreta.
-    val multiFrameSaveState by viewModel.multiFrameSaveState.collectAsState()
+    val multiFrameSaveState by viewModel.multiFrameSaveState.collectAsStateWithLifecycle()
     // La confirmación se recalcula con TODAS sus entradas observables (salida del visor, puerta y
     // estado del editor), nunca solo con `displayState`: es la misma fuente que usa el ViewModel para
     // validar PTS/frame, así que la capa nunca dibuja ni instala gestos con una confirmación vieja, y
@@ -544,7 +544,10 @@ internal fun AngleEditorCloseDiscardDialog(
                 onClick = onConfirm,
                 modifier = Modifier.heightIn(min = Spacing.xxxl),
             ) {
-                Text(stringResource(R.string.angle_editor_close_discard_confirm))
+                Text(
+                    stringResource(R.string.angle_editor_close_discard_confirm),
+                    color = MaterialTheme.colorScheme.error,
+                )
             }
         },
         dismissButton = {
@@ -1170,7 +1173,10 @@ internal fun AngleEditorContent(
                     },
                     modifier = Modifier.heightIn(min = Spacing.xxxl),
                 ) {
-                    Text(stringResource(R.string.angle_delete))
+                    Text(
+                        stringResource(R.string.angle_delete),
+                        color = MaterialTheme.colorScheme.error,
+                    )
                 }
             },
             dismissButton = {

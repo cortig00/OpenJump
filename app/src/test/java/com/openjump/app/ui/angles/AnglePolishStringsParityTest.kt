@@ -152,21 +152,21 @@ class AnglePolishStringsParityTest {
     }
 
     @Test
-    fun `el catalogo base y values-es dicen lo mismo en las claves angle_polish`() {
+    fun `el catalogo base y values-en dicen lo mismo en las claves angle_polish`() {
         val base = catalogs.catalog(BASE_LOCALE)
-        val spanish = catalogs.catalog("values-es")
+        val english = catalogs.catalog("values-en")
         for (name in EXPECTED_STRINGS) {
             assertEquals(
-                "El español por defecto no puede derivar entre los dos ficheros que la app trata como fuente ('$name')",
+                "El inglés por defecto no puede derivar entre los dos ficheros que la app trata como fuente ('$name')",
                 base.onlyValue(name),
-                spanish.onlyValue(name),
+                english.onlyValue(name),
             )
         }
         for (plural in EXPECTED_PLURALS) {
             assertEquals(
-                "El plural '$plural' del español por defecto debe ser idéntico en values y values-es",
+                "El plural '$plural' del inglés por defecto debe ser idéntico en values y values-en",
                 base.pluralItems(plural),
-                spanish.pluralItems(plural),
+                english.pluralItems(plural),
             )
         }
     }

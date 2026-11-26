@@ -172,13 +172,13 @@ class LatinAmericanSpanishStringsParityTest {
     }
 
     @Test
-    fun `generic spanish has an explicit catalog identical to the default`() {
-        // Sin values-es Android puede preferir el único español calificado (es-419), incluso
-        // cuando el usuario elige Español. El espejo explícito evita esa regresión de fallback.
+    fun `generic english has an explicit catalog identical to the default`() {
+        // Sin values-en Android puede preferir el idioma del sistema (p. ej. values-es) cuando
+        // el usuario elige English explícitamente. El espejo evita esa regresión de fallback.
         assertEquals(
-            "values-es debe conservar íntegro el catálogo español original",
-            resolve(basePath()).readText(),
-            resolve("src/main/res/values-es/strings.xml").readText(),
+            "values-en debe conservar íntegro el catálogo inglés por defecto",
+            resolve("src/main/res/values/strings.xml").readText(),
+            resolve("src/main/res/values-en/strings.xml").readText(),
         )
     }
 
@@ -307,7 +307,7 @@ class LatinAmericanSpanishStringsParityTest {
         )
     }
 
-    private fun basePath() = "src/main/res/values/strings.xml"
+    private fun basePath() = "src/main/res/values-es/strings.xml"
 
     private fun latinAmericaPath() = "src/main/res/values-b+es+419/strings.xml"
 

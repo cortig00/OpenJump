@@ -75,7 +75,7 @@ class AngleEditorSaveRecoveryTest {
 
         assertTrue(
             "La pantalla debe observar el estado de recuperación del ViewModel",
-            source.contains("viewModel.saveRecovery.collectAsState()"),
+            source.contains("viewModel.saveRecovery.collectAsStateWithLifecycle()"),
         )
         assertTrue(
             "La visibilidad del botón debe salir de la función que la prueba fija",

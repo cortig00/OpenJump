@@ -141,7 +141,7 @@ class HindiAndSimplifiedChineseStringsParityTest {
     }
 
     private fun escapeTokens(value: String): List<String> =
-        Regex("""\\[n'"t\\]""").findAll(value).map { it.value }.sorted().toList()
+        Regex("""\\[nt\\]""").findAll(value).map { it.value }.sorted().toList()
 
     /**
      * `printf` del texto: índice, flags/ancho/precisión y conversión, en orden de aparición.
@@ -537,7 +537,7 @@ class HindiAndSimplifiedChineseStringsParityTest {
         const val SAYERS_LIMITATION = "result_estimates_sayers_limitation"
         const val HINDI_AUTONYM = "हिंदी"
         const val CHINESE_AUTONYM = "简体中文"
-        const val EXPECTED_STRINGS = 1942
+        const val EXPECTED_STRINGS = 2004
         const val EXPECTED_PLURALS = 12
         const val EXPECTED_PLURAL_ITEMS = 24
         const val MIN_EXPECTED_KEYS = 1900

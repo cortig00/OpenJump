@@ -185,7 +185,7 @@ internal fun HorizontalJumpControls(
         HorizontalJumpStage.LANDING_HEEL, HorizontalJumpStage.COMPLETE -> 3
     }
 
-    Surface(color = MaterialTheme.colorScheme.surfaceVariant, modifier = modifier) {
+    Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = modifier) {
         Column(
             Modifier.fillMaxWidth().padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),

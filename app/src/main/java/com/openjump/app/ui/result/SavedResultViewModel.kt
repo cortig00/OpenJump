@@ -8,6 +8,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.openjump.app.OpenJumpApp
 import com.openjump.app.data.JumpRepository
 import com.openjump.app.protocol.NoteNormalizer
+import com.openjump.app.protocol.StoredEvent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,6 +21,9 @@ sealed interface SavedResultState {
     data class Content(
         val model: ResultUiModel,
         val noteState: ResultNotesState = ResultNotesState.fromSaved(model.note),
+        val athleteName: String? = null,
+        val shareVideoUri: String? = null,
+        val shareEvents: List<StoredEvent> = emptyList(),
     ) : SavedResultState
     data object Missing : SavedResultState
     data class Error(val message: String) : SavedResultState
@@ -51,13 +55,19 @@ class SavedResultViewModel(
                 _state.value = if (measurement == null) {
                     SavedResultState.Missing
                 } else {
-                    SavedResultState.Content(ResultPresenter.presentStored(measurement)).also {
+                    val primaryAttempt = measurement.attempts.firstOrNull()
+                    SavedResultState.Content(
+                        model = ResultPresenter.presentStored(measurement),
+                        athleteName = measurement.athleteName,
+                        shareVideoUri = primaryAttempt?.videoUri,
+                        shareEvents = primaryAttempt?.events.orEmpty(),
+                    ).also {
                         _noteState.value = ResultNotesState.fromSaved(it.model.note)
                     }
                 }
             } catch (error: Exception) {
                 _state.value = SavedResultState.Error(
-                    error.message ?: "No se pudo abrir la medición guardada.",
+                    error.message ?: "Unable to open saved measurement.",
                 )
             }
         }
@@ -79,7 +89,7 @@ class SavedResultViewModel(
                 _state.value = content.copy(model = content.model.copy(note = request), noteState = _noteState.value)
                 onSaved()
             } catch (error: Exception) {
-                _noteState.value = ResultNotesReducer.saveFailed(_noteState.value, error.message ?: "No se pudo guardar la nota.")
+                _noteState.value = ResultNotesReducer.saveFailed(_noteState.value, error.message ?: "Unable to save note.")
             }
         }
     }
@@ -96,7 +106,7 @@ class SavedResultViewModel(
                 }
                 onDeleted()
             } catch (error: Exception) {
-                _noteState.value = ResultNotesReducer.deleteFailed(_noteState.value, error.message ?: "No se pudo eliminar la nota.")
+                _noteState.value = ResultNotesReducer.deleteFailed(_noteState.value, error.message ?: "Unable to delete note.")
             }
         }
     }

@@ -85,6 +85,7 @@ enum class ThemeMode {
 data class DisplayPreferences(
     val unitProfile: UnitProfile = UnitProfile.METRIC,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    val dynamicColor: Boolean = false,
 ) {
     /** Compatibility projection for callers not yet migrated. */
     val unitSystem: UnitSystem
@@ -103,6 +104,9 @@ object DisplayPreferencesCodec {
     const val KEY_JUMP_TIMING = "display_unit_jump_timing"
     const val KEY_LEGACY_SYSTEM = "display_unit_system"
     const val KEY_THEME = "display_theme_mode"
+    const val KEY_DYNAMIC_COLOR = "display_dynamic_color"
+
+    fun decodeDynamicColor(raw: String?): Boolean = raw == "true"
 
     data class Snapshot(val values: Map<String, String?>) {
         operator fun get(key: String): String? = values[key]
@@ -167,6 +171,11 @@ class DisplayPreferencesStore(context: Context) {
         _state.value = _state.value.copy(themeMode = themeMode)
     }
 
+    fun setDynamicColor(enabled: Boolean) {
+        preferences.edit().putString(DisplayPreferencesCodec.KEY_DYNAMIC_COLOR, enabled.toString()).apply()
+        _state.value = _state.value.copy(dynamicColor = enabled)
+    }
+
     private fun read(): DisplayPreferences {
         val snapshot = DisplayPreferencesCodec.Snapshot(
             listOf(
@@ -179,11 +188,13 @@ class DisplayPreferencesStore(context: Context) {
                 DisplayPreferencesCodec.KEY_JUMP_TIMING,
                 DisplayPreferencesCodec.KEY_LEGACY_SYSTEM,
                 DisplayPreferencesCodec.KEY_THEME,
+                DisplayPreferencesCodec.KEY_DYNAMIC_COLOR,
             ).associateWith { preferences.getString(it, null) },
         )
         return DisplayPreferences(
             unitProfile = DisplayPreferencesCodec.decode(snapshot),
             themeMode = ThemeMode.decode(snapshot[DisplayPreferencesCodec.KEY_THEME]),
+            dynamicColor = DisplayPreferencesCodec.decodeDynamicColor(snapshot[DisplayPreferencesCodec.KEY_DYNAMIC_COLOR]),
         )
     }
 

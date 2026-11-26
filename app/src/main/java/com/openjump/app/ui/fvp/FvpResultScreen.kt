@@ -31,7 +31,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -150,9 +150,9 @@ fun FvpResultScreen(
     // A2: toda mutacion externa del borrador (nota, descarte, duplicar y editar) pasa por el DUEÑO
     // cuando existe, y la salida terminal del guardado pasa por su guard de `sessionKey`.
     val mutations: FvpDraftMutations = flowViewModel ?: FvpDraftSession
-    val draft by FvpDraftSession.draft.collectAsState()
-    val saveState by viewModel.saveState.collectAsState()
-    val deleteState by viewModel.deleteState.collectAsState()
+    val draft by FvpDraftSession.draft.collectAsStateWithLifecycle()
+    val saveState by viewModel.saveState.collectAsStateWithLifecycle()
+    val deleteState by viewModel.deleteState.collectAsStateWithLifecycle()
     // P2 (Wave 4a): el borrado NO se puede cancelar saliendo. El ViewModel vive en el destino, de
     // modo que un pop durante `Deleting` cancelaria la corrutina y ocultaria el resultado. El Back
     // del sistema se consume mientras el estado sea `Deleting`; la flecha de la barra y Editar se

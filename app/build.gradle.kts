@@ -152,6 +152,18 @@ android {
         buildConfig = true
     }
 
+    packaging {
+        resources {
+            excludes += setOf(
+                "/META-INF/{AL2.0,LGPL2.1}",
+                "META-INF/*.version",
+                "DebugProbesKt.bin",
+                "kotlin-tooling-metadata.json",
+                "kotlin/**/*.kotlin_builtins",
+            )
+        }
+    }
+
     sourceSets.getByName("test").java.srcDir("src/jumpValidationTest/java")
     sourceSets.getByName("test").resources.srcDir("$rootDir/testdata/jump_video/catalog")
     sourceSets.getByName("androidTest").java.srcDir("src/jumpValidationTest/java")
@@ -180,7 +192,9 @@ tasks.withType<Test>().configureEach {
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.profileinstaller)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.appcompat)
     implementation(libs.kotlinx.serialization.json)

@@ -17,7 +17,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -50,8 +50,8 @@ fun PersonalRecordsScreen(
     val model: PersonalRecordsViewModel = viewModel(
         key = "personal-records-$athleteId", factory = PersonalRecordsViewModel.factory(athleteId),
     )
-    val athlete by model.athlete.collectAsState()
-    val records by model.records.collectAsState()
+    val athlete by model.athlete.collectAsStateWithLifecycle()
+    val records by model.records.collectAsStateWithLifecycle()
     var expandedRecord by rememberSaveable(athleteId) { mutableStateOf<String?>(null) }
     var dropExpanded by rememberSaveable(athleteId) { mutableStateOf(false) }
 

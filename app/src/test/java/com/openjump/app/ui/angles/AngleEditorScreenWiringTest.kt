@@ -31,7 +31,7 @@ class AngleEditorScreenWiringTest {
     fun `la geometria se consume del viewmodel y no se aproxima desde el player`() {
         assertTrue(
             "AngleEditorScreen debe recoger viewModel.videoGeometry",
-            source.contains("viewModel.videoGeometry.collectAsState()"),
+            source.contains("viewModel.videoGeometry.collectAsStateWithLifecycle()"),
         )
         assertFalse(
             "AngleEditorScreen no debe volver a leer tracks del player",
@@ -76,7 +76,7 @@ class AngleEditorScreenWiringTest {
         val workspace = readSource("AngleEditorWorkspace.kt")
         assertTrue(
             "El workspace debe consumir el mapper PTS real del ViewModel",
-            workspace.contains("viewModel.timelineMapper.collectAsState()"),
+            workspace.contains("viewModel.timelineMapper.collectAsStateWithLifecycle()"),
         )
         assertTrue(
             "El timeline debe ser el componente existente sobre ese mapper",
@@ -154,7 +154,7 @@ class AngleEditorScreenWiringTest {
         // `null` de la reapertura y no hay capa, ni panel accesible, ni forma de colocar C.
         assertTrue(
             "La pantalla debe observar la puerta de gestos del ViewModel",
-            source.contains("viewModel.gestureGate.collectAsState()"),
+            source.contains("viewModel.gestureGate.collectAsStateWithLifecycle()"),
         )
         assertTrue(
             "La confirmación debe pasar por la caché de entradas observables",

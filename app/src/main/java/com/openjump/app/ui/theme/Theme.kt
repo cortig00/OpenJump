@@ -1,9 +1,14 @@
 package com.openjump.app.ui.theme
 
 import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -11,7 +16,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
@@ -21,20 +26,34 @@ private val LightColors = lightColorScheme(
     primaryContainer = LightPrimaryContainer,
     onPrimaryContainer = LightOnPrimaryContainer,
     secondary = LightSecondary,
+    onSecondary = LightOnSecondary,
     secondaryContainer = LightSecondaryContainer,
     onSecondaryContainer = LightOnSecondaryContainer,
     tertiary = LightTertiary,
+    onTertiary = LightOnTertiary,
     tertiaryContainer = LightTertiaryContainer,
     onTertiaryContainer = LightOnTertiaryContainer,
+    error = LightError,
+    onError = LightOnError,
+    errorContainer = LightErrorContainer,
+    onErrorContainer = LightOnErrorContainer,
     background = LightBackground,
+    onBackground = LightOnBackground,
     surface = LightSurface,
+    onSurface = LightOnSurface,
     surfaceVariant = LightSurfaceVariant,
+    onSurfaceVariant = LightOnSurfaceVariant,
+    surfaceContainerLowest = LightSurfaceContainerLowest,
     surfaceContainerLow = LightSurfaceContainerLow,
     surfaceContainer = LightSurfaceContainer,
     surfaceContainerHigh = LightSurfaceContainerHigh,
     surfaceContainerHighest = LightSurfaceContainerHighest,
     outline = LightOutline,
     outlineVariant = LightOutlineVariant,
+    inverseSurface = LightInverseSurface,
+    inverseOnSurface = LightInverseOnSurface,
+    inversePrimary = LightInversePrimary,
+    scrim = LightScrim,
 )
 
 private val DarkColors = darkColorScheme(
@@ -47,22 +66,30 @@ private val DarkColors = darkColorScheme(
     secondaryContainer = DarkSecondaryContainer,
     onSecondaryContainer = DarkOnSecondaryContainer,
     tertiary = DarkTertiary,
+    onTertiary = DarkOnTertiary,
     tertiaryContainer = DarkTertiaryContainer,
     onTertiaryContainer = DarkOnTertiaryContainer,
     error = DarkError,
     onError = DarkOnError,
+    errorContainer = DarkErrorContainer,
+    onErrorContainer = DarkOnErrorContainer,
     background = DarkBackground,
     onBackground = DarkOnBackground,
     surface = DarkSurface,
     onSurface = DarkOnSurface,
     onSurfaceVariant = DarkOnSurfaceVariant,
     surfaceVariant = DarkSurfaceVariant,
+    surfaceContainerLowest = DarkSurfaceContainerLowest,
     surfaceContainerLow = DarkSurfaceContainerLow,
     surfaceContainer = DarkSurfaceContainer,
     surfaceContainerHigh = DarkSurfaceContainerHigh,
     surfaceContainerHighest = DarkSurfaceContainerHighest,
     outline = DarkOutline,
     outlineVariant = DarkOutlineVariant,
+    inverseSurface = DarkInverseSurface,
+    inverseOnSurface = DarkInverseOnSurface,
+    inversePrimary = DarkInversePrimary,
+    scrim = DarkScrim,
 )
 
 /**
@@ -132,18 +159,32 @@ object OpenJumpTheme {
 @Composable
 fun OpenJumpTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit,
 ) {
-    val colors = if (darkTheme) DarkColors else LightColors
-    val openJumpColors = if (darkTheme) DarkOpenJumpColors else LightOpenJumpColors
+    val context = LocalContext.current
+    val useDynamicColor = dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val colors = when {
+        useDynamicColor && darkTheme -> dynamicDarkColorScheme(context)
+        useDynamicColor -> dynamicLightColorScheme(context)
+        darkTheme -> DarkColors
+        else -> LightColors
+    }
+    val baseOpenJumpColors = if (darkTheme) DarkOpenJumpColors else LightOpenJumpColors
+    val openJumpColors = if (useDynamicColor) {
+        baseOpenJumpColors.copy(
+            navigationSelectedContainer = colors.primaryContainer,
+            navigationSelectedContent = colors.onPrimaryContainer,
+            progressCompletedContainer = colors.primaryContainer,
+            progressCompletedContent = colors.onPrimaryContainer,
+        )
+    } else {
+        baseOpenJumpColors
+    }
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
-            val window = (view.context as Activity).window
-            @Suppress("DEPRECATION")
-            window.statusBarColor = colors.background.toArgb()
-            @Suppress("DEPRECATION")
-            window.navigationBarColor = colors.background.toArgb()
+            val window = view.context.findActivity()?.window ?: return@SideEffect
             WindowCompat.getInsetsController(window, view).apply {
                 isAppearanceLightStatusBars = !darkTheme
                 isAppearanceLightNavigationBars = !darkTheme
@@ -158,4 +199,10 @@ fun OpenJumpTheme(
             content = content,
         )
     }
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }

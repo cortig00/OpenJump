@@ -2,8 +2,12 @@ package com.openjump.app.encoder
 
 import kotlin.math.abs
 import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.sqrt
 
 object RepetitionSegmenter {
+    private const val MAXIMUM_VELOCITY_ENTER_MPS = 0.15
+
     data class StationaryInterval(val startSample: Int, val endSample: Int)
 
     data class Segmentation(
@@ -33,8 +37,22 @@ object RepetitionSegmenter {
         )
         val lowMotionLimit = percentile(velocities.map(::abs), 0.25)
         val lowMotion = velocities.filter { abs(it) <= lowMotionLimit }
-        val sigmaNoise = 1.4826 * mad(lowMotion)
+        val sigmaLowMotion = 1.4826 * mad(lowMotion)
+        // In continuous multi-rep sets with little or no rest between reps, the lowest 25% of |v|
+        // contains genuine movement near turnarounds rather than stationary noise. Estimate
+        // high-frequency noise from second differences (which cancel both velocity and constant
+        // acceleration) and take the smaller estimate so fatigued grinding reps are never masked.
+        val sigmaHighFreq = if (velocities.size >= 5) {
+            val secondDiffs = List(velocities.size - 2) { i ->
+                velocities[i + 2] - 2.0 * velocities[i + 1] + velocities[i]
+            }
+            1.4826 * mad(secondDiffs) / sqrt(6.0)
+        } else {
+            sigmaLowMotion
+        }
+        val sigmaNoise = min(sigmaLowMotion, sigmaHighFreq)
         val enter = max(config.minimumVelocityMps, config.noiseMultiplier * sigmaNoise)
+            .coerceAtMost(max(config.minimumVelocityMps, MAXIMUM_VELOCITY_ENTER_MPS))
         val exit = enter * config.exitRatio
         val medianDelta = medianLong(
             samples.mapNotNull { it.physicalTimeUs }.zipWithNext { a, b -> b - a },

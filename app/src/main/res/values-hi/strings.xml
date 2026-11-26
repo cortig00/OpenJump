@@ -412,6 +412,8 @@
     <string name="settings_theme_system">सिस्टम का पालन करें</string>
     <string name="settings_theme_light">हल्का</string>
     <string name="settings_theme_dark">गहरा</string>
+    <string name="settings_dynamic_color_title">डायनामिक रंग (Material You)</string>
+    <string name="settings_dynamic_color_description">वॉलपेपर के रंगों के अनुसार ऐप के रंग बदलता है</string>
     <string name="error_invalid_measurement">अनुरोधित परिणाम मान्य नहीं है।</string>
     <string name="error_unknown_protocol">अनुरोधित टेस्ट मौजूद नहीं है।</string>
     <string name="camera_guidance_encoder">संदर्भ और लक्ष्य को दिखाई देते रखें और कैमरा हिलाने से बचें।</string>
@@ -1282,6 +1284,8 @@
     <string name="onboarding_finish_start">शुरू करें</string>
     <string name="onboarding_settings_title">प्रारंभिक सेटिंग्स</string>
     <string name="onboarding_settings_summary">खिलाड़ी और प्राथमिकताएँ जाँचें</string>
+    <string name="settings_sample_videos_title">सैंपल वीडियो</string>
+    <string name="settings_sample_videos_summary">रिकॉर्ड किए बिना जंप और एनकोडर डेमो आज़माएँ</string>
     <string name="encoder_reference_title">संदर्भ</string>
     <string name="encoder_reference_choose_hint">बताएँ कि आप कौन-सा माप जानते हैं। संदर्भ लक्ष्य की तरह कैमरे से उसी दूरी पर होना चाहिए।</string>
     <string name="encoder_reference_choose_video">वीडियो में चुनें</string>
@@ -1954,4 +1958,63 @@
     <plurals name="camera_bilateral_series_recording"><item quantity="one">एक ही वीडियो में प्रति टाँग %d कूद रिकॉर्ड हो रहा है।</item><item quantity="other">एक ही वीडियो में प्रति टाँग %d कूद रिकॉर्ड हो रहे हैं।</item></plurals>
     <plurals name="angle_polish_frames_count"><item quantity="one">%1$d फ़्रेम</item><item quantity="other">%1$d फ़्रेम</item></plurals>
     <plurals name="angle_polish_marks_count"><item quantity="one">%1$d कोण</item><item quantity="other">%1$d कोण</item></plurals>
-    </resources>
+
+    <string name="result_save_error_body">उपलब्ध स्टोरेज जाँचें और फिर से सहेजने का प्रयास करें।</string>
+    <string name="result_open_error_body">सहेजा गया माप लोड नहीं हो सका। कृपया पुनः प्रयास करें।</string>
+    <string name="home_try_sample_video">सैंपल जंप वीडियो के साथ आज़माएँ</string>
+    <string name="encoder_try_sample_video">सैंपल स्क्वाट वीडियो के साथ आज़माएँ</string>
+    <string name="result_share_action">रिज़ल्ट कार्ड साझा करें</string>
+    <string name="result_share_dialog_title">रिज़ल्ट कार्ड साझा करें</string>
+    <string name="result_share_dialog_body">किसी अन्य ऐप में साझा करने के लिए इस जंप का PNG सारांश कार्ड बनाता है।</string>
+    <string name="result_share_include_athlete">एथलीट का नाम शामिल करें</string>
+    <string name="result_share_confirm">छवि साझा करें</string>
+    <string name="result_share_chooser_title">जंप परिणाम साझा करें</string>
+    <string name="result_share_error">इस डिवाइस पर परिणाम छवि साझा नहीं की जा सकी।</string>
+    <string name="result_share_footer">OpenJump के साथ ऑफ़लाइन मापा गया · ओपन सोर्स</string>
+    <string name="share_studio_format_feed">पोस्ट (4:5)</string>
+    <string name="share_studio_format_story">स्टोरी (9:16)</string>
+    <string name="share_studio_include_photos">मुख्य फ़्रेम शामिल करें</string>
+    <string name="share_studio_include_chart">रेप गति ग्राफ़ शामिल करें</string>
+    <string name="share_studio_rep_chart_title">प्रति रेप गति (%s)</string>
+    <string name="share_studio_include_metrics">अतिरिक्त मीट्रिक शामिल करें</string>
+    <string name="share_studio_include_brand">OpenJump ब्रांड दिखाएँ</string>
+    <string name="share_studio_frame_start">शुरुआत</string>
+    <string name="share_studio_frame_end">अंत</string>
+    <string name="selector_tracking_set_end_frame">इस फ़्रेम पर रोकें</string>
+    <string name="selector_tracking_end_frame_set">फ़्रेम %1$d पर रुकता है</string>
+    <string name="selector_tracking_clear_end_frame">अंत तक ट्रैक करें</string>
+    <string name="selector_tracking_resume_action">खोने के बाद जारी रखें</string>
+    <string name="selector_tracking_resume_hint">फ़्रेम %1$d के बाद एक स्पष्ट फ़्रेम पर जाएँ और ट्रैकिंग जारी रखने के लिए प्लेट या बार पर टैप करें।</string>
+    <string name="selector_tracking_resume_cancel">जारी रखना रद्द करें</string>
+    <string name="share_studio_tab_image">छवि (PNG)</string>
+    <string name="share_studio_tab_video">वीडियो (MP4)</string>
+    <string name="video_export_preview_cd">वीडियो ओवरले पूर्वावलोकन</string>
+    <string name="video_export_unavailable">मूल वीडियो अब इस डिवाइस पर उपलब्ध नहीं है।</string>
+    <string name="video_export_show_logo">OpenJump लोगो</string>
+    <string name="video_export_logo_position">लोगो की स्थिति</string>
+    <string name="video_export_show_hud">मैट्रिक्स HUD ओवरले</string>
+    <string name="video_export_hud_position">मैट्रिक्स की स्थिति</string>
+    <string name="video_export_show_trajectory">बारबेल पथ</string>
+    <string name="video_export_corner_top_left">ऊपर बाएँ</string>
+    <string name="video_export_corner_top_right">ऊपर दाएँ</string>
+    <string name="video_export_corner_bottom_left">नीचे बाएँ</string>
+    <string name="video_export_corner_bottom_right">नीचे दाएँ</string>
+    <string name="video_export_action">वीडियो निर्यात करें (MP4)</string>
+    <string name="video_export_share_action">वीडियो साझा करें</string>
+    <string name="video_export_share_title">OpenJump वीडियो साझा करें</string>
+    <string name="video_export_saved_ok">वीडियो सफलतापूर्वक सहेजा गया।</string>
+    <string name="video_export_save_error">वीडियो फ़ाइल सहेजी नहीं जा सकी।</string>
+    <string name="video_hud_phase_ready">तैयार</string>
+    <string name="video_hud_phase_flight">उड़ान में</string>
+    <string name="video_hud_phase_landed">लैंडिंग</string>
+    <string name="video_hud_rep_prefix">REP</string>
+    <string name="share_studio_chart_legend_best">सर्वश्रेष्ठ</string>
+    <string name="share_studio_chart_legend_fatigue">≥%1$d%%</string>
+    <string name="video_export_show_live_chart">प्रति रेप लाइव चार्ट (गति / स्थिति)</string>
+    <string name="video_export_trajectory_per_rep">प्रति रेप</string>
+    <string name="video_export_trajectory_full_set">पूरा सेट</string>
+    <string name="share_studio_include_estimated_power">अनुमानित शक्ति शामिल करें (Sayers)</string>
+    <string name="share_studio_est_peak_power_short">अनुमानित शिखर शक्ति</string>
+    <string name="share_studio_est_rel_power_short">अनुमानित सापेक्ष शक्ति</string>
+    <string name="share_studio_est_sayers_note">अनुमान Sayers (1999)</string>
+</resources>

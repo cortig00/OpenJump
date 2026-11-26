@@ -39,7 +39,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -85,6 +85,7 @@ fun EncoderSetupScreen(
     onAthleteSelected: (Long) -> Unit,
     onImport: (Uri, EncoderSetup, Long) -> Unit,
     onRecord: (EncoderSetup, Long) -> Unit,
+    onTryDemoEncoder: ((Long) -> Unit)? = null,
     initialDefaultLoadsKg: Map<EncoderExercise, Double>? = null,
 ) {
     val context = LocalContext.current
@@ -125,7 +126,7 @@ fun EncoderSetupScreen(
     // Navigation supplies the current encoder/setup NavBackStackEntry as the ViewModelStoreOwner:
     // it survives activity configuration recreation and clears when this destination is popped.
     val importViewModel: EncoderImportHandoffViewModel = viewModel(factory = EncoderImportHandoffViewModel.Factory)
-    val handoffState by importViewModel.state.collectAsState()
+    val handoffState by importViewModel.state.collectAsStateWithLifecycle()
     val currentOnImport = rememberUpdatedState(onImport)
     var pickedExerciseName by rememberSaveable { mutableStateOf<String?>(null) }
     var pickedLoadKg by rememberSaveable { mutableStateOf<Double?>(null) }
@@ -283,7 +284,7 @@ fun EncoderSetupScreen(
             EncoderInfoNote(
                 title = stringResource(R.string.labs_live_warning_title),
                 body = stringResource(R.string.labs_live_warning_body),
-                warning = true,
+                warning = false,
             )
             AthleteSelector(
                 athletes = activeAthletes,
@@ -369,6 +370,32 @@ fun EncoderSetupScreen(
                         style = MaterialTheme.typography.titleMedium)
                     Icon(painterResource(R.drawable.ic_info), contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            if (onTryDemoEncoder != null) {
+                OutlinedButton(
+                    onClick = {
+                        setupAthleteId?.let { athleteId ->
+                            if (!startDispatched) {
+                                startDispatched = true
+                                onTryDemoEncoder(athleteId)
+                            }
+                        }
+                    },
+                    enabled = athleteSelected && !startDispatched,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .testTag("encoder-setup-demo"),
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_encoder),
+                        contentDescription = null,
+                    )
+                    Text(
+                        stringResource(R.string.encoder_try_sample_video),
+                        modifier = Modifier.padding(start = Spacing.sm),
+                    )
                 }
             }
         }

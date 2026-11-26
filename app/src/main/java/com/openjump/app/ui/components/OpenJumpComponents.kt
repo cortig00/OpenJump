@@ -16,8 +16,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -27,13 +25,13 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -45,7 +43,7 @@ import androidx.compose.ui.unit.sp
 import com.openjump.app.R
 import com.openjump.app.protocol.ProtocolAvailability
 import com.openjump.app.protocol.ProtocolDefinition
-import com.openjump.app.ui.theme.LightPrimary
+import com.openjump.app.ui.theme.OpenJumpTheme
 import com.openjump.app.ui.theme.OpenJumpTypes
 import com.openjump.app.ui.theme.ShapeTokens
 import com.openjump.app.ui.theme.Spacing
@@ -57,7 +55,7 @@ fun OpenJumpIconBadge(
     size: Dp = 34.dp,
     iconSize: Dp = 20.dp,
 ) {
-    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val isDark = OpenJumpTheme.isDark
     Surface(
         modifier = modifier.size(size),
         shape = ShapeTokens.small,
@@ -83,11 +81,7 @@ fun OpenJumpIconBadge(
                 painter = painterResource(icon),
                 contentDescription = null,
                 modifier = Modifier.size(iconSize),
-                tint = if (isDark) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    LightPrimary
-                },
+                tint = MaterialTheme.colorScheme.primary,
             )
         }
     }
@@ -99,7 +93,7 @@ fun OpenJumpBrandBadge(
     size: Dp = 32.dp,
     iconSize: Dp = 20.dp,
 ) {
-    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val isDark = OpenJumpTheme.isDark
     Surface(
         modifier = modifier.size(size),
         shape = ShapeTokens.small,
@@ -125,11 +119,7 @@ fun OpenJumpBrandBadge(
                 painter = painterResource(R.drawable.ic_openjump_logo),
                 contentDescription = null,
                 modifier = Modifier.size(iconSize),
-                colorFilter = if (isDark) {
-                    ColorFilter.tint(MaterialTheme.colorScheme.primary)
-                } else {
-                    ColorFilter.tint(LightPrimary)
-                },
+                colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.primary),
             )
         }
     }
@@ -154,6 +144,62 @@ fun OpenJumpTopAppBar(
     titleLeadingContent: (@Composable () -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {},
     subtitle: String? = null,
+) {
+    OpenJumpTopAppBarImpl(
+        title = title,
+        onNavigationClick = onNavigationClick,
+        navigationContentDescription = navigationContentDescription,
+        showBrandLogo = showBrandLogo,
+        isHome = isHome,
+        iconBadge = iconBadge,
+        titleLeadingContent = titleLeadingContent,
+        actions = actions,
+        subtitle = subtitle,
+        scrollBehavior = null,
+    )
+}
+
+@ExperimentalMaterial3Api
+@Composable
+fun OpenJumpTopAppBar(
+    title: String,
+    scrollBehavior: TopAppBarScrollBehavior,
+    onNavigationClick: (() -> Unit)? = null,
+    navigationContentDescription: String? = null,
+    showBrandLogo: Boolean = false,
+    isHome: Boolean = false,
+    iconBadge: Int? = null,
+    titleLeadingContent: (@Composable () -> Unit)? = null,
+    actions: @Composable RowScope.() -> Unit = {},
+    subtitle: String? = null,
+) {
+    OpenJumpTopAppBarImpl(
+        title = title,
+        onNavigationClick = onNavigationClick,
+        navigationContentDescription = navigationContentDescription,
+        showBrandLogo = showBrandLogo,
+        isHome = isHome,
+        iconBadge = iconBadge,
+        titleLeadingContent = titleLeadingContent,
+        actions = actions,
+        subtitle = subtitle,
+        scrollBehavior = scrollBehavior,
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun OpenJumpTopAppBarImpl(
+    title: String,
+    onNavigationClick: (() -> Unit)?,
+    navigationContentDescription: String?,
+    showBrandLogo: Boolean,
+    isHome: Boolean,
+    iconBadge: Int?,
+    titleLeadingContent: (@Composable () -> Unit)?,
+    actions: @Composable RowScope.() -> Unit,
+    subtitle: String?,
+    scrollBehavior: TopAppBarScrollBehavior?,
 ) {
     val leading = titleLeadingContent ?: when {
         showBrandLogo -> {
@@ -246,17 +292,21 @@ fun OpenJumpTopAppBar(
                 }
             },
             actions = actions,
+            scrollBehavior = scrollBehavior,
             colors = TopAppBarDefaults.topAppBarColors(
                 containerColor = MaterialTheme.colorScheme.surface,
+                scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
                 navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
                 titleContentColor = MaterialTheme.colorScheme.onSurface,
                 actionIconContentColor = MaterialTheme.colorScheme.onSurface,
             ),
         )
-        HorizontalDivider(
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.22f),
-            thickness = 0.75.dp,
-        )
+        if (scrollBehavior == null) {
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.22f),
+                thickness = 0.75.dp,
+            )
+        }
     }
 }
 
@@ -305,18 +355,26 @@ fun ProtocolCard(
 ) {
     val available = definition.availability == ProtocolAvailability.AVAILABLE
     val cardModifier = modifier.fillMaxWidth()
+    val border = BorderStroke(
+        width = 1.dp,
+        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+    )
     if (available) {
-        ElevatedCard(
+        Surface(
             onClick = onClick,
             modifier = cardModifier,
-            colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface),
+            shape = ShapeTokens.medium,
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            border = border,
         ) {
             ProtocolCardContent(definition, available = true)
         }
     } else {
-        ElevatedCard(
+        Surface(
             modifier = cardModifier,
-            colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            shape = ShapeTokens.medium,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            border = border,
         ) {
             ProtocolCardContent(definition, available = false)
         }
@@ -388,8 +446,16 @@ fun MetricCard(
     Surface(
         modifier = modifier,
         shape = ShapeTokens.large,
-        color = if (primary) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
-        tonalElevation = if (primary) 0.dp else 2.dp,
+        color = if (primary) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerLow
+        },
+        border = if (primary) {
+            null
+        } else {
+            BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+        },
     ) {
         Column(Modifier.padding(Spacing.lg)) {
             Text(

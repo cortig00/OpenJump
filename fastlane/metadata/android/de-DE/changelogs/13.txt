@@ -1,0 +1,5 @@
+OpenJump 1.4.0:
+• Export Studio (PNG & MP4): 4:5/9:16-Karten (Hell/Dunkel) mit Sprungbildern oder VBT-Diagramm sowie Videos mit Logo, 4-Ecken-HUD, Live-ROM/Tempo pro Wiederholung & Hantelbahn.
+• Schnellerer, präziserer VBT-Encoder: MediaCodec-Tracking, zirkuläre Anti-Drift-ROI & Erkennung langsamer Wiederholungen.
+• Integrierte 60-fps-Demovideos (CMJ & Kniebeuge) auch in den Einstellungen.
+• Material Design 3, OLED-Dunkelmodus & optionales Material You. 100 % offline.

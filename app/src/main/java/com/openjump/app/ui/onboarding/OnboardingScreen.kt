@@ -28,13 +28,14 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.layout.ContentScale
@@ -74,7 +75,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import kotlinx.coroutines.launch
 
 /** First-run and replay onboarding destinations. */
-enum class OnboardingExitDestination { HOME, JUMPS, ENCODER }
+enum class OnboardingExitDestination { HOME, JUMPS, ANGLES, ENCODER, DEMO_JUMP }
 
 private enum class OnboardingStep(val position: Int) {
     WELCOME(1), MODE(2), ATHLETE(3), BASICS(4), FINISH(5);
@@ -102,20 +103,20 @@ fun OnboardingScreen(
     onSkip: () -> Unit,
     onBack: (() -> Unit)? = null,
 ) {
-    // Never restore a half-finished wizard after Activity/process recreation; persisted choices remain.
-    var step by remember { mutableStateOf(OnboardingStep.WELCOME) }
-    var athleteName by remember { mutableStateOf("") }
-    var avatarKey by remember { mutableStateOf<String?>(null) }
-    var targetAthleteId by remember { mutableStateOf<Long?>(null) }
-    var initializedProfile by remember { mutableStateOf(false) }
-    var createdAthleteId by remember { mutableStateOf<Long?>(null) }
+    // Preserve in-progress wizard state across configuration changes (e.g. rotation/font scaling).
+    var step by rememberSaveable { mutableStateOf(OnboardingStep.WELCOME) }
+    var athleteName by rememberSaveable { mutableStateOf("") }
+    var avatarKey by rememberSaveable { mutableStateOf<String?>(null) }
+    var targetAthleteId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var initializedProfile by rememberSaveable { mutableStateOf(false) }
+    var createdAthleteId by rememberSaveable { mutableStateOf<Long?>(null) }
     var showAvatarPicker by remember { mutableStateOf(false) }
     var savingAthlete by remember { mutableStateOf(false) }
     var profileError by remember { mutableStateOf(false) }
     var nameError by remember { mutableStateOf(false) }
 
-    val mode by app.experienceModeStore.mode.collectAsState()
-    val displayPreferences by app.displayPreferencesStore.state.collectAsState()
+    val mode by app.experienceModeStore.mode.collectAsStateWithLifecycle()
+    val displayPreferences by app.displayPreferencesStore.state.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
     val stepScroll = key(step) { rememberScrollState() }
@@ -283,9 +284,17 @@ fun OnboardingScreen(
                             onThemeSelected = app.displayPreferencesStore::setThemeMode,
                         )
                         OnboardingStep.FINISH -> FinishStep(
+                            onTryDemoJump = {
+                                app.onboardingPreferencesStore.completeOnboarding()
+                                onExit(OnboardingExitDestination.DEMO_JUMP)
+                            },
                             onJumpsSelected = {
                                 app.onboardingPreferencesStore.completeOnboarding()
                                 onExit(OnboardingExitDestination.JUMPS)
+                            },
+                            onAnglesSelected = {
+                                app.onboardingPreferencesStore.completeOnboarding()
+                                onExit(OnboardingExitDestination.ANGLES)
                             },
                             onEncoderSelected = {
                                 app.onboardingPreferencesStore.completeOnboarding()
@@ -501,24 +510,43 @@ private fun BasicsStep(
 }
 
 @Composable
-private fun FinishStep(onJumpsSelected: () -> Unit, onEncoderSelected: () -> Unit) {
-    // Keep both destinations visible above the fixed footer on shorter phones.
+private fun FinishStep(
+    onTryDemoJump: () -> Unit,
+    onJumpsSelected: () -> Unit,
+    onAnglesSelected: () -> Unit,
+    onEncoderSelected: () -> Unit,
+) {
+    // Keep destinations accessible above the fixed footer on shorter phones.
     val compact = LocalConfiguration.current.screenHeightDp < 700
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
         Text(stringResource(R.string.onboarding_finish_title), style = OpenJumpTypes.ScreenTitle)
         Text(stringResource(R.string.onboarding_finish_body), style = OpenJumpTypes.Body, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        OnboardingIllustration(R.drawable.onboarding_finish, if (compact) 152.dp else 208.dp, if (compact) 128.dp else 176.dp)
+        OnboardingIllustration(R.drawable.onboarding_finish, if (compact) 140.dp else 184.dp, if (compact) 116.dp else 156.dp)
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
             OutlinedButton(
+                onClick = onTryDemoJump,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).testTag("onboarding-demo-jump"),
+            ) {
+                Icon(painterResource(R.drawable.ic_jumps), contentDescription = null)
+                Text(stringResource(R.string.home_try_sample_video), modifier = Modifier.padding(start = Spacing.sm))
+            }
+            OutlinedButton(
                 onClick = onJumpsSelected,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag("onboarding-jumps"),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).testTag("onboarding-jumps"),
             ) {
                 Icon(painterResource(R.drawable.ic_jumps), contentDescription = null)
                 Text(stringResource(R.string.home_jumps_title), modifier = Modifier.padding(start = Spacing.sm))
             }
             OutlinedButton(
+                onClick = onAnglesSelected,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).testTag("onboarding-angles"),
+            ) {
+                Icon(painterResource(R.drawable.ic_angles), contentDescription = null)
+                Text(stringResource(R.string.home_angles_title), modifier = Modifier.padding(start = Spacing.sm))
+            }
+            OutlinedButton(
                 onClick = onEncoderSelected,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag("onboarding-encoder"),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).testTag("onboarding-encoder"),
             ) {
                 Icon(painterResource(R.drawable.ic_encoder), contentDescription = null)
                 Text(stringResource(R.string.home_encoder_title), modifier = Modifier.padding(start = Spacing.sm))

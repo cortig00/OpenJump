@@ -60,6 +60,7 @@ import com.openjump.app.video.AppSession
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 /** Encoder-only preparation. No scrolling page can separate the disk from its CTA. */
 @OptIn(UnstableApi::class)
@@ -72,14 +73,14 @@ internal fun EncoderReferenceScreen(
     preparingFirstRecording: Boolean,
     preparationFeedbackDelayMs: Long,
 ) {
-    val player by viewModel.player.collectAsState()
-    val index by AppSession.frameIndex.collectAsState()
-    val display by viewModel.displayState.collectAsState()
-    val plate by viewModel.plateDetectionState.collectAsState()
-    val tracking by viewModel.trackingState.collectAsState()
-    val loading by viewModel.loading.collectAsState()
-    val error by viewModel.error.collectAsState()
-    val liveVideoUri by AppSession.videoUri.collectAsState()
+    val player by viewModel.player.collectAsStateWithLifecycle()
+    val index by AppSession.frameIndex.collectAsStateWithLifecycle()
+    val display by viewModel.displayState.collectAsStateWithLifecycle()
+    val plate by viewModel.plateDetectionState.collectAsStateWithLifecycle()
+    val tracking by viewModel.trackingState.collectAsStateWithLifecycle()
+    val loading by viewModel.loading.collectAsStateWithLifecycle()
+    val error by viewModel.error.collectAsStateWithLifecycle()
+    val liveVideoUri by AppSession.videoUri.collectAsStateWithLifecycle()
     var chosen by rememberSaveable(draft.sessionKey) { mutableStateOf(plate.phase != PlateDetectionPhase.IDLE) }
     var moments by rememberSaveable(draft.sessionKey) { mutableStateOf(false) }
     var viewport by remember { mutableStateOf(IntSize.Zero) }

@@ -1,0 +1,5 @@
+OpenJump 1.4.0:
+• Export Studio (PNG y MP4): tarjetas 4:5 y 9:16 (claro/oscuro) con fotos de salto o gráfica de repeticiones, y videos con logo, HUD en 4 esquinas, PV/pérdida/ROM por repetición y trayectoria.
+• Encoder VBT más rápido y preciso: tracking MediaCodec, ROI circular antideriva y mejor detección en fatiga.
+• Videos de muestra 60 fps de CMJ y Sentadilla (también en Ajustes).
+• Material Design 3, modo oscuro OLED y Material You opcional. 100 % sin conexión.

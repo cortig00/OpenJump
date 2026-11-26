@@ -17,6 +17,8 @@ import boofcv.struct.ConfigLength
 import boofcv.struct.image.GrayS16
 import boofcv.struct.image.GrayU8
 import boofcv.struct.pyramid.ConfigDiscreteLevels
+import kotlin.math.ceil
+import kotlin.math.floor
 import kotlin.math.hypot
 import kotlin.math.min
 import kotlin.math.pow
@@ -48,7 +50,16 @@ class PyramidalKltMotionTracker(
         val forwardBackwardTolerancePx: Double = 1.5,
         val trackingConfidenceThreshold: Double = 0.60,
         val lostConfidenceThreshold: Double = 0.20,
-        val maximumUncertainFrames: Int = 3,
+        val maximumUncertainFrames: Int = 5,
+        val replenishmentRatio: Double = 0.75,
+        /**
+         * Optional calibrated barbell plate diameter in tracking-frame pixels. When provided,
+         * restricts Shi-Tomasi features to the plate's circular interior (blocking rack/background
+         * bleed) and enables periodic sub-pixel circular rim re-anchoring to eliminate KLT drift.
+         */
+        val targetDiameterPx: Double? = null,
+        val enableCircularReanchor: Boolean = true,
+        val reanchorIntervalFrames: Int = 1,
     )
 
     private val gradient: ImageGradient<GrayU8, GrayS16> =
@@ -68,11 +79,15 @@ class PyramidalKltMotionTracker(
 
     private var klt: PointTrackerKltPyramid<GrayU8, GrayS16>? = null
     private var gray = GrayU8(1, 1)
+    private var roiGray = GrayU8(1, 1)
     private var derivX = GrayS16(1, 1)
     private var derivY = GrayS16(1, 1)
     private var frameWidth = 0
     private var frameHeight = 0
     private var region: ImageRegion? = null
+    private var circularMaskRadiusPx: Double? = null
+    private var rimSignature: CircularRimSignature? = null
+    private var trackedFrameCount = 0
     private var lastTimestampUs: Long? = null
     private var uncertainFrames = 0
     private var lost = false
@@ -88,9 +103,21 @@ class PyramidalKltMotionTracker(
             copyFrame(frame)
         }
 
-        val side = (min(frame.width, frame.height) * 0.16)
-            .coerceIn(48.0, 96.0)
-            .coerceAtMost(min(frame.width, frame.height) - 4.0)
+        val maxSide = min(frame.width, frame.height) - 4.0
+        val calibratedDiameter = config.targetDiameterPx?.takeIf { it.isFinite() && it >= 24.0 }
+        val side = if (calibratedDiameter != null) {
+            calibratedDiameter.coerceIn(36.0, min(maxSide, 220.0))
+        } else {
+            (min(frame.width, frame.height) * 0.16)
+                .coerceIn(48.0, 96.0)
+                .coerceAtMost(maxSide)
+        }
+        circularMaskRadiusPx = calibratedDiameter?.let { (it * 0.44).coerceIn(14.0, side * 0.48) }
+        rimSignature = if (calibratedDiameter != null && config.enableCircularReanchor) {
+            CircularPlateReanchor.learnSignature(frame, seed, calibratedDiameter / 2.0)
+        } else {
+            null
+        }
         val initialRegion = ImageRegion(seed, side, side).clampedTo(frame.width, frame.height)
         region = initialRegion
 
@@ -170,20 +197,76 @@ class PyramidalKltMotionTracker(
             )
         }
         lastTimestampUs = timestampUs
+        trackedFrameCount++
 
+        val activeRim = rimSignature
         if (estimate == null ||
             estimate.inliers.size < config.absoluteMinimumFeatures ||
             estimate.confidence < config.lostConfidenceThreshold
         ) {
+            // If KLT briefly lost texture support (e.g. rapid plate spin or motion blur) but the
+            // calibrated circular plate rim is still clearly visible, recover conservatively as
+            // UNCERTAIN instead of losing the whole set. Complete occlusion has zero rim support
+            // and still transitions immediately to LOST.
+            val rimFallback = activeRim?.let { sig ->
+                CircularPlateReanchor.refineCenter(frame, previousRegion.center, sig)
+            }
+            if (rimFallback != null && rimFallback.supportFraction >= 0.55 && rimFallback.coveredSectors >= 7) {
+                uncertainFrames++
+                if (uncertainFrames < config.maximumUncertainFrames) {
+                    val recoveredRegion = previousRegion.copy(center = rimFallback.center)
+                        .clampedTo(frameWidth, frameHeight)
+                    region = recoveredRegion
+                    tracker.dropAllTracks()
+                    performanceProfiler.measure(TrackingPerformanceProfiler.Stage.FEATURE_REPLENISHMENT) {
+                        prepareForManualSeeding(tracker)
+                        seedFeatures(tracker, recoveredRegion)
+                    }
+                    val currentFeatures = activeFeaturePoints(tracker)
+                    val rimConfidence = (rimFallback.supportFraction * 0.85).coerceIn(0.35, 0.75)
+                    return TrackingResult(
+                        sample = TrackingSample(
+                            timestampUs = timestampUs,
+                            point = recoveredRegion.center,
+                            confidence = rimConfidence,
+                            status = TrackingStatus.UNCERTAIN,
+                        ),
+                        region = recoveredRegion,
+                        featurePoints = currentFeatures,
+                        diagnostics = TrackingDiagnostics(
+                            attemptedFeatures = attempted.coerceAtLeast(motions.size),
+                            validFeatures = motions.size,
+                            inlierFeatures = estimate?.inliers?.size ?: 0,
+                            medianResidualPx = rimFallback.medianResidualPx,
+                            spatialCoverage = estimate?.diagnostics?.spatialCoverage ?: 0.0,
+                        ),
+                    )
+                }
+            }
             lost = true
             return lostResult(timestampUs, attempted, motions.size)
         }
 
-        val nextRegion = previousRegion.moved(estimate.dx, estimate.dy).clampedTo(frameWidth, frameHeight)
-        region = nextRegion
+        var nextRegion = previousRegion.moved(estimate.dx, estimate.dy).clampedTo(frameWidth, frameHeight)
         val weak = estimate.inliers.size < config.minimumFeatures ||
             estimate.confidence < config.trackingConfidenceThreshold ||
             estimate.diagnostics.spatialCoverage < 0.05
+
+        // Periodic sub-pixel circular rim re-anchoring prevents cumulative KLT drift across long
+        // sets and keeps the tracked point locked onto the true plate center during plate rotation.
+        if (activeRim != null && (weak || trackedFrameCount % config.reanchorIntervalFrames.coerceAtLeast(1) == 0)) {
+            val rimEstimate = CircularPlateReanchor.refineCenter(frame, nextRegion.center, activeRim)
+            if (rimEstimate != null) {
+                val blend = if (weak) 0.70 else 0.45
+                val blendedCenter = ImagePoint(
+                    x = nextRegion.center.x + (rimEstimate.center.x - nextRegion.center.x) * blend,
+                    y = nextRegion.center.y + (rimEstimate.center.y - nextRegion.center.y) * blend,
+                )
+                nextRegion = nextRegion.copy(center = blendedCenter).clampedTo(frameWidth, frameHeight)
+            }
+        }
+
+        region = nextRegion
         uncertainFrames = if (weak) uncertainFrames + 1 else 0
         if (uncertainFrames >= config.maximumUncertainFrames) {
             lost = true
@@ -197,12 +280,25 @@ class PyramidalKltMotionTracker(
 
         // Keep mature object support instead of replacing every feature on every frame. A newly
         // detected background corner can only influence motion after surviving KLT and the robust
-        // motion gate; geometrically inconsistent tracks are removed before replenishment.
+        // motion gate; geometrically inconsistent or out-of-disc tracks are removed before
+        // replenishment.
         val inliers = estimate.inliers.toSet()
-        trackedMotions.filter { it.second !in inliers }.forEach { (track, _) -> tracker.dropTrack(track) }
-        performanceProfiler.measure(TrackingPerformanceProfiler.Stage.FEATURE_REPLENISHMENT) {
-            prepareForManualSeeding(tracker)
-            seedFeatures(tracker, nextRegion)
+        val maxTrackRadius = circularMaskRadiusPx?.let { it * 1.10 }
+        trackedMotions.forEach { (track, motion) ->
+            val outsideDisc = maxTrackRadius != null &&
+                hypot(track.pixel.x - nextRegion.center.x, track.pixel.y - nextRegion.center.y) > maxTrackRadius
+            if (motion !in inliers || outsideDisc) {
+                tracker.dropTrack(track)
+            }
+        }
+        val replenishThreshold = (config.targetFeatures * config.replenishmentRatio)
+            .toInt()
+            .coerceIn(config.minimumFeatures, config.targetFeatures)
+        if (weak || tracker.totalActive < replenishThreshold) {
+            performanceProfiler.measure(TrackingPerformanceProfiler.Stage.FEATURE_REPLENISHMENT) {
+                prepareForManualSeeding(tracker)
+                seedFeatures(tracker, nextRegion)
+            }
         }
         val currentFeatures = activeFeaturePoints(tracker)
 
@@ -224,6 +320,9 @@ class PyramidalKltMotionTracker(
         frameWidth = 0
         frameHeight = 0
         region = null
+        circularMaskRadiusPx = null
+        rimSignature = null
+        trackedFrameCount = 0
         lastTimestampUs = null
         uncertainFrames = 0
         lost = false
@@ -301,14 +400,41 @@ class PyramidalKltMotionTracker(
         val selected = activeFeaturePoints(tracker).toMutableList()
         if (selected.size >= config.targetFeatures) return
 
-        derivX.reshape(gray.width, gray.height)
-        derivY.reshape(gray.width, gray.height)
-        gradient.process(gray, derivX, derivY)
-        featureDetector.process(gray, derivX, derivY, null, null, null)
+        // Restrict Sobel gradient and Shi-Tomasi corner detection to a padded ROI around the
+        // tracked target instead of scanning the entire frame.
+        val pad = 8
+        val halfW = targetRegion.width / 2.0
+        val halfH = targetRegion.height / 2.0
+        val x0 = floor(targetRegion.center.x - halfW - pad).toInt().coerceIn(0, gray.width - 1)
+        val y0 = floor(targetRegion.center.y - halfH - pad).toInt().coerceIn(0, gray.height - 1)
+        val x1 = ceil(targetRegion.center.x + halfW + pad).toInt().coerceIn(x0 + 1, gray.width)
+        val y1 = ceil(targetRegion.center.y + halfH + pad).toInt().coerceIn(y0 + 1, gray.height)
+        val roiWidth = x1 - x0
+        val roiHeight = y1 - y0
+        if (roiWidth < 8 || roiHeight < 8) return
+
+        roiGray.reshape(roiWidth, roiHeight)
+        for (row in 0 until roiHeight) {
+            System.arraycopy(
+                gray.data,
+                (y0 + row) * gray.stride + x0,
+                roiGray.data,
+                row * roiWidth,
+                roiWidth,
+            )
+        }
+        derivX.reshape(roiWidth, roiHeight)
+        derivY.reshape(roiWidth, roiHeight)
+        gradient.process(roiGray, derivX, derivY)
+        featureDetector.process(roiGray, derivX, derivY, null, null, null)
         val margin = 6.0
+        val maskRadius = circularMaskRadiusPx
         val candidates = featureDetector.maximums.toList()
-            .map { ImagePoint(it.x.toDouble(), it.y.toDouble()) }
-            .filter { targetRegion.contains(it, margin) }
+            .map { ImagePoint(it.x.toDouble() + x0, it.y.toDouble() + y0) }
+            .filter { pt ->
+                targetRegion.contains(pt, margin) &&
+                    (maskRadius == null || hypot(pt.x - targetRegion.center.x, pt.y - targetRegion.center.y) <= maskRadius)
+            }
             .sortedBy { hypot(it.x - targetRegion.center.x, it.y - targetRegion.center.y) }
         // New one-frame tracks must not be able to outvote the mature inlier set on the next frame.
         // Grow support gradually; initialization is the only time the ROI is filled from scratch.

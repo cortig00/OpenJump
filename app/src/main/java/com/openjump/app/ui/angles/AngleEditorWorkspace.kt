@@ -29,7 +29,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -126,13 +126,13 @@ internal fun AngleEditorWorkspace(
     modifier: Modifier = Modifier,
     windowHost: AngleWorkspaceWindowHost? = null,
 ) {
-    val videoState by viewModel.videoState.collectAsState()
-    val multiFrame by viewModel.multiFrameState.collectAsState()
-    val saveState by viewModel.multiFrameSaveState.collectAsState()
-    val timelineMapper by viewModel.timelineMapper.collectAsState()
-    val displayState by viewModel.displayState.collectAsState()
-    val player by viewModel.player.collectAsState()
-    val videoGeometry by viewModel.videoGeometry.collectAsState()
+    val videoState by viewModel.videoState.collectAsStateWithLifecycle()
+    val multiFrame by viewModel.multiFrameState.collectAsStateWithLifecycle()
+    val saveState by viewModel.multiFrameSaveState.collectAsStateWithLifecycle()
+    val timelineMapper by viewModel.timelineMapper.collectAsStateWithLifecycle()
+    val displayState by viewModel.displayState.collectAsStateWithLifecycle()
+    val player by viewModel.player.collectAsStateWithLifecycle()
+    val videoGeometry by viewModel.videoGeometry.collectAsStateWithLifecycle()
 
     val videoReady = videoState is AngleVideoState.Ready
     val saving = saveState is AngleMultiFrameSaveState.Saving
@@ -1120,7 +1120,10 @@ internal fun AngleEditorWorkspace(
                     },
                     modifier = Modifier.testTag(ANGLE_WORKSPACE_REMOVE_CONFIRM_TAG),
                 ) {
-                    Text(stringResource(R.string.common_discard))
+                    Text(
+                        stringResource(R.string.common_discard),
+                        color = MaterialTheme.colorScheme.error,
+                    )
                 }
             },
             dismissButton = {

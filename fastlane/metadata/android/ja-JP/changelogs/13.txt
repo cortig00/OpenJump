@@ -1,0 +1,5 @@
+OpenJump 1.4.0:
+• Export Studio（PNG・MP4）：4:5/9:16のライト/ダーク結果カード（ジャンプ画像やVBT反復速度グラフ）と、ロゴ・4隅HUD・各レップのROM/速度・バーベル軌道付き動画を書き出し。
+• VBTエンコーダ強化：MediaCodec高速追跡、ドリフト防止円形ROI、疲労レップ検出精度向上。
+• 60fpsのCMJ・スクワットサンプル動画を搭載（設定から再生可）。
+• Material Design 3・OLEDダークモード・Material You対応。完全オフライン。

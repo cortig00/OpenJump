@@ -73,13 +73,41 @@ class OfflineVideoTracker(
         return result
     }
 
+    /**
+     * Re-anchors tracking at [frameIndex] after a loss, keeping all previously measured valid
+     * results strictly before [frameIndex] and dropping any trailing LOST sentinel.
+     */
+    suspend fun resumeFrom(
+        frameIndex: Int,
+        seedInPresentation: ImagePoint,
+        priorResults: List<TrackingFrameResult> = mutableResults.toList(),
+    ): TrackingFrameResult {
+        require(frameIndex in 0 until source.frameCount)
+        val frame = source.frameAt(frameIndex)
+        val prefix = priorResults.filter {
+            it.frameIndex < frameIndex && it.result.sample.status != TrackingStatus.LOST
+        }
+        mutableResults.clear()
+        mutableResults.addAll(prefix)
+        val raw = tracker.initialize(frame.image, frame.timestampUs, frame.toTracking(seedInPresentation))
+        val result = performanceProfiler.measure(TrackingPerformanceProfiler.Stage.PRESENTATION_MAPPING) {
+            TrackingFrameResult(frame.frameIndex, raw.toPresentation(frame))
+        }
+        mutableResults += result
+        seedFrameIndex = frame.frameIndex
+        return result
+    }
+
     suspend fun trackRemaining(
+        endFrameIndex: Int? = null,
         onProgress: suspend (result: TrackingFrameResult, processed: Int, total: Int) -> Unit,
     ): List<TrackingFrameResult> {
         val seed = requireNotNull(seedFrameIndex) { "Initialize before processing." }
         if (mutableResults.last().result.sample.status == TrackingStatus.LOST) return results
         val start = seed + 1
-        val total = (source.frameCount - start).coerceAtLeast(0)
+        val effectiveEnd = (endFrameIndex ?: (source.frameCount - 1)).coerceIn(seed, source.frameCount - 1)
+        val total = (effectiveEnd - seed).coerceAtLeast(0)
+        if (total == 0) return results
         var processed = 0
         source.forEachFrame(start) { frame ->
             val raw = tracker.track(frame.image, frame.timestampUs)
@@ -97,7 +125,7 @@ class OfflineVideoTracker(
                     System.nanoTime() - publishStartedNs,
                 )
             }
-            raw.sample.status != TrackingStatus.LOST
+            raw.sample.status != TrackingStatus.LOST && frame.frameIndex < effectiveEnd
         }
         return results
     }

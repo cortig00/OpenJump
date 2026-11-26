@@ -25,7 +25,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -111,8 +111,8 @@ fun TestingScreen(
     onBack: () -> Unit,
     onSessionSelected: (Long) -> Unit,
 ) {
-    val sessions by viewModel.sessions.collectAsState()
-    val groups by viewModel.groups.collectAsState()
+    val sessions by viewModel.sessions.collectAsStateWithLifecycle()
+    val groups by viewModel.groups.collectAsStateWithLifecycle()
     val context = androidx.compose.ui.platform.LocalContext.current
     val defaultPlate = remember { EncoderSettings(context).defaultPlateDiameterCm }
     val unitSystem = LocalUnitSystem.current

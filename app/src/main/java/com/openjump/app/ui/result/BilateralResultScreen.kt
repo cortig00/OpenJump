@@ -20,7 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -60,7 +60,7 @@ fun BilateralLiveResultScreen(
 ) {
     val model = remember(comparison) { BilateralResultPresenter.presentLive(comparison) }
     var confirmDiscard by remember { mutableStateOf(false) }
-    val liveSaveState = viewModel.saveState.collectAsState().value
+    val liveSaveState = viewModel.saveState.collectAsStateWithLifecycle().value
     // F-004 robustness: Discard/toolbar/system-Back never own the exit while a
     // save is in flight or already committed. Idle/Error keep the existing
     // confirmation dialog and retry semantics.
@@ -90,7 +90,10 @@ fun BilateralLiveResultScreen(
             text = { Text(stringResource(R.string.bilateral_discard_body)) },
             confirmButton = {
                 TextButton(onClick = { confirmDiscard = false; onDiscard() }) {
-                    Text(stringResource(R.string.common_discard))
+                    Text(
+                        stringResource(R.string.common_discard),
+                        color = MaterialTheme.colorScheme.error,
+                    )
                 }
             },
             dismissButton = {

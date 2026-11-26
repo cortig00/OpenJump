@@ -44,7 +44,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -116,7 +116,7 @@ fun FvpConditionsScreen(
 ) {
     // A2: toda mutacion externa del borrador pasa por el DUEÑO cuando existe.
     val mutations: FvpDraftMutations = flowViewModel ?: FvpDraftSession
-    val draft by FvpDraftSession.draft.collectAsState()
+    val draft by FvpDraftSession.draft.collectAsStateWithLifecycle()
     val current = draft
     if (current == null) {
         FvpExpiredDraftBody(onBack = onBack)

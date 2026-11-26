@@ -762,7 +762,7 @@ class AnglesHomeNavigationTest {
         val route = block(appNavSource, "composable(ANGLES_EDITOR_ROUTE) {")
         assertTrue(
             "El guardado verificado se observa desde el VM real",
-            route.contains("angleEditorViewModel.saveState.collectAsState()"),
+            route.contains("angleEditorViewModel.saveState.collectAsStateWithLifecycle()"),
         )
         assertTrue(
             "Solo `Saved` navega",

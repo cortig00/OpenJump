@@ -17,7 +17,7 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -55,7 +55,7 @@ fun AthleteEditScreen(
     onDeleted: () -> Unit,
     viewModel: AthleteProfileViewModel = viewModel(factory = AthleteProfileViewModel.factory(athleteId)),
 ) {
-    val athlete by viewModel.athlete.collectAsState()
+    val athlete by viewModel.athlete.collectAsStateWithLifecycle()
     val unitSystem = LocalUnitSystem.current
     val locale = currentAppLocale()
     val massUnit = MeasurementFormatting.unit(MeasurementQuantity.MASS_KG, unitSystem)

@@ -1,5 +1,6 @@
 package com.openjump.app.ui.comparison
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,22 +19,24 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
@@ -57,8 +60,10 @@ import com.openjump.app.ui.components.EmptyState
 import com.openjump.app.ui.components.OpenJumpTopAppBar
 import com.openjump.app.ui.titleResource
 import com.openjump.app.ui.theme.OpenJumpTypes
+import com.openjump.app.ui.theme.ShapeTokens
 import com.openjump.app.ui.theme.Spacing
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ComparisonScreen(
     onBack: () -> Unit,
@@ -67,17 +72,20 @@ fun ComparisonScreen(
     onCompare: () -> Unit = {},
     onEdit: () -> Unit = {},
 ) {
-    val state by viewModel.state.collectAsState()
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     LaunchedEffect(results, state.rosterLoading, state.rosterError, state.selectedIds) {
         if (results && !state.rosterLoading && !state.rosterError) viewModel.prepareResults()
     }
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             OpenJumpTopAppBar(
                 title = stringResource(if (results) R.string.comparison_results_title else R.string.comparison_title),
                 onNavigationClick = onBack,
                 navigationContentDescription = stringResource(R.string.common_back),
                 iconBadge = R.drawable.ic_compare,
+                scrollBehavior = scrollBehavior,
                 actions = {
                     if (results) {
                         TextButton(onClick = onEdit) { Text(stringResource(R.string.comparison_edit_selection)) }
@@ -219,7 +227,11 @@ private fun ResultsContent(
         item {
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 comparisonSelectedAthletes(state.athletes, state.selectedIds).forEach { athlete ->
-                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
+                    Surface(
+                        shape = ShapeTokens.medium,
+                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+                    ) {
                         Row(Modifier.padding(Spacing.sm), verticalAlignment = Alignment.CenterVertically) {
                             AthleteAvatar(athlete.displayName, athlete.avatarKey, size = 32.dp)
                             Text(athlete.displayName, modifier = Modifier.padding(start = Spacing.xs))
@@ -343,9 +355,18 @@ private fun ComparisonRow(row: ComparisonAthlete, series: ComparisonSeries, rank
     } else {
         MaterialTheme.colorScheme.surfaceContainerLow
     }
-    Card(
+    Surface(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = container),
+        shape = ShapeTokens.medium,
+        color = container,
+        border = BorderStroke(
+            width = 1.dp,
+            color = if (rank == 1) {
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
+            } else {
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+            },
+        ),
     ) {
         Column(Modifier.padding(Spacing.md), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
